@@ -10,6 +10,28 @@ Name: **reachgraph**.
 
 ---
 
+## Supersession notice
+
+**The authoritative record of decisions is [`docs/adr/`](adr/README.md).** Where this
+document and an ADR disagree, the ADR is current.
+
+This document is kept as a **dated research record (2026-09-17)**. It is not maintained as
+the current design. Its evidence appendix and prior-art survey remain the provenance trail
+for claims the ADRs now assert, which is why nothing below has been deleted or rewritten.
+
+| section | status |
+|---|---|
+| §1 thesis, §2 outputs, §3 architecture | stand |
+| §4 contract join | join key superseded by ADR-0007 — the key is the **fully-qualified** operation name, not the bare RPC name |
+| §5 data sources | superseded by ADR-0004 and ADR-0005 |
+| §6 prior art | stands — research record |
+| §7 v0.1 scope | superseded by ADR-0006 and ADR-0008 |
+| §8 failure modes | the two hard prerequisites superseded by ADR-0001; the wording rule extended by ADR-0007 |
+| §9 open questions | largely answered — see [`docs/adr/README.md`](adr/README.md) |
+| §10 evidence appendix | stands — provenance |
+
+---
+
 ## 1. Thesis
 
 > The call graph is per-repo and mechanical. The **seam between repos is derived from the
