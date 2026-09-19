@@ -1,14 +1,23 @@
 //! The corpus walk, the invariants that hold over every case in it, and the
 //! five cases the plan marks required (plan-02 §6, §7.1, §7.4).
 //!
-//! # Why the corpus is six cases and not twenty-one
+//! # Why the corpus grows case by case
 //!
 //! Plan-02 §7.1 is explicit: "the corpus grows case by case, pulled by the test
 //! that needs it… writing all twenty-one up front would be writing fixtures
 //! against an interface no test has exercised yet, which is the opposite of
-//! red-first." The six here are the ones a test in *this* crate pulls. The
-//! remaining fifteen feed plan-01's suite, which does not exist yet; each
-//! arrives with the test that goes red without it.
+//! red-first." Eight cases were the ones a test in *this* crate pulled.
+//!
+//! The rest arrived with plan-01's suite, each alongside the test that goes red
+//! without it, and they are asserted by `reachgraph-core` rather than here.
+//! Two departures from plan-02 §6's table, both deliberate:
+//!
+//! - `two_plugins` is two directories, `two_plugins_a` and `two_plugins_b`.
+//!   This walk reads one document per directory, and the case's whole point is
+//!   two documents under two plugin ids.
+//! - `unversioned_and_versioned` is a case §6 does not list. Plan-01 §10.2
+//!   names `unversioned_and_versioned_roots_do_not_merge`, and no listed case
+//!   puts a versioned and an unversioned root on one operation.
 //!
 //! # Why a case can be invalid on purpose
 //!

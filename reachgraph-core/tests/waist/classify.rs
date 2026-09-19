@@ -5,7 +5,7 @@ use reachgraph_core::{BuildInputs, BuildOptions, Index};
 use reachgraph_plugin_api::Category;
 
 use crate::doubles::SpyClassifier;
-use crate::support::{build, case, emit, inputs, inputs_of, shards, unreachable};
+use crate::support::{build, case, emit, endpoints, inputs, inputs_of, shards, unreachable};
 
 /// Plan-00 §3.5. A core that called into a language crate directly would have
 /// re-created ADR-0008's forbidden language branch in a different costume.
@@ -139,6 +139,29 @@ fn position_encoding_is_per_plugin_not_global() {
             "{path}: {declared:?}"
         );
     }
+}
+
+/// Plan-01 §7.1. The declared limitation reaches `unreachable.json`, not a
+/// release note: a consumer can see that the complement was computed against a
+/// deliberately truncated walk.
+#[test]
+fn terminal_categories_recorded_in_coverage() {
+    let index = build(&case("foreign_shapes"));
+    assert_eq!(
+        index.coverage().traversal_terminal_categories,
+        [Category::ThirdParty, Category::Stdlib]
+    );
+
+    let sink = emit(&index);
+    assert_eq!(
+        unreachable(&sink).coverage.traversal_terminal_categories,
+        [CategoryRow::ThirdParty, CategoryRow::Stdlib]
+    );
+    assert_eq!(
+        endpoints(&sink).coverage.traversal_terminal_categories,
+        [CategoryRow::ThirdParty, CategoryRow::Stdlib],
+        "both files carry the coverage a consumer needs to weaken the claim"
+    );
 }
 
 /// Plan-01 §7.1. `expand_categories` is what a caller reaches for when the
