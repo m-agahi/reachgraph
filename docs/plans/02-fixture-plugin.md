@@ -65,6 +65,29 @@ guards against at the other end of the pipeline: code_graph's `Function.docstrin
 only the last line of a `///` block and 0 of 40 `Method` nodes carry any docstring at all —
 absence rendering as if it were content. A `#[serde(default)]` is that failure, upstream.
 
+**The rule above is necessary and NOT sufficient, MEASURED 2026-09-19 while building this
+crate.** Writing no `#[serde(default)]` guards only the _explicit_ spelling. Serde supplies
+an _implicit_ one that neither that rule nor `deny_unknown_fields` touches: for any
+`Option<T>` field with no `default` attribute, the derive routes a missing key through
+`serde::__private::de::missing_field`, whose deserializer answers `deserialize_option` with
+`visit_none`. **Every bare `Option` field is optional whether or not anyone asked.**
+
+This was not theoretical. `every_case_is_either_loadable_or_listed_invalid` went red on its
+first run: the `version_key_missing` case — a document with no `version` key at all —
+parsed cleanly, which made ADR-0007's core property ("a missing version is an absence;
+`None` must be an _assertion_, not an absence") silently false in the format as first
+written.
+
+**The second clause, binding:** any `Option<T>` field whose absence must be a parse error
+carries `#[serde(deserialize_with = "Option::deserialize")]`. That attribute takes the
+other branch of the derive and reports the missing key. Applied here to
+`FixtureRoot::version`, `FixtureCoverageVersion::version`, `FixtureSymbol::doc` and
+`FixtureSymbol::container`.
+
+The general form, worth carrying to any schema outside this crate: **in serde, "null" and
+"absent" are the same thing by default, and a format that needs them to differ must say so
+per field.**
+
 ### 2.2 Schema
 
 ```jsonc
