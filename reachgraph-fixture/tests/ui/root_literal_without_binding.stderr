@@ -1,0 +1,5 @@
+error[E0063]: missing field `binding` in initializer of `Root`
+  --> tests/ui/root_literal_without_binding.rs:10:13
+   |
+10 |     let _ = Root {
+   |             ^^^^ missing `binding`

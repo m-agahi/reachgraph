@@ -1,0 +1,7 @@
+error[E0560]: struct `Root` has no field named `confidence`
+  --> tests/ui/root_literal_with_confidence.rs:22:9
+   |
+22 |         confidence: 0.55,
+   |         ^^^^^^^^^^ `Root` does not have this field
+   |
+   = note: all struct fields are already assigned
