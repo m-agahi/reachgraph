@@ -235,7 +235,7 @@ fn analyse(registry: &Registry, options: &Analyse, streams: &mut Streams<'_>) ->
     let mut limits = preflight::limits(&checks);
     limits.extend(preflight::notes_as_limits(&index));
 
-    let mut report = RunReport::of(
+    let report = RunReport::of(
         &index,
         &repo,
         &out,
@@ -247,8 +247,6 @@ fn analyse(registry: &Registry, options: &Analyse, streams: &mut Streams<'_>) ->
         },
         limits,
     );
-    report.emit_ms = emit_started.elapsed().as_millis() as u64;
-    report.wall_clock_ms = started.elapsed().as_millis() as u64;
 
     if let Err(error) = write_run_record(&mut sink, &report) {
         let _ = writeln!(streams.err, "error: run.json: {error}");
