@@ -9,16 +9,18 @@
 # reason from the other side: it is the one crate the guard must EXEMPT, so the
 # exemption has to be exercised too.
 #
-# `reachgraph-lang-rust`, `reachgraph-roots-proto-tonic` and
-# `reachgraph-render-html` are absent rather than empty. Nothing asserts over
-# them yet, so an empty crate would buy no guard and would only pre-commit a
-# name.
+# `reachgraph-lang-rust` arrived with plan-03 and is the first crate here that
+# links an analysis engine. `reachgraph-roots-proto-tonic` and
+# `reachgraph-render-html` are still absent rather than empty. Nothing asserts
+# over them yet, so an empty crate would buy no guard and would only pre-commit
+# a name.
 [workspace]
 resolver = "2"
 members = [
     "reachgraph-plugin-api",
     "reachgraph-core",
     "reachgraph-fixture",
+    "reachgraph-lang-rust",
     "reachgraph-cli",
     "xtask",
 ]
@@ -39,6 +41,7 @@ repository = "https://github.com/m-agahi/reachgraph"
 reachgraph-plugin-api = { path = "reachgraph-plugin-api", version = "0.1.0" }
 reachgraph-core = { path = "reachgraph-core", version = "0.1.0" }
 reachgraph-fixture = { path = "reachgraph-fixture", version = "0.1.0" }
+reachgraph-lang-rust = { path = "reachgraph-lang-rust", version = "0.1.0" }
 xtask = { path = "xtask", version = "0.1.0" }
 
 # Parsing and rendering Rust source, for the public-API snapshot (plan-02
@@ -61,6 +64,41 @@ serde_json = "1.0.133"
 # on the contract types, because `reachgraph-plugin-api` has no dependencies and
 # adding serde there would add it to every plugin (plan-00 §1).
 serde = { version = "1.0.215", features = ["derive"] }
+
+# The rust-analyzer engine, ADR-0004 and ADR-0001. EXACT pins, no caret: these
+# are 0.0.x republished weekly in lockstep with rust-analyzer nightlies, with no
+# semver promise (ADR-0001, plan-03 §2). An upgrade is a deliberate re-vendor on
+# its own pull request, expected to break, and the re-vendor must run plan-03
+# §13's full suite because nothing else detects a silent behaviour change in an
+# engine with no changelog contract.
+#
+# TWO TRANSITIVE PINS LIVE IN Cargo.lock AND NOT HERE, both MEASURED 2026-09-19
+# by a build that failed before them. Neither is a direct dependency, so neither
+# can be pinned in this file; the committed lockfile is what holds them, and
+# `cargo update` re-breaks the build loudly rather than silently:
+#
+#   salsa 0.28.2, NOT 0.28.3/0.28.4. ra_ap_span 0.0.352 asks for `^0.28.2`, and
+#   0.28.3 (published 2026-09-18, four days AFTER ra_ap 0.0.352) changed
+#   `IngredientImpl::intern`'s arity — E0061, "this method takes 3 arguments but
+#   4 arguments were supplied", inside ra_ap_span's own hygiene.rs.
+#
+#   unicode-ident 1.0.24, NOT 1.0.25/1.0.26. ra-ap-rustc_lexer 0.166.0 asserts
+#   at compile time that unicode-ident and unicode-properties agree on their
+#   Unicode version; 1.0.25 (2026-09-16) does not agree with unicode-properties
+#   0.1.4, and the build fails with E0080 on that assertion.
+ra_ap_ide = "=0.0.352"
+ra_ap_ide_db = "=0.0.352"
+ra_ap_hir = "=0.0.352"
+ra_ap_load-cargo = "=0.0.352"
+ra_ap_project_model = "=0.0.352"
+ra_ap_vfs = "=0.0.352"
+ra_ap_paths = "=0.0.352"
+ra_ap_syntax = "=0.0.352"
+ra_ap_base_db = "=0.0.352"
+ra_ap_span = "=0.0.352"
+# `FxHashMap` crosses `load_workspace`'s signature, so it is a direct dependency
+# rather than an implementation detail. Pinned to what the ra_ap tree resolves.
+rustc-hash = "2.1.3"
 
 # `assert_impl_all!` — plan-02 §7.2's compile-level guard. Dev-side only.
 static_assertions = "1.1.0"

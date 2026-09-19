@@ -124,7 +124,10 @@ impl RawParts {
                 raw: format!("{}{SEP}{}{SEP}", self.unit.0, self.offset),
             });
         }
-        Ok(format!("{}{SEP}{}{SEP}{}", self.unit.0, self.offset, self.path))
+        Ok(format!(
+            "{}{SEP}{}{SEP}{}",
+            self.unit.0, self.offset, self.path
+        ))
     }
 
     /// Read a raw back.
@@ -143,10 +146,12 @@ impl RawParts {
                 found: 2,
             });
         };
-        let offset = offset.parse::<u32>().map_err(|_| RawError::OffsetNotAnOffset {
-            raw: raw.to_owned(),
-            field: offset.to_owned(),
-        })?;
+        let offset = offset
+            .parse::<u32>()
+            .map_err(|_| RawError::OffsetNotAnOffset {
+                raw: raw.to_owned(),
+                field: offset.to_owned(),
+            })?;
         if path.is_empty() {
             return Err(RawError::EmptyPath {
                 raw: raw.to_owned(),

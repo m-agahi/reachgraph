@@ -12,3 +12,19 @@ repository.workspace = true
 
 [dependencies]
 reachgraph-plugin-api.workspace = true
+
+# ADR-0004: Rust imports its engine rather than shelling out to one. This is
+# the only crate in the workspace that names `ra_ap_*` (plan-03 §1), and
+# `engine_string_matches_pinned_version` reads the `ra_ap_ide` line below to
+# assert the `ENGINE` stamp against it.
+ra_ap_ide.workspace = true
+ra_ap_ide_db.workspace = true
+ra_ap_hir.workspace = true
+ra_ap_load-cargo.workspace = true
+ra_ap_project_model.workspace = true
+ra_ap_vfs.workspace = true
+ra_ap_paths.workspace = true
+ra_ap_syntax.workspace = true
+ra_ap_base_db.workspace = true
+ra_ap_span.workspace = true
+rustc-hash.workspace = true
