@@ -274,7 +274,15 @@ fn partial_index_renders_banner() {
     );
 
     let banner = text_of(&document, "#rg-partial-banner");
-    assert!(banner.contains("A provider failed"), "{banner}");
+    // ADR-0743 gave `partial` a second cause. The banner used to say "A
+    // provider failed during this run", which is now false half the time: a
+    // provider that skipped one contract and returned roots did not fail. The
+    // sentence states what both causes have in common, and the block below
+    // says which one happened.
+    assert!(
+        banner.contains("built over less than this repository holds"),
+        "{banner}"
+    );
     assert!(
         banner.contains("may name code that is reachable"),
         "{banner}"
@@ -309,6 +317,35 @@ fn an_unbound_root_is_reported_with_its_reason() {
     assert!(block.contains("TaskService.DeleteTask"), "{block}");
     assert!(block.contains("delete_task"), "{block}");
     assert!(block.contains("v3"), "{block}");
+}
+
+/// ADR-0743. A contract found and not read is a reported gap like an unbound
+/// root, so it is named on the page with the reason its provider gave.
+///
+/// The structured list rather than a note: a reader who can see *which* file
+/// was skipped can go and look at it, and a reader who is told only that
+/// "something was skipped" cannot.
+#[test]
+fn an_unexamined_contract_is_named_with_its_reason() {
+    let clean = page();
+    assert_eq!(
+        clean.select(&select("#rg-unexamined")).count(),
+        0,
+        "an index that read every contract carries no such block"
+    );
+
+    let document = Html::parse_document(
+        &support::render(&unexamined_view(), &[], &support::artifact()).text("index.html"),
+    );
+    let block = text_of(&document, "#rg-unexamined");
+    assert!(block.contains("proto/broken.proto"), "{block}");
+    assert!(block.contains("reached end of file"), "{block}");
+
+    assert_eq!(
+        document.select(&select("#rg-partial-banner")).count(),
+        1,
+        "a skipped contract weakens every claim under it, so the banner is up"
+    );
 }
 
 /// Plan-05 §6.3: no control anywhere offers a union across versions. Naming
@@ -453,6 +490,17 @@ fn partial_view() -> GraphView {
     let view = support::index_view();
     let mut coverage = support::coverage();
     coverage.partial = true;
+    rebuild(&view, coverage)
+}
+
+fn unexamined_view() -> GraphView {
+    let view = support::index_view();
+    let mut coverage = support::coverage();
+    coverage.partial = true;
+    coverage.unexamined_contracts = vec![reachgraph_plugin_api::UnexaminedContract {
+        contract: reachgraph_plugin_api::ContractId("proto/broken.proto".to_owned()),
+        reason: "expected 'stream' or a type name, but reached end of file".to_owned(),
+    }];
     rebuild(&view, coverage)
 }
 

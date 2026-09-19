@@ -446,6 +446,11 @@ impl RootProvider for FixturePlugin {
                     version: entry.version.clone(),
                 })
                 .collect(),
+            // A corpus case declares data, never a failure to read it: the
+            // fixture's input is one JSON document that either parses or does
+            // not, so there is no file it could find and skip. Empty is the
+            // answer, not a stub.
+            unexamined_contracts: Vec::new(),
         }
     }
 }

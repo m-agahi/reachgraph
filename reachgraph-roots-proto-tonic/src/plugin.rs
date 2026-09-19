@@ -17,7 +17,8 @@ use std::sync::Mutex;
 
 use reachgraph_plugin_api::{
     Capability, ContractId, Coverage, Detection, Direction, Plugin, PluginError, PluginId,
-    PositionEncoding, Preflight, Root, RootBinding, RootProvider, Symbol, SymbolIndex, VersionKey,
+    PositionEncoding, Preflight, Root, RootBinding, RootProvider, Symbol, SymbolIndex,
+    UnexaminedContract, VersionKey,
 };
 
 use crate::bind::{bind_generated_client, bind_handler, Binding, Operation};
@@ -35,11 +36,16 @@ pub struct ProtoTonicPlugin {
     examined: Mutex<Examined>,
 }
 
-/// What the last completed run looked at.
+/// What the last completed run looked at, and what it found and could not
+/// look at.
+///
+/// The two lists are disjoint by construction: `read_contracts` puts each
+/// discovered file in exactly one of them.
 #[derive(Clone, Default)]
 struct Examined {
     contracts: Vec<ContractId>,
     versions: Vec<VersionKey>,
+    unexamined: Vec<UnexaminedContract>,
 }
 
 impl ProtoTonicPlugin {
@@ -117,6 +123,11 @@ impl Plugin for ProtoTonicPlugin {
     ///
     /// A note belongs here only for something the contract has no field for,
     /// which is why `reachgraph-lang-rust` has three and this crate has none.
+    /// ADR-0743 is the rule applied rather than an exception to it: a contract
+    /// this plugin could not read is a
+    /// [`reachgraph_plugin_api::UnexaminedContract`], so writing the same fact
+    /// here as prose would be the second spelling this method exists to
+    /// refuse.
     fn notes(&self) -> Vec<String> {
         Vec::new()
     }
@@ -124,11 +135,11 @@ impl Plugin for ProtoTonicPlugin {
 
 impl RootProvider for ProtoTonicPlugin {
     fn roots(&self, repo_root: &Path, symbols: &dyn SymbolIndex) -> Result<Vec<Root>, PluginError> {
-        let contracts = read_contracts(repo_root)?;
+        let read = read_contracts(repo_root)?;
         let sources = read_first_party_sources(repo_root)?;
 
         let mut roots = Vec::new();
-        for contract in &contracts {
+        for contract in &read.contracts {
             for service in &contract.services {
                 let call = direction_of(evidence_for(&service.name, &sources, symbols));
                 for rpc in &service.rpcs {
@@ -147,17 +158,20 @@ impl RootProvider for ProtoTonicPlugin {
             }
         }
 
-        // Written only once the whole run succeeded: a failed run must not
-        // leave behind a coverage claim it did not earn (plan-04 §10).
-        self.record(&contracts);
+        // Written only once the whole run reached its end: a run that returned
+        // `Err` must not leave behind a coverage claim it did not earn. A file
+        // this run could not read is part of the claim rather than an exception
+        // to it — the run covered the repository minus that file, and saying so
+        // is the point of ADR-0743.
+        self.record(&read);
         Ok(roots)
     }
 
-    /// What the last completed run examined.
+    /// What the last completed run examined, and what it skipped.
     ///
-    /// Before any run this is empty, which is the honest answer: the plugin has
-    /// looked at nothing, and reporting contracts it has not opened would be
-    /// the partial-index claim inverted.
+    /// Before any run both lists are empty, which is the honest answer: the
+    /// plugin has looked at nothing, and reporting contracts it has not opened
+    /// would be the partial-index claim inverted.
     fn coverage(&self) -> Coverage {
         let examined = match self.examined.lock() {
             Ok(guard) => guard.clone(),
@@ -168,24 +182,28 @@ impl RootProvider for ProtoTonicPlugin {
         Coverage {
             contracts: examined.contracts,
             versions: examined.versions,
+            unexamined_contracts: examined.unexamined,
         }
     }
 }
 
 impl ProtoTonicPlugin {
-    fn record(&self, contracts: &[ProtoContract]) {
+    fn record(&self, read: &ReadContracts) {
         let examined = Examined {
-            contracts: contracts
+            contracts: read
+                .contracts
                 .iter()
                 .map(|contract| contract.contract.clone())
                 .collect(),
-            versions: contracts
+            versions: read
+                .contracts
                 .iter()
                 .map(|contract| VersionKey {
                     contract: contract.contract.clone(),
                     version: contract.version.clone(),
                 })
                 .collect(),
+            unexamined: read.unexamined.clone(),
         };
         if let Ok(mut guard) = self.examined.lock() {
             *guard = examined;
@@ -200,12 +218,45 @@ struct RustSource {
     text: String,
 }
 
-/// Every `.proto` under the repository, parsed.
+/// Every `.proto` under the repository, split into the ones that were read and
+/// the ones that were not.
+struct ReadContracts {
+    contracts: Vec<ProtoContract>,
+    unexamined: Vec<UnexaminedContract>,
+}
+
+/// Read every `.proto` under the repository — ADR-0743.
 ///
-/// A file that does not parse fails the run (plan-04 §10): `Coverage` has no
-/// slot for "found but unreadable", so skipping it would produce an index that
-/// looks complete and silently omits a contract's roots.
-fn read_contracts(repo_root: &Path) -> Result<Vec<ProtoContract>, PluginError> {
+/// # Where the boundary sits
+///
+/// **Per file: recorded. Per tree: fatal.**
+///
+/// A discovered file that cannot be read — the bytes are not UTF-8, or the
+/// parser rejects the syntax — is named in `unexamined` and the walk carries
+/// on. The repository was still enumerated, so the claim this function returns
+/// is exact: these contracts were read, that one was found and was not, here is
+/// why. plan-04 §10 chose the other branch and MEASURED 2026-09-19 is what
+/// overruled it: one truncated fixture in reachgraph's own tree made the
+/// release smoke test exit 1 on both native runners, so the tool could not
+/// analyse itself and no repository holding a partial or vendored-sample
+/// contract got anything at all.
+///
+/// `discover` failing is different in kind and stays a `PluginError`. A
+/// directory that cannot be walked yields no file to name and no count to
+/// state, so there is no coverage claim to make about it — recording "something
+/// under here, unknown" would be an assertion about a tree nobody enumerated.
+///
+/// # The counter-argument, which is still true
+///
+/// An unread contract may declare services whose handlers nothing else binds,
+/// so the root set may be incomplete, and an incomplete root set makes live
+/// code read as not reachable from any endpoint — the false-positive class
+/// ADR-0007 calls the one that permanently destroys trust. Recording answers
+/// that argument only because the record is loud: every entry here raises
+/// `IndexCoverage::partial`, which puts a non-dismissible banner on the page
+/// and weakens every claim under it. A warning on stderr would not have
+/// answered it, and silence would have been the bug itself.
+fn read_contracts(repo_root: &Path) -> Result<ReadContracts, PluginError> {
     let files = discover(repo_root).map_err(|source| PluginError::Io {
         plugin: PLUGIN_ID,
         path: repo_root.to_path_buf(),
@@ -213,20 +264,32 @@ fn read_contracts(repo_root: &Path) -> Result<Vec<ProtoContract>, PluginError> {
     })?;
 
     let mut contracts = Vec::with_capacity(files.len());
+    let mut unexamined = Vec::new();
     for file in files {
-        let source = std::fs::read_to_string(&file.path).map_err(|source| PluginError::Io {
-            plugin: PLUGIN_ID,
-            path: file.path.clone(),
-            source,
-        })?;
-        let contract = parse(&file.contract, &source).map_err(|error| PluginError::Parse {
-            plugin: PLUGIN_ID,
-            path: file.path.clone(),
-            detail: error.detail().to_owned(),
-        })?;
-        contracts.push(contract);
+        let source = match std::fs::read_to_string(&file.path) {
+            Ok(source) => source,
+            Err(error) => {
+                unexamined.push(UnexaminedContract {
+                    contract: file.contract.clone(),
+                    reason: format!("could not be read as text: {error}"),
+                });
+                continue;
+            }
+        };
+        match parse(&file.contract, &source) {
+            Ok(contract) => contracts.push(contract),
+            // The parser's own message, verbatim. "could not be read" is not
+            // actionable; "expected 'stream' or a type name" is.
+            Err(error) => unexamined.push(UnexaminedContract {
+                contract: file.contract.clone(),
+                reason: error.detail().to_owned(),
+            }),
+        }
     }
-    Ok(contracts)
+    Ok(ReadContracts {
+        contracts,
+        unexamined,
+    })
 }
 
 /// Every first-party, non-test `.rs` file under the repository.

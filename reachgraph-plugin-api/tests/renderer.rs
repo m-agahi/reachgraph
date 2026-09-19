@@ -75,6 +75,7 @@ fn empty_coverage() -> IndexCoverage {
         roots_total: 0,
         roots_bound: 0,
         unbound_roots: Vec::new(),
+        unexamined_contracts: Vec::new(),
         units_indexed: Vec::new(),
         plugins: Vec::new(),
         traversal_terminal_categories: Vec::new(),
@@ -163,6 +164,7 @@ fn a_provider_coverage_and_an_index_coverage_are_different_types() {
     let provider = Coverage {
         contracts: Vec::new(),
         versions: Vec::new(),
+        unexamined_contracts: Vec::new(),
     };
     assert!(provider.contracts.is_empty());
     assert_eq!(empty_coverage().roots_total, 0);

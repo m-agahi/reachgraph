@@ -5,9 +5,9 @@ use std::path::Path;
 use reachgraph_core::schema::BindingRow;
 use reachgraph_core::{BuildDiagnostic, BuildError, BuildInputs, BuildOptions, Index};
 use reachgraph_fixture::format::{FixtureRaw, FixtureRootBinding, FixtureUnitId};
-use reachgraph_plugin_api::{Capability, NodeId, Plugin, PluginId};
+use reachgraph_plugin_api::{Capability, ContractId, NodeId, Plugin, PluginId, UnexaminedContract};
 
-use crate::doubles::{doc_of, plugin_from, FailingProvider, PreflightSpy};
+use crate::doubles::{doc_of, plugin_from, FailingProvider, PartialRootProvider, PreflightSpy};
 use crate::support::{build, case, emit, endpoints, inputs, shards, unreachable};
 
 /// Plan-01 §10.1 step 1. Symbols and edges are collected per unit from a
@@ -446,4 +446,77 @@ fn a_run_with_no_notes_emits_an_empty_list() {
 
     assert!(index.coverage().notes.is_empty());
     assert!(endpoints(&emit(&index)).coverage.notes.is_empty());
+}
+
+/// ADR-0743. A provider that returned roots and named a contract it could not
+/// read has produced a **smaller** index, not a failed one, and the waist
+/// carries that fact rather than deciding it does not matter.
+///
+/// The aggregation and the flag are asserted separately on purpose: wiring the
+/// list into `IndexCoverage` and forgetting to raise `partial` is the exact
+/// half-fix that leaves every consumer reading a truncated index as a complete
+/// one.
+#[test]
+fn an_unexamined_contract_is_aggregated_and_makes_the_index_partial() {
+    let provider = PartialRootProvider {
+        id: PluginId("a-double"),
+        unexamined: vec![UnexaminedContract {
+            contract: ContractId("proto/broken.proto".to_owned()),
+            reason: "expected 'stream' or a type name, but reached end of file".to_owned(),
+        }],
+    };
+    let inputs = BuildInputs {
+        symbols: Vec::new(),
+        edges: Vec::new(),
+        roots: vec![&provider],
+        classifiers: Vec::new(),
+    };
+
+    let index = Index::build(Path::new("."), &inputs, &BuildOptions::default())
+        .expect("a provider that skipped one file did not fail");
+
+    let coverage = index.coverage();
+    assert_eq!(
+        coverage.unexamined_contracts,
+        [UnexaminedContract {
+            contract: ContractId("proto/broken.proto".to_owned()),
+            reason: "expected 'stream' or a type name, but reached end of file".to_owned(),
+        }],
+        "the provider's own words, carried verbatim"
+    );
+    assert!(
+        coverage.partial,
+        "a contract nobody read may hold roots nobody bound, so every \
+         unreachability claim here is weaker"
+    );
+    assert!(
+        !coverage
+            .contracts
+            .contains(&ContractId("proto/broken.proto".to_owned())),
+        "examined and unexamined are disjoint: {:?}",
+        coverage.contracts
+    );
+}
+
+/// The complement of the test above, and the guard that keeps `partial` from
+/// being wired to something that is always true. A provider with nothing to
+/// skip leaves the index complete.
+#[test]
+fn a_provider_with_nothing_unexamined_leaves_the_index_complete() {
+    let provider = PartialRootProvider {
+        id: PluginId("a-double"),
+        unexamined: Vec::new(),
+    };
+    let inputs = BuildInputs {
+        symbols: Vec::new(),
+        edges: Vec::new(),
+        roots: vec![&provider],
+        classifiers: Vec::new(),
+    };
+
+    let index = Index::build(Path::new("."), &inputs, &BuildOptions::default())
+        .expect("nothing failed and nothing was skipped");
+
+    assert!(index.coverage().unexamined_contracts.is_empty());
+    assert!(!index.coverage().partial);
 }

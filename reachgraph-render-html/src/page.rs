@@ -171,13 +171,51 @@ fn terminal_sentence(coverage: &IndexCoverage) -> String {
 }
 
 /// Plan-05 §4.5: not dismissible, above the list, outside any disclosure.
+///
+/// ADR-0743 gave `partial` a second cause, so the sentence states what the two
+/// have in common rather than naming one of them. It used to open "A provider
+/// failed during this run", which is false for a provider that read every
+/// contract but one and returned roots for the rest: nothing failed, the index
+/// is simply smaller than the repository. `rg-unexamined` below says which
+/// happened.
 fn partial_banner(coverage: &IndexCoverage) -> String {
     if !coverage.partial {
         return String::new();
     }
-    "<p class=\"rg-partial-banner\" id=\"rg-partial-banner\">A provider failed during this run. \
-     This list is computed from an incomplete index and may name code that is reachable.</p>"
+    "<p class=\"rg-partial-banner\" id=\"rg-partial-banner\">This index was built over less \
+     than this repository holds. This list is computed from an incomplete index and may name \
+     code that is reachable.</p>"
         .to_owned()
+}
+
+/// ADR-0743: a contract found and not read, named where the reader is
+/// evaluating the claim it weakens.
+///
+/// The same shape as `unbound_block` and for the same reason. A gap that is
+/// reported with the file and the provider's own words is one a reader can act
+/// on; a gap reported as a count is one they can only worry about.
+fn unexamined_block(coverage: &IndexCoverage) -> String {
+    if coverage.unexamined_contracts.is_empty() {
+        return String::new();
+    }
+    let mut html = String::from("<div class=\"rg-unexamined\" id=\"rg-unexamined\"><h3>");
+    let _ = write!(
+        html,
+        "{} contract(s) found and not read</h3><p>Operations declared in these files are absent \
+         from this index, so a handler serving one of them may be in the list below, put there \
+         by the missing contract rather than by being uncalled.</p><ul>",
+        coverage.unexamined_contracts.len()
+    );
+    for entry in &coverage.unexamined_contracts {
+        let _ = write!(
+            html,
+            "<li><code>{}</code> — {}</li>",
+            escape_html(&entry.contract.0),
+            escape_html(&entry.reason)
+        );
+    }
+    html.push_str("</ul></div>");
+    html
 }
 
 /// `IndexCoverage::notes`, verbatim.
@@ -445,6 +483,7 @@ pub fn render_page(
         ("RG_TERMINAL", escape_html(&terminal_sentence(coverage))),
         ("RG_NOTES", notes_block(coverage)),
         ("RG_UNBOUND", unbound_block(coverage)),
+        ("RG_UNEXAMINED", unexamined_block(coverage)),
         ("RG_UNREACHABLE_COUNT", unreachable_count.to_string()),
         ("RG_FOOTER", escape_html(footer)),
         ("RG_DATA", data),

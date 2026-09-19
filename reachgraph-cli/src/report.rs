@@ -72,6 +72,10 @@ pub struct RunReport {
     pub shards: usize,
     /// Contracts covered.
     pub contracts: usize,
+    /// Contracts found and not read — ADR-0743. Stated beside `contracts`
+    /// rather than folded into it: a reader who sees only the covered count
+    /// has no way to tell it from the whole repository.
+    pub contracts_unexamined: usize,
     /// Version keys covered.
     pub versions: usize,
     /// What this run could not do.
@@ -110,6 +114,7 @@ impl RunReport {
             unreachable_claim: UNREACHABLE_CLAIM.to_owned(),
             shards: index.shards().len(),
             contracts: coverage.contracts.len(),
+            contracts_unexamined: coverage.unexamined_contracts.len(),
             versions: coverage.versions.len(),
             limits,
         }
@@ -143,9 +148,16 @@ impl RunReport {
             "  {}: {} symbols",
             self.unreachable_claim, self.unreachable
         )?;
+        // The shortfall is on the coverage line rather than under it: a reader
+        // scanning for the covered count meets the caveat in the same glance,
+        // and a caveat on its own line is one a long report can push away.
+        let unexamined = match self.contracts_unexamined {
+            0 => String::new(),
+            count => format!(" ({count} not read)"),
+        };
         writeln!(
             into,
-            "  coverage: {} contracts, {} versions",
+            "  coverage: {} contracts{unexamined}, {} versions",
             self.contracts, self.versions
         )?;
         writeln!(

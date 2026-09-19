@@ -71,6 +71,7 @@
     "roots_total": 2,
     "roots_bound": 2,
     "unbound_roots": [],
+    "unexamined_contracts": [],
     "units_indexed": [
       "unit:app"
     ],

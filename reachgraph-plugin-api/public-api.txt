@@ -44,6 +44,7 @@ pub struct ContractId(pub String);
 pub struct Coverage {
     pub contracts: Vec<ContractId>,
     pub versions: Vec<VersionKey>,
+    pub unexamined_contracts: Vec<UnexaminedContract>,
 }
 
 #[derive(Clone, Debug)]
@@ -95,6 +96,7 @@ pub struct IndexCoverage {
     pub roots_total: usize,
     pub roots_bound: usize,
     pub unbound_roots: Vec<UnboundRoot>,
+    pub unexamined_contracts: Vec<UnexaminedContract>,
     pub units_indexed: Vec<UnitId>,
     pub plugins: Vec<PluginId>,
     pub traversal_terminal_categories: Vec<Category>,
@@ -259,6 +261,12 @@ pub struct UnboundRoot {
     pub service: String,
     pub operation: String,
     pub direction: Direction,
+    pub reason: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnexaminedContract {
+    pub contract: ContractId,
     pub reason: String,
 }
 

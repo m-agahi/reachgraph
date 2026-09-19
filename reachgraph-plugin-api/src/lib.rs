@@ -416,6 +416,31 @@ pub struct VersionKey {
     pub version: Option<String>,
 }
 
+/// One contract a provider found and did not examine, with the provider's own
+/// reason.
+///
+/// # Why this slot exists
+///
+/// A provider that meets a contract file it cannot read has three moves. It can
+/// drop the file, which is the partial-index bug ADR-0007 exists to prevent: the
+/// index then looks complete, the contract's roots are missing, and every
+/// function behind them reads as not reachable from any endpoint. It can fail
+/// the whole run, which hands the user nothing at all — including the roots of
+/// every contract it *could* read. Or it can say which file it skipped and why,
+/// which is the honest-absence rule ADR-0003 states, applied to a run rather
+/// than to a field.
+///
+/// This type is the third move. An entry here is not an excuse for a smaller
+/// root set; it is the statement that the root set is smaller, so a consumer
+/// can weaken the unreachability claim by exactly the contract named.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnexaminedContract {
+    /// The contract that was found and not read.
+    pub contract: ContractId,
+    /// The provider's own words for why. Carried verbatim, never parsed.
+    pub reason: String,
+}
+
 /// ADR-0007's binding requirement: the index records what it covered, so a
 /// partial root set cannot make live code read as unreachable.
 #[derive(Clone, Debug)]
@@ -425,6 +450,13 @@ pub struct Coverage {
     /// Every version key it looked at. A `None` version is a real entry, not a
     /// gap in the list.
     pub versions: Vec<VersionKey>,
+    /// Every contract it found and could not look at.
+    ///
+    /// Disjoint from [`Coverage::contracts`] by construction: a file is either
+    /// examined or it is named here, never both. A non-empty list makes
+    /// [`IndexCoverage::partial`] true, because a contract nobody read may hold
+    /// roots nobody bound.
+    pub unexamined_contracts: Vec<UnexaminedContract>,
 }
 
 // ---------------------------------------------------------------------------
@@ -510,6 +542,9 @@ pub struct IndexCoverage {
     pub roots_bound: usize,
     /// The rest, each with the reason its provider gave.
     pub unbound_roots: Vec<UnboundRoot>,
+    /// Every contract any provider found and could not examine, with that
+    /// provider's own reason. The union of every [`Coverage::unexamined_contracts`].
+    pub unexamined_contracts: Vec<UnexaminedContract>,
     /// Every unit any symbol provider enumerated.
     pub units_indexed: Vec<UnitId>,
     /// Every plugin that contributed.
@@ -519,8 +554,14 @@ pub struct IndexCoverage {
     /// node of one of these categories was not followed, so a consumer can see
     /// that the complement was computed against a deliberately truncated walk.
     pub traversal_terminal_categories: Vec<Category>,
-    /// True when any provider failed and the run continued anyway. A consumer
-    /// must weaken every unreachability claim when this is set.
+    /// True when the index was built over less than it set out to cover, and a
+    /// consumer must weaken every unreachability claim when this is set.
+    ///
+    /// Two things raise it, and they are different sizes. A provider failed
+    /// outright and `allow_partial` let the build continue, so that provider
+    /// contributed nothing. Or a provider succeeded and reported an
+    /// [`UnexaminedContract`], so it contributed everything except the files it
+    /// names. `unexamined_contracts` is what tells the two apart.
     pub partial: bool,
     /// What the contributing plugins said about their own run, verbatim.
     ///
