@@ -1,0 +1,17 @@
+# The gRPC roots plugin — plan-04. ADR-0003 field 6 and ADR-0007: every
+# tonic-specific and protobuf-specific fact in the system lives in this crate
+# and nowhere else. The waist receives `Root` and `Coverage` and learns nothing
+# about `.proto` syntax, impl blocks, CamelCase or generated modules.
+[package]
+name = "reachgraph-roots-proto-tonic"
+description = "The reachgraph gRPC roots plugin: `.proto` contracts to endpoint roots, bound to tonic handlers (ADR-0007)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+reachgraph-plugin-api.workspace = true
+protox-parse.workspace = true
+prost-types.workspace = true
