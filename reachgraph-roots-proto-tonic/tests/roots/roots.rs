@@ -330,3 +330,25 @@ fn preflight_warns_when_a_repository_has_no_contracts() {
     };
     assert!(reason.contains("no `.proto`"), "{reason}");
 }
+
+/// The corroborating client reference must be in **non-test** source.
+///
+/// MEASURED by mutation: without the walk-level exclusion this fixture reports
+/// the wrong consumed case — a test double's client construction would read as
+/// production consumption. The direction is `Consumed` either way, which is
+/// exactly why the reason is what has to be asserted: the two consumed cases
+/// say different things about the repository.
+#[test]
+fn a_client_named_only_in_a_test_does_not_corroborate() {
+    let (_plugin, roots) = roots_of("testclient", &FakeIndex::new(Vec::new()));
+    let root = find(&roots, "WidgetDb", "CreateWidget");
+
+    assert_eq!(root.direction, Direction::Consumed);
+    let RootBinding::Unbound { reason } = &root.binding else {
+        panic!("nothing in the fixture implements or calls it: {root:?}");
+    };
+    assert!(
+        reason.contains("no first-party impl and no client reference"),
+        "a mention inside a `tests/` target is not first-party non-test usage: {reason}"
+    );
+}
