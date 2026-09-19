@@ -11,6 +11,7 @@ mod fake;
 mod binding;
 mod contracts;
 mod direction;
+mod golden;
 mod keys;
 mod names;
 mod neutrality;

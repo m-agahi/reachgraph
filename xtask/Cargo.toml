@@ -16,7 +16,20 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+# The golden symbol dump behind `cargo xtask golden-symbols` (plan-04 §12).
+# xtask is a dependency of nothing shipped, so linking the Rust plugin here
+# keeps `reachgraph-roots-proto-tonic` off the `ra_ap` path while still letting
+# a deliberate command regenerate the cross-plugin contract data.
+reachgraph-lang-rust.workspace = true
+reachgraph-plugin-api.workspace = true
 syn.workspace = true
 prettyplease.workspace = true
 proc-macro2.workspace = true
 quote.workspace = true
+
+[features]
+# The `fx-impl` golden dump loads a real Cargo workspace through cargo, which
+# takes seconds. Same split, and the same reason, as plan-03 §13's Tier B:
+# `--all-features` turns it on, so the four gates run it and a bare
+# `cargo test` stays fast.
+slow-tests = []

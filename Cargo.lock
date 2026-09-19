@@ -2489,6 +2489,8 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
+ "reachgraph-lang-rust",
+ "reachgraph-plugin-api",
  "syn 2.0.119",
 ]
 
