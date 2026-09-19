@@ -11,14 +11,47 @@
 //! through another crate; `resolve.nodes` is the graph cargo actually built, so
 //! a transitive edge is caught the same way a direct one is.
 //!
-//! `fixture_implements_every_trait` is the third guard of plan-02 §7.2 and it
-//! belongs to the pull request that writes `FixturePlugin`. It is absent here
-//! rather than stubbed: a stub would be a green tick meaning nothing.
+//! `fixture_implements_every_trait` is the third guard of plan-02 §7.2 and is
+//! the first thing in this file, because it is the strongest: the other two
+//! read a graph and report, while that one either compiles or does not.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::process::Command;
 
+use reachgraph_fixture::FixturePlugin;
+use reachgraph_plugin_api::{
+    Classifier, EdgeProvider, LanguagePlugin, Plugin, RootProvider, SymbolProvider,
+};
 use serde_json::Value;
+use static_assertions::assert_impl_all;
+
+// Plan-00 §6.1 and plan-02 §7.2 — **the gate**.
+//
+// ADR-0008's mechanism made executable, and the strongest guard in the
+// project: it is a compile-time assertion, so it prevents a change rather than
+// reporting one afterwards. If a signature ever requires something only a real
+// language engine can produce — a salsa snapshot, a `FileId`, a cursor
+// position — the fixture cannot produce a value of that type and this file
+// stops building.
+//
+// `Send + Sync` is in the list because `Plugin` requires it and a registry
+// holds `Box<dyn Plugin>`. Asserting it here means a future field that is
+// neither — an `Rc`, a `RefCell` — fails at the fixture rather than at
+// whichever caller first tries to share a registry.
+//
+// There is no `Renderer` row. A renderer is not a `Plugin` (plan-00 §3.6), it
+// takes a `&GraphView` that plan-01 has not defined yet, and `Capability`
+// has no `Render` variant for a case to declare.
+assert_impl_all!(
+    FixturePlugin: Plugin,
+    LanguagePlugin,
+    SymbolProvider,
+    EdgeProvider,
+    RootProvider,
+    Classifier,
+    Send,
+    Sync
+);
 
 /// A package id as `cargo metadata` spells it, and the package name it resolves
 /// to. Ids are opaque and version-qualified; names are what a guard asserts
