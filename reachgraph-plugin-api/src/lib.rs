@@ -41,12 +41,18 @@
 //! `reachgraph-fixture` already makes for its own input format, and for the
 //! same stated reason.
 //!
-//! # What is not here yet
+//! # The output family
 //!
-//! `Renderer` is the one trait of plan-00 §3 that is absent. Its `render`
-//! takes a `&GraphView`, which now exists, so the trait is plan-05's to add
-//! with the renderer that needs it. [`OutputSink`] is here already: plan-01
-//! §8.6 has the waist's own `emit.rs` writing through it.
+//! [`OutputSink`] and [`Renderer`] are the other half of plan-00 §3, and they
+//! are a **different family** from the analysis traits above. A renderer is not
+//! a [`Plugin`] (plan-00 §3.6), so [`Registry::detect`] can never return one:
+//! an output format is asked for, never detected from a repository.
+//!
+//! [`Renderer`] arrived with plan-05. It receives a [`RenderInput`], which
+//! carries the index-wide [`GraphView`], the [`Shard`] list, and — as
+//! [`ArtifactFile`] values — the bytes the waist already wrote. The last of
+//! those is what lets a single-file page inline the *same* JSON the sharded
+//! directory holds without the renderer owning a second copy of the schema.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -1112,6 +1118,141 @@ pub trait OutputSink {
     /// The path is relative and stays relative. A sink resolves it; a renderer
     /// never does.
     fn write(&mut self, relative_path: &str, bytes: &[u8]) -> std::io::Result<()>;
+}
+
+/// One file the waist already wrote into the artifact, with the bytes it wrote.
+///
+/// # Why a renderer receives bytes rather than a document
+///
+/// MEASURED while building plan-05: the artifact schema is `reachgraph-core`'s
+/// serde mirror (ADR-0727), and plan-05 §8.6 keeps `reachgraph-core` out of a
+/// renderer's dependency graph. Those two facts leave a renderer unable to
+/// construct — or to re-serialise — a single artifact document.
+///
+/// That would be a problem if a renderer had to. It does not. Plan-05 §6.5's
+/// single-file page inlines the same JSON the sharded directory holds, and
+/// "the same" is the requirement: a second serialisation could drift from the
+/// first in key order, in number formatting, or in a field one side forgot.
+/// Handing over the bytes makes the two identical by construction rather than
+/// by a test that compares them.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ArtifactFile {
+    /// The relative path the waist wrote it at, as an [`OutputSink`] received
+    /// it.
+    pub path: String,
+    /// What was written there.
+    pub bytes: Vec<u8>,
+}
+
+/// Everything a [`Renderer`] receives about one run.
+///
+/// A named struct rather than a parameter list, so a later addition is a field
+/// a renderer may ignore rather than a signature change every renderer has to
+/// absorb.
+#[derive(Clone, Copy, Debug)]
+pub struct RenderInput<'a> {
+    /// The index-wide view: every node, every edge, no depth.
+    ///
+    /// **Not reconstructible from `artifact`.** A shard carries the nodes one
+    /// root reaches, and a node's containment chain routinely leaves that set
+    /// — MEASURED on `/home/max/git/yadgarhq/task`, where a handler's `impl`
+    /// block and enclosing module are both outside every shard that contains
+    /// the handler. Deriving plan-05 §4.4.1's compound boxes needs the whole
+    /// view.
+    pub view: &'a GraphView,
+    /// One per bound root, in index order.
+    pub shards: &'a [Shard],
+    /// What the waist wrote, in the order it wrote it.
+    pub artifact: &'a [ArtifactFile],
+}
+
+/// Why a render could not be completed.
+#[derive(Debug)]
+pub enum RenderError {
+    /// The sink refused a write.
+    Sink {
+        /// The relative path the renderer asked for.
+        path: String,
+        /// What the sink said.
+        source: std::io::Error,
+    },
+    /// The renderer refused to emit, and says why.
+    ///
+    /// A renderer that cannot represent what it was handed states that rather
+    /// than emitting a page which quietly omits it.
+    Refused {
+        /// The renderer's own words.
+        reason: String,
+    },
+}
+
+impl fmt::Display for RenderError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RenderError::Sink { path, source } => write!(f, "{path}: {source}"),
+            RenderError::Refused { reason } => write!(f, "{reason}"),
+        }
+    }
+}
+
+impl std::error::Error for RenderError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            RenderError::Sink { source, .. } => Some(source),
+            RenderError::Refused { .. } => None,
+        }
+    }
+}
+
+/// An output format — plan-00 §3.6.
+///
+/// **Deliberately not a [`Plugin`].** `position_encoding`, `detection` and
+/// `preflight` are meaningless for something that analyses nothing, claims no
+/// repository and has no prerequisite to check; a provided default for them
+/// would be a *value*, and a defaulted `Utf8Bytes` reaching
+/// [`PluginDescriptor`] is indistinguishable downstream from one a plugin
+/// meant. [`Capability`] has no `Render` variant for the same reason: "this is
+/// a renderer" is expressed by type.
+///
+/// It follows that [`Registry::detect`] can never yield one. An output format
+/// is **asked for**, never detected from a repository.
+///
+/// [`Renderer::id`] survives from `Plugin` for attribution and because the
+/// binary's `--renderer` flag needs a name to match.
+pub trait Renderer: Send + Sync {
+    /// This renderer's stable identity, and the name `--renderer` selects it
+    /// by.
+    fn id(&self) -> PluginId;
+
+    /// The top-level names this renderer writes into, relative to the
+    /// artifact root: a file name, or a directory name it owns wholesale.
+    ///
+    /// # Why this is on the trait rather than known by the caller
+    ///
+    /// The artifact is **regenerated, never merged into** — a directory
+    /// holding a previous run's files for roots this run does not have would
+    /// serve a reader a repository state nobody analysed. So the binary
+    /// removes the previous artifact before the new one lands, and it removes
+    /// only what it owns.
+    ///
+    /// Which names those are depends on which renderer ran. A binary that
+    /// hardcoded one renderer's paths would silently leave another's behind,
+    /// and the reader would open a page from the run before last. Asking the
+    /// renderer is the only answer that stays true when a second one exists
+    /// (ADR-0002 names five).
+    ///
+    /// **Required rather than defaulted**, like [`Plugin::notes`]: a provided
+    /// empty slice would make "this renderer writes nothing that needs
+    /// removing" indistinguishable from "this renderer was never asked", and
+    /// the second reads as the first right up until a stale page is served.
+    fn owns(&self) -> &[&'static str];
+
+    /// Write this format's files through the sink.
+    ///
+    /// Object-safe, like [`OutputSink`], and for the same reason: the binary
+    /// holds a selected renderer behind a trait object.
+    fn render(&self, input: &RenderInput<'_>, sink: &mut dyn OutputSink)
+        -> Result<(), RenderError>;
 }
 
 // ---------------------------------------------------------------------------

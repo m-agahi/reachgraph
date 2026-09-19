@@ -1,6 +1,6 @@
 # The virtual workspace of docs/plans/00-workspace-and-plugin-api.md §1. Seven
-# crates are named there; four exist today, and the two that are still empty
-# exist ON PURPOSE rather than as placeholders nobody filled in.
+# crates are named there and all seven are here, each having arrived with the
+# guards that assert over it rather than as a placeholder name.
 #
 # `reachgraph-core` has to exist for `no_plugin_depends_on_core` to assert
 # anything. A dependency-direction guard over a graph that contains no `core`
@@ -10,10 +10,10 @@
 # exemption has to be exercised too.
 #
 # `reachgraph-lang-rust` arrived with plan-03 and is the first crate here that
-# links an analysis engine. `reachgraph-roots-proto-tonic` and
-# `reachgraph-render-html` are still absent rather than empty. Nothing asserts
-# over them yet, so an empty crate would buy no guard and would only pre-commit
-# a name.
+# links an analysis engine. `reachgraph-roots-proto-tonic` arrived with plan-04
+# and `reachgraph-render-html` with plan-05, so the seven crates plan-00 §1
+# names are all here. Neither was pre-committed as an empty name: each landed
+# with the guards that assert over it.
 [workspace]
 resolver = "2"
 members = [
@@ -22,6 +22,7 @@ members = [
     "reachgraph-fixture",
     "reachgraph-lang-rust",
     "reachgraph-roots-proto-tonic",
+    "reachgraph-render-html",
     "reachgraph-cli",
     "xtask",
 ]
@@ -51,6 +52,7 @@ reachgraph-core = { path = "reachgraph-core", version = "0.1.0" }
 reachgraph-fixture = { path = "reachgraph-fixture", version = "0.1.0" }
 reachgraph-lang-rust = { path = "reachgraph-lang-rust", version = "0.1.0" }
 reachgraph-roots-proto-tonic = { path = "reachgraph-roots-proto-tonic", version = "0.1.0" }
+reachgraph-render-html = { path = "reachgraph-render-html", version = "0.1.0" }
 xtask = { path = "xtask", version = "0.1.0" }
 
 # Parsing and rendering Rust source, for the public-API snapshot (plan-02

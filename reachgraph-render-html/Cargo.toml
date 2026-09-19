@@ -1,0 +1,40 @@
+# The static-HTML renderer — plan-05.
+#
+# THE DEPENDENCY LIST IS THE POINT. `reachgraph-core` is absent, directly and
+# transitively, and `render_html_has_no_core_dependency` asserts it over
+# `cargo metadata` (plan-05 §8.6). Plan-00 §1's rule is what that guard is for:
+# a renderer receives the graph through `reachgraph-plugin-api`, so nothing
+# here may reach for the waist's algorithms.
+#
+# `serde_json` is here for ONE file — `structure.json`, the compound-box and
+# dispatch sidecar this crate computes (plan-05 §4.4.1, ADR-0729). Every other
+# byte of JSON in the artifact was serialised by the waist and arrives as
+# `ArtifactFile` bytes; this crate copies those and never re-serialises one.
+[package]
+name = "reachgraph-render-html"
+description = "The reachgraph static-HTML renderer: ADR-0006's root-sharded artifact as a page, with vendored Cytoscape and no runtime download."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+reachgraph-plugin-api.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+# Plan-05 §8.3: the page is asserted by PARSING it, never by string matching.
+# A string match on generated HTML passes on a page that would not render.
+scraper = "0.27.0"
+# `assert_impl_all!` / `assert_not_impl_any!` — plan-05 §8.6's compile-level
+# half, where the negative is the load-bearing one.
+static_assertions.workspace = true
+# Reading `vendor/VENDOR.toml` in the guard that compares emitted bytes against
+# the recorded hashes. Dev-side only; the shipped crate parses no TOML.
+toml = "1.1.6"
+# The hash half of the same guard. Dev-side only: the shipped crate hashes
+# nothing — it writes the vendored bytes through the sink and the test proves
+# they are the bytes `VENDOR.toml` recorded.
+sha2 = "0.10.8"

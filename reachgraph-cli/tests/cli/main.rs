@@ -6,8 +6,11 @@
 //! `main` is three lines over this library, so a spawning harness would assert
 //! the same behaviour more slowly and would argue with §4.1's own guard.
 
+mod formats;
 mod guards;
 mod preflight;
+#[cfg(feature = "render-html")]
+mod renderers;
 mod report;
 mod support;
 mod surface;

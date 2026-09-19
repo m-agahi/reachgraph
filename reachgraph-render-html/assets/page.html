@@ -1,0 +1,379 @@
+<!doctype html>
+<!--
+  reachgraph — ADR-0006's root-sharded artifact.
+
+  THIS PAGE DOWNLOADS NOTHING. Every script it loads is vendored in the
+  reachgraph repository, compiled into the binary and written beside this file.
+  ADR-0001 excludes runtime downloads, and a script tag pointing at a remote
+  host is one: it fails in an air-gapped runner, it fails when the host is
+  unreachable, and it tells a third party that somebody is reading a private
+  repository's call graph. `page_has_no_external_script_src` is that rule as a
+  build failure, and it refuses an absolute URL anywhere in these bytes — this
+  comment included, which is why the rule above is stated rather than quoted.
+
+  {{RG_LICENCE_COMMENT}}
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{RG_TITLE}}</title>
+    <style>
+      {{RG_STYLE}}
+    </style>
+  </head>
+  <body>
+    <header class="rg-header">
+      <h1>{{RG_TITLE}}</h1>
+      <p class="rg-subtitle">{{RG_SUBTITLE}}</p>
+    </header>
+
+    <!--
+      Plan-05 §6.1 step 2: `fetch()` against `file://` is CORS-blocked. One
+      blocked fetch and a blank page is the worst version of this, so the
+      loader shows the instruction instead.
+    -->
+    <div id="rg-file-protocol" class="rg-blocker" hidden>
+      <h2>This page needs a server</h2>
+      <p>
+        A browser refuses to read the artifact's JSON files over
+        <code>file://</code>. Serve the directory and open the address it
+        prints:
+      </p>
+      <pre><code>reachgraph serve {{RG_OUT_HINT}}</code></pre>
+      <p>
+        <strong>Or open <code>overview.html</code> instead</strong>, which
+        carries the same data inside it and needs no server. It is emitted
+        beside this file whenever the graph is small enough.
+      </p>
+    </div>
+
+    <div id="rg-load-error" class="rg-blocker" hidden>
+      <h2>The artifact could not be read</h2>
+      <p id="rg-load-error-detail"></p>
+    </div>
+
+    <main id="rg-main" class="rg-layout" hidden>
+      <nav class="rg-endpoints" aria-label="Endpoints">
+        <h2>Endpoints</h2>
+        <p class="rg-hint">
+          Grouped by operation. Versions are siblings — pick one.
+        </p>
+        <div id="rg-endpoint-list"></div>
+      </nav>
+
+      <section class="rg-graph-pane">
+        <div class="rg-controls">
+          <div class="rg-control" id="rg-version-control" hidden>
+            <span class="rg-control-label">Version</span>
+            <div id="rg-version-toggle" class="rg-segmented" role="group"></div>
+          </div>
+
+          <!--
+            Plan-05 §6.2. Absent in the index-wide view, where `depth` is null
+            for every node and the control would have nothing to mean.
+          -->
+          <div class="rg-control" id="rg-depth-control" hidden>
+            <label class="rg-control-label" for="rg-depth">Depth</label>
+            <input id="rg-depth" type="range" min="0" max="3" value="3" />
+            <output id="rg-depth-value">3</output>
+          </div>
+
+          <div class="rg-control">
+            <span class="rg-control-label">Edge strength</span>
+            <div id="rg-strength-filter" class="rg-checkboxes"></div>
+          </div>
+        </div>
+
+        <!--
+          Plan-05 §5: a display filter never restates what was computed. This
+          sentence is beside the filter that would otherwise imply it does.
+        -->
+        <p class="rg-caveat" id="rg-filter-caveat">
+          Hiding an edge class changes only what is drawn. The list below is
+          computed over every edge and does not move.
+        </p>
+
+        <div id="rg-shard-note" class="rg-shard-note" hidden></div>
+
+        <div id="rg-cy" class="rg-canvas"></div>
+
+        <div id="rg-empty" class="rg-empty">
+          Pick an endpoint version on the left.
+        </div>
+
+        <aside class="rg-inspector" id="rg-inspector" hidden>
+          <button type="button" id="rg-inspector-close" aria-label="Close">
+            ×
+          </button>
+          <h3 id="rg-inspector-title"></h3>
+          <dl id="rg-inspector-body"></dl>
+        </aside>
+      </section>
+
+      <aside class="rg-side">
+        <!--
+          Plan-05 §5: always rendered, never behind a disclosure. An unlabelled
+          dash pattern communicates nothing, and the signal is carried by the
+          dash and the weight rather than by colour, because artifacts get
+          printed and screenshotted into greyscale.
+        -->
+        <section class="rg-legend" aria-label="Legend">
+          <h2>Legend</h2>
+          <h3>Edges</h3>
+          <ul class="rg-legend-list" id="rg-legend-edges">
+            <li data-strength="resolved">
+              <svg
+                class="rg-legend-line"
+                width="46"
+                height="10"
+                aria-hidden="true"
+              >
+                <line
+                  x1="1"
+                  y1="5"
+                  x2="45"
+                  y2="5"
+                  stroke="currentColor"
+                  stroke-width="3"
+                />
+              </svg>
+              <span
+                ><strong>resolved</strong> — a semantic engine answered
+                directly</span
+              >
+            </li>
+            <li data-strength="type-inferred">
+              <svg
+                class="rg-legend-line"
+                width="46"
+                height="10"
+                aria-hidden="true"
+              >
+                <line
+                  x1="1"
+                  y1="5"
+                  x2="45"
+                  y2="5"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-dasharray="10 4"
+                />
+              </svg>
+              <span
+                ><strong>type-inferred</strong> — type inference picked the
+                target</span
+              >
+            </li>
+            <li data-strength="lexical">
+              <svg
+                class="rg-legend-line"
+                width="46"
+                height="10"
+                aria-hidden="true"
+              >
+                <line
+                  x1="1"
+                  y1="5"
+                  x2="45"
+                  y2="5"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-dasharray="4 4"
+                />
+              </svg>
+              <span
+                ><strong>lexical</strong> — scope and binding resolution
+                only</span
+              >
+            </li>
+            <li data-strength="enclosure">
+              <svg
+                class="rg-legend-line"
+                width="46"
+                height="10"
+                aria-hidden="true"
+              >
+                <line
+                  x1="1"
+                  y1="5"
+                  x2="45"
+                  y2="5"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-dasharray="1 4"
+                />
+              </svg>
+              <span
+                ><strong>enclosure</strong> — derived from which definition
+                encloses a reference</span
+              >
+            </li>
+            <li data-strength="unresolved">
+              <svg
+                class="rg-legend-line"
+                width="46"
+                height="10"
+                aria-hidden="true"
+              >
+                <line
+                  x1="1"
+                  y1="5"
+                  x2="45"
+                  y2="5"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-dasharray="1 4"
+                />
+              </svg>
+              <span
+                ><strong>unresolved</strong> — the call was not resolved, and
+                the target is drawn as a stub</span
+              >
+            </li>
+          </ul>
+
+          <h3>Nodes</h3>
+          <ul class="rg-legend-list" id="rg-legend-nodes">
+            <li data-node-class="indexed">
+              <span class="rg-swatch rg-swatch-indexed" aria-hidden="true"
+              ></span>
+              <span>indexed — a provider emitted a symbol for it</span>
+            </li>
+            <li data-node-class="unindexed">
+              <span class="rg-swatch rg-swatch-unindexed" aria-hidden="true"
+              ></span>
+              <span
+                >not indexed — no provider emitted a symbol, so the label is
+                the opaque id itself</span
+              >
+            </li>
+            <li data-node-class="frontier">
+              <span class="rg-swatch rg-swatch-frontier" aria-hidden="true"
+              ></span>
+              <span
+                >frontier — the walk stopped here at the depth limit. Its
+                out-edges were <em>not followed</em>; it is not a leaf</span
+              >
+            </li>
+            <li data-node-class="trait-declaration">
+              <span
+                class="rg-swatch rg-swatch-trait-declaration"
+                aria-hidden="true"
+              ></span>
+              <span
+                >trait declaration — a call through a generic resolves here
+                rather than to the implementation that runs</span
+              >
+            </li>
+            <li data-node-class="implementation">
+              <span
+                class="rg-swatch rg-swatch-implementation"
+                aria-hidden="true"
+              ></span>
+              <span>implementation — the body that runs</span>
+            </li>
+          </ul>
+
+          <!--
+            Plan-05 §6.3, compare mode. Three redundant channels — border,
+            fill hatch and a text badge — for the greyscale reason above.
+          -->
+          <div id="rg-compare-legend" hidden>
+            <h3>Comparing <span id="rg-compare-names"></span></h3>
+            <ul class="rg-legend-list">
+              <li data-compare-class="first-only">
+                <span class="rg-swatch rg-swatch-first" aria-hidden="true"
+                ></span>
+                <span
+                  ><strong id="rg-compare-first-badge"></strong> only — this
+                  path ends when that version is sunset</span
+                >
+              </li>
+              <li data-compare-class="second-only">
+                <span class="rg-swatch rg-swatch-second" aria-hidden="true"
+                ></span>
+                <span
+                  ><strong id="rg-compare-second-badge"></strong> only — the
+                  new path</span
+                >
+              </li>
+              <li data-compare-class="both">
+                <span class="rg-swatch rg-swatch-both" aria-hidden="true"
+                ></span>
+                <span>both — shared, and survives the sunset</span>
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <!--
+          Plan-05 §7: emitting the bundles is distribution, so the notice is
+          in the artifact and visible, not only in the repository.
+        -->
+        <section class="rg-licences" aria-label="Licences">
+          <h2>Licences</h2>
+          <ul id="rg-licence-list">
+            {{RG_LICENCE_LIST}}
+          </ul>
+          <p class="rg-hint">{{RG_LICENCE_FOOTER}}</p>
+        </section>
+      </aside>
+    </main>
+
+    <!--
+      Plan-05 §4.5 and §6.4. Everything below the heading is rendered by the
+      binary, not by the page: the claim, what it was computed against, the
+      categories traversal stopped at, and every plugin note. A reader who
+      cannot see the covered set cannot evaluate the claim, and a reader who
+      cannot tell *not indexed* from *not called* will read the first as the
+      second.
+    -->
+    <section class="rg-unreachable" id="rg-unreachable" aria-label="Coverage">
+      {{RG_PARTIAL_BANNER}}
+      <h2 id="rg-unreachable-heading">{{RG_CLAIM}}</h2>
+      <p class="rg-coverage" id="rg-coverage">{{RG_COVERAGE}}</p>
+      <p class="rg-coverage" id="rg-terminal">{{RG_TERMINAL}}</p>
+      {{RG_NOTES}} {{RG_UNBOUND}}
+      <div class="rg-unreachable-controls">
+        <button type="button" id="rg-unreachable-load">
+          Show the {{RG_UNREACHABLE_COUNT}} symbols this covers
+        </button>
+        <label
+          ><input type="checkbox" id="rg-unreachable-tests" checked /> include
+          test code</label
+        >
+      </div>
+      <table class="rg-unreachable-table" id="rg-unreachable-table" hidden>
+        <thead>
+          <tr>
+            <th scope="col">symbol</th>
+            <th scope="col">file</th>
+            <th scope="col">category</th>
+            <th scope="col">test</th>
+            <th scope="col">note</th>
+          </tr>
+        </thead>
+        <tbody id="rg-unreachable-rows"></tbody>
+      </table>
+    </section>
+
+    <!--
+      Plan-05 §6.3's contract-level half. `versions.json` classifies every
+      indexed node by which contract versions reach it, and the summary is
+      honest only where a contract has exactly two — so the panel says when it
+      has nothing to show rather than showing an empty table.
+    -->
+    <section class="rg-sunset" id="rg-sunset" aria-label="Version reach">
+      <h2>Version reach</h2>
+      <p class="rg-hint" id="rg-sunset-hint"></p>
+      <div id="rg-sunset-body"></div>
+    </section>
+
+    <footer class="rg-footer">
+      <p>{{RG_FOOTER}}</p>
+    </footer>
+
+    {{RG_DATA}} {{RG_SCRIPTS}} {{RG_LOADER}}
+  </body>
+</html>

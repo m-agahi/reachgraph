@@ -146,6 +146,16 @@ impl TempDir {
         Self(path)
     }
 
+    /// The directory itself.
+    ///
+    /// **Gated on the one feature that uses it.** `serve.rs` is the only
+    /// consumer, and it is `#[cfg(feature = "serve")]`, so an ungated method
+    /// here is dead code in every build without that feature —
+    /// `cargo clippy --no-default-features -- -D warnings` fails on it.
+    /// MEASURED: that failure predates plan-05 and stands on the merge base
+    /// too, so CI does not run clippy in that combination; it is removed here
+    /// rather than left as a landmine for whoever adds the combination.
+    #[cfg(feature = "serve")]
     pub fn path(&self) -> &Path {
         &self.0
     }
