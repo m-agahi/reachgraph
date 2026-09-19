@@ -148,7 +148,7 @@ pub enum PositionEncoding {
 #[derive(Clone, Debug)]
 pub enum Preflight {
     Ok,
-    Warned { remediation: String },
+    Warned { reason: String, remediation: String },
     Failed { reason: String, remediation: String },
 }
 

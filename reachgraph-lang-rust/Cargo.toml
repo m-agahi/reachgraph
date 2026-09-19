@@ -1,0 +1,14 @@
+# The Rust language plugin — plan-03. The only crate in the workspace permitted
+# to know that rust-analyzer exists (plan-03 §1), and the crate ADR-0008 leak 1
+# exists to contain: `NodeId` ↔ `FilePosition` happens here and nowhere else.
+[package]
+name = "reachgraph-lang-rust"
+description = "The reachgraph Rust plugin: symbols, call edges and classification over ra_ap_* (ADR-0004)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+reachgraph-plugin-api.workspace = true

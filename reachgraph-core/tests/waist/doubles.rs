@@ -172,6 +172,7 @@ impl Classifier for SpyClassifier<'_> {
 pub struct PreflightSpy<'a> {
     inner: &'a FixturePlugin,
     seen: Mutex<RefCell<Vec<std::path::PathBuf>>>,
+    pub reason: &'static str,
     pub remediation: &'static str,
 }
 
@@ -180,7 +181,8 @@ impl<'a> PreflightSpy<'a> {
         Self {
             inner,
             seen: Mutex::new(RefCell::new(Vec::new())),
-            remediation: "a finding the plugin reports while still running",
+            reason: "a finding the plugin reports while still running",
+            remediation: "what the reader should do about the finding",
         }
     }
 
@@ -215,6 +217,7 @@ impl Plugin for PreflightSpy<'_> {
             guard.borrow_mut().push(root.to_path_buf());
         }
         Preflight::Warned {
+            reason: self.reason.to_owned(),
             remediation: self.remediation.to_owned(),
         }
     }

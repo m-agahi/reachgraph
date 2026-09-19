@@ -351,7 +351,10 @@ fn preflight_warning_is_recorded_and_the_plugin_still_runs() {
 
     assert!(index.diagnostics().iter().any(|diagnostic| matches!(
         diagnostic,
-        BuildDiagnostic::PreflightWarned { remediation, .. }
-            if remediation == spy.remediation
+        BuildDiagnostic::PreflightWarned {
+            reason,
+            remediation,
+            ..
+        } if reason == spy.reason && remediation == spy.remediation
     )));
 }

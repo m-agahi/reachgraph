@@ -18,6 +18,12 @@ by plan-02 §8 question 6. Changes are in §2, §4, §6.1 and §8.
 `Ok | Failed` could not express a non-fatal finding, so plan-03's checks 3 and 4 returned
 `Ok` and routed the finding to a side channel. Fifth instance of ADR-0003's honest-absence
 rule. Resolves plan-03 §14 question 11. Changes are in §2 and §8.
+**Amended:** 2026-09-19 (f) — from plan-03, on evidence. `Preflight::Warned` gains
+`reason`, so it is `Warned { reason, remediation }`. §8 question 7 named the
+discriminator — a plugin that fuses finding and fix into one `remediation` string — and
+plan-03 §11's checks 3 and 4 both do exactly that. The argument against the field lost
+its premise: MEASURED, there is no run record for the finding to live in instead. New §8
+question 8 records that gap. Changes are in §2 and §8.
 **Amended:** 2026-09-19 (e) — a build note, not a design change. §3.6 presents `Renderer`
 and `OutputSink` together; they ship apart. `OutputSink` names no graph type, and plan-01
 §8.6 puts the waist's own `emit.rs` through it, so holding it back would have made the
@@ -349,7 +355,7 @@ pub enum Preflight {
     /// report as one that cannot.
     ///
     /// Resolves plan-03 §14 question 11.
-    Warned { remediation: String },
+    Warned { reason: String, remediation: String },
     Failed { reason: String, remediation: String },
 }
 
@@ -831,24 +837,82 @@ recorded in place, rather than deleted.
    symbols from which it cannot be recovered. Revisit when a consumer asks, and treat the
    ask as urgent rather than cosmetic.
 
-7. **Should `Preflight::Warned` carry a `reason` as well as a `remediation`?** Opened
-   2026-09-19 with the variant itself, and named rather than answered because the
-   evidence points both ways.
+7. ~~**Should `Preflight::Warned` carry a `reason` as well as a `remediation`?**~~
+   **DECIDED 2026-09-19 — yes. `Warned { reason, remediation }`, the same shape as
+   `Failed`.** Decided while plan-03 §11's checks 3 and 4 were written, which is where
+   this question said to decide it. The original text is kept below, because the
+   argument that lost is the reason a future reader should not re-open this.
 
-   `Failed { reason, remediation }` carries both: what was checked and found, and what to
-   do about it. `Warned { remediation }` carries only the second, so a warning can say
-   what to do but not what it found — and the two plan-03 findings that motivated the
-   variant both have a fact worth stating. "Calls into the standard library cannot be
-   located" is the finding; "`rustup component add rust-src`" is the remediation. With
-   one field the plugin must fuse them into one string, which is the sentence plan-03 §11
-   already writes by hand.
+   **What decided it was the discriminator this question itself named**: "treat a plugin
+   that fuses finding and fix into one `remediation` string as the evidence that the
+   field is wanted." Plan-03 §11 check 4's own draft remediation is exactly that fusion
+   — `"rustup component add rust-src — without it, calls into the standard library
+cannot be located and are reported as external rather than classified as stdlib"` is
+   a fix with a finding welded to its tail. Check 3's is the same shape. Two of two.
 
-   Against adding it: a warning that runs is different from a failure that does not, and
-   an asymmetric shape says so. A warning's fact is often already in the run record
-   (plan-03 §11 puts `rust_src_available: false` there), so a `reason` on the variant
-   would be a second place for one fact to be spelled — which is the duplication §8
-   question 6 rejected for `PositionEncoding` on a `Span`.
+   **And the argument against the field lost its premise, measured rather than argued.**
+   That argument was that a warning's fact is often already in the run record, so a
+   `reason` would be a second place for one fact to be spelled. MEASURED 2026-09-19
+   while building `reachgraph-lang-rust`: **there is no run record.** Plan-03 §11
+   specifies one in detail — `has_build_script`, `out_dir_loaded`,
+   `proc_macro_expansion`, `rust_src_available`, `out_dir_mechanism` — and no type in
+   `reachgraph-plugin-api` or `reachgraph-core` carries it. `IndexCoverage` is the
+   nearest thing and holds root and unit coverage, not per-plugin findings. So the fact
+   had nowhere else to be spelled, and the duplication the objection feared could not
+   arise. See §8 question 12.
 
-   **Not decided at n=2.** Both instances come from one plugin that does not exist yet.
-   Decide when plan-03 writes them, and treat a plugin that fuses finding and fix into
-   one `remediation` string as the evidence that the field is wanted.
+   The asymmetry argument — "a warning that runs is different from a failure that does
+   not, and an asymmetric shape says so" — is answered by the variant's name. `Warned`
+   and `Failed` already say which is which; making one of them say _less about what it
+   found_ does not communicate that difference, it just loses the finding.
+
+   The original text follows.
+
+   > Opened 2026-09-19 with the variant itself, and named rather than answered because
+   > the evidence points both ways.
+
+   > `Failed { reason, remediation }` carries both: what was checked and found, and what
+   > to do about it. `Warned { remediation }` carries only the second, so a warning can
+   > say what to do but not what it found — and the two plan-03 findings that motivated
+   > the variant both have a fact worth stating. "Calls into the standard library cannot
+   > be located" is the finding; "`rustup component add rust-src`" is the remediation.
+   > With one field the plugin must fuse them into one string, which is the sentence
+   > plan-03 §11 already writes by hand.
+   >
+   > Against adding it: a warning that runs is different from a failure that does not,
+   > and an asymmetric shape says so. A warning's fact is often already in the run record
+   > (plan-03 §11 puts `rust_src_available: false` there), so a `reason` on the variant
+   > would be a second place for one fact to be spelled — which is the duplication §8
+   > question 6 rejected for `PositionEncoding` on a `Span`.
+   >
+   > **Not decided at n=2.** Both instances come from one plugin that does not exist yet.
+   > Decide when plan-03 writes them, and treat a plugin that fuses finding and fix into
+   > one `remediation` string as the evidence that the field is wanted.
+
+8. **Where does a plugin's per-unit run record go?** Opened 2026-09-19 by
+   `reachgraph-lang-rust`, and it is the measurement that decided question 7.
+
+   Plan-03 §11 specifies a run record in detail and names the fields the artifact must
+   carry: per workspace member `has_build_script`, `out_dir_loaded`,
+   `proc_macro_expansion`; per workspace `rust_src_available`, `out_dir_mechanism`; and
+   the workspace-level statement _"generated code was not indexed for N of M members;
+   calls into generated code from those members are absent from this index, not proven
+   absent from the code"_. **MEASURED: no channel in the shipped contract carries any of
+   it.** `Preflight` is a per-plugin return value, not a per-unit record, and
+   `IndexCoverage` holds root and unit coverage, not plugin findings.
+
+   The obvious fix is the wrong one. `out_dir_loaded`, `rust_src_available` and
+   `proc_macro_expansion` are Rust vocabulary, and putting them in `IndexCoverage` is
+   exactly the ADR-0003 violation the fixture plugin exists to catch — the waist would
+   hold a field only one language can fill.
+
+   `reachgraph-lang-rust` therefore exposes the facts as a named type on **its own**
+   public surface (`RustCoverage`), and this question records that they do not reach the
+   artifact in v0.1. **That is a real gap rather than a deferral**: plan-03 §9 D-D's
+   ruling is that generated code goes unindexed _and the artifact says so_, and the
+   second half is what has no channel. A consumer reading the artifact cannot today tell
+   "not indexed" from "not called", which is the distinction D-D exists to preserve.
+
+   The neutral shape, if one is wanted, is a `Vec<String>` of plugin-authored coverage
+   notes the waist carries and never parses — the same opacity discipline `join_key` and
+   `raw_kind` already have. It is plan-01's decision, not plan-03's.
