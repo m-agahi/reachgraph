@@ -6,7 +6,11 @@
 //! **and** gives `SymbolIndex` a second independent consumer: a field only a
 //! real engine can produce would stop `FakeIndex` compiling (plan-04 §12).
 
+mod fake;
+
+mod binding;
 mod contracts;
+mod direction;
 mod keys;
 mod names;
 mod versions;

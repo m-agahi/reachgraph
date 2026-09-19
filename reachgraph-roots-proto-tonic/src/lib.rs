@@ -27,9 +27,12 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+pub mod bind;
 pub mod contract;
+pub mod direction;
 pub mod keys;
 pub mod names;
+pub mod unbound;
 pub mod version;
 
 use reachgraph_plugin_api::PluginId;
