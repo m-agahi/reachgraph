@@ -14,6 +14,10 @@ Changes are in §2, §3.0, §3.6, §4, §5 and §6.1.
 `SourceRange::span`, where the uncertainty actually lives. Supersedes (b)'s
 `Option<SourceRange>`, which discarded a known file along with an unknown offset. Raised
 by plan-02 §8 question 6. Changes are in §2, §4, §6.1 and §8.
+**Amended:** 2026-09-19 (d) — from plan-03. `Preflight` gains `Warned { remediation }`;
+`Ok | Failed` could not express a non-fatal finding, so plan-03's checks 3 and 4 returned
+`Ok` and routed the finding to a side channel. Fifth instance of ADR-0003's honest-absence
+rule. Resolves plan-03 §14 question 11. Changes are in §2 and §8.
 **Depends on:** ADR-0001 … ADR-0008
 **Blocks:** every other plan
 
@@ -323,6 +327,24 @@ pub struct Coverage {
 #[derive(Clone, Debug)]
 pub enum Preflight {
     Ok,
+    /// Passed, with a finding the user should act on. A `Warned` plugin RUNS.
+    ///
+    /// Added 2026-09-19. `Ok | Failed` could not express "the plugin will run, and what
+    /// it produces means something different from what you expect", so plan-03 §11's
+    /// checks 3 and 4 — degraded proc-macro expansion, and a missing `rust-src` — both
+    /// returned `Ok` and routed their finding to the run record. That left the
+    /// structured remediation text outside the type ADR-0003 field 5 built to carry it,
+    /// which is the honest-absence rule again: a value that says less than the plugin
+    /// knows. The four instances ADR-0003 lists are `confidence: f32`, the sentinel
+    /// `Span { 0, 0 }`, a defaulted `PositionEncoding` on a renderer and
+    /// `Option<SourceRange>`; this is the fifth.
+    ///
+    /// **Never return `Failed` for a non-fatal finding.** That was the workaround
+    /// plan-03 §11 refused, and it stays refused — a plugin that would have run must not
+    /// report as one that cannot.
+    ///
+    /// Resolves plan-03 §14 question 11.
+    Warned { remediation: String },
     Failed { reason: String, remediation: String },
 }
 
@@ -793,3 +815,25 @@ recorded in place, rather than deleted.
    ADR-0003-class:** a plugin that shipped without collecting the name range produces
    symbols from which it cannot be recovered. Revisit when a consumer asks, and treat the
    ask as urgent rather than cosmetic.
+
+7. **Should `Preflight::Warned` carry a `reason` as well as a `remediation`?** Opened
+   2026-09-19 with the variant itself, and named rather than answered because the
+   evidence points both ways.
+
+   `Failed { reason, remediation }` carries both: what was checked and found, and what to
+   do about it. `Warned { remediation }` carries only the second, so a warning can say
+   what to do but not what it found — and the two plan-03 findings that motivated the
+   variant both have a fact worth stating. "Calls into the standard library cannot be
+   located" is the finding; "`rustup component add rust-src`" is the remediation. With
+   one field the plugin must fuse them into one string, which is the sentence plan-03 §11
+   already writes by hand.
+
+   Against adding it: a warning that runs is different from a failure that does not, and
+   an asymmetric shape says so. A warning's fact is often already in the run record
+   (plan-03 §11 puts `rust_src_available: false` there), so a `reason` on the variant
+   would be a second place for one fact to be spelled — which is the duplication §8
+   question 6 rejected for `PositionEncoding` on a `Span`.
+
+   **Not decided at n=2.** Both instances come from one plugin that does not exist yet.
+   Decide when plan-03 writes them, and treat a plugin that fuses finding and fix into
+   one `remediation` string as the evidence that the field is wanted.
