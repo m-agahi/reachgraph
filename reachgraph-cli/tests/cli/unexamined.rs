@@ -192,3 +192,25 @@ fn the_run_keeps_the_contracts_it_could_read() {
         "a file nobody read is not a file that was examined: {contracts:?}"
     );
 }
+
+/// The stderr report, because a user who runs the binary does not open
+/// `endpoints.json`.
+///
+/// The artifact is the record and this is the pointer to it. A run that says
+/// "coverage: 2 contracts" and nothing else invites the reader to believe two
+/// is all there were.
+#[test]
+fn the_run_report_says_a_contract_was_not_read() {
+    let (result, _temp, out) = analyse("unexamined-report");
+    assert_eq!(result.code, 0, "stderr: {}", result.err);
+
+    assert!(
+        result.err.contains("1 not read"),
+        "the human report names the shortfall: {}",
+        result.err
+    );
+
+    let text = fs::read_to_string(out.join("run.json")).expect("the report was written");
+    let report: Value = serde_json::from_str(&text).expect("run.json is json");
+    assert_eq!(report["contracts_unexamined"], 1);
+}
