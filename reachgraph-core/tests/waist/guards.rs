@@ -9,12 +9,30 @@ fn source_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src")
 }
 
+/// Every `.rs` file under a directory, at any depth.
+///
+/// **Recursive, and that is load-bearing.** A one-level walk was the first
+/// shape of this helper, and it let a stray file at
+/// `reachgraph-core/src/<a nested path>/waist.rs` sit in the tree carrying the
+/// word the guard below refuses. A file cargo does not compile still reads as
+/// covered in review and greps as present, which is the vacuous shape these
+/// guards exist to refuse.
+fn walk(root: &Path, found: &mut Vec<PathBuf>) {
+    let entries = std::fs::read_dir(root).expect("the source directory is readable");
+
+    for entry in entries {
+        let path = entry.expect("an entry is readable").path();
+        if path.is_dir() {
+            walk(&path, found);
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            found.push(path);
+        }
+    }
+}
+
 fn sources() -> Vec<(PathBuf, String)> {
-    let mut files: Vec<PathBuf> = std::fs::read_dir(source_dir())
-        .expect("the source directory is readable")
-        .map(|entry| entry.expect("an entry is readable").path())
-        .filter(|path| path.extension().is_some_and(|extension| extension == "rs"))
-        .collect();
+    let mut files = Vec::new();
+    walk(&source_dir(), &mut files);
     files.sort();
 
     assert!(
