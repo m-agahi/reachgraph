@@ -69,25 +69,40 @@ $ git push origin v0.1.0
 `release.yaml` then builds the matrix, checks each wheel, builds a vendored sdist, and
 stops at a protected `pypi` environment. **Nothing is published without that approval.**
 
-### The platform matrix — PROPOSED, and the first run is the measurement
+### The platform matrix — MEASURED for the five targets in it
 
-Plan-07 §9 measurements 6 and 7 **cannot be taken on a developer machine**, and the
-workflow is written to take them rather than to assume them:
+MEASURED 2026-09-19 by the first `workflow_dispatch` run, 35457883578. **All five targets
+in the matrix compiled.** The two tier-1 jobs reported failure, and neither failure was a
+build: both are runners that EXECUTE the wheel, and the smoke test caught
+`reachgraph .` panicking. The three jobs that only cross-compiled passed, which is exactly
+how a defect in the binary hides from a build matrix.
 
-- `auditwheel show` reads the glibc symbols a built wheel actually requires. It is not
-  installed here, and more to the point a NixOS build reports a platform tag that says
-  nothing about what a manylinux runner would produce. **No manylinux tag is claimed in
-  this document.** The `auditwheel` step writes the tag it finds into the run summary.
-- musl for `ra_ap_*` is unverified. **INFERRED, and worth checking rather than assuming:**
-  the classic musl blocker for rust-analyzer is loading a proc-macro server as a dynamic
-  library, and ADR-0728 disables proc-macro expansion in v0.1 outright. If that is the
-  only obstacle, musllinux is cheaper than the tier table assumes. Nobody has built it.
+| target                      | tier | built | executed on the runner | manylinux tag MEASURED                       |
+| --------------------------- | ---- | ----- | ---------------------- | -------------------------------------------- |
+| `x86_64-unknown-linux-gnu`  | 1    | yes   | yes                    | `manylinux_2_17_x86_64.manylinux2014_x86_64` |
+| `aarch64-apple-darwin`      | 1    | yes   | yes                    | not applicable                               |
+| `aarch64-unknown-linux-gnu` | 2    | yes   | no                     | not reported back to this document           |
+| `x86_64-apple-darwin`       | 2    | yes   | no                     | not applicable                               |
+| `x86_64-pc-windows-msvc`    | 2    | yes   | no                     | not applicable                               |
 
-| tier                 | targets                                                                      | commitment                            |
-| -------------------- | ---------------------------------------------------------------------------- | ------------------------------------- |
-| **1 — smoke-tested** | `x86_64-unknown-linux-gnu` (manylinux), `aarch64-apple-darwin`               | `gate` fails the release if one fails |
-| **2 — best effort**  | `aarch64-unknown-linux-gnu`, `x86_64-apple-darwin`, `x86_64-pc-windows-msvc` | failure documented, release proceeds  |
-| **3 — not built**    | musllinux, 32-bit anything, `aarch64-pc-windows-msvc`                        | source build from the sdist           |
+**Plan-07 §9 measurement 6 is answered for the x86_64 linux wheel:
+`manylinux_2_17_x86_64.manylinux2014_x86_64`** — the oldest baseline maturin's
+`manylinux: auto` could satisfy, and the widest-compatibility answer available. The local
+build's `manylinux_2_39_x86_64` was an artifact of the NixOS host exactly as §6 below
+flagged it would be; that figure is retained there as the worked example of why a tag from
+a developer machine must not be published.
+
+**musl is NOT in the matrix and no musl wheel has ever been built.** The tier-3 row below
+is the whole of the commitment: a musl user builds from the sdist. The inference that
+ADR-0728 may already have removed the usual blocker — rust-analyzer's proc-macro server is
+loaded as a dynamic library, and v0.1 disables proc-macro expansion outright — is still an
+inference, and adding a `x86_64-unknown-linux-musl` row is what would settle it.
+
+| tier                      | targets                                                                      | commitment                            |
+| ------------------------- | ---------------------------------------------------------------------------- | ------------------------------------- |
+| **1 — smoke-tested**      | `x86_64-unknown-linux-gnu` (manylinux), `aarch64-apple-darwin`               | `gate` fails the release if one fails |
+| **2 — built, not run**    | `aarch64-unknown-linux-gnu`, `x86_64-apple-darwin`, `x86_64-pc-windows-msvc` | failure documented, release proceeds  |
+| **3 — not in the matrix** | musllinux, 32-bit anything, `aarch64-pc-windows-msvc`                        | source build from the sdist           |
 
 **The tier column is documentation, not enforcement, and the difference matters.** `gate`
 fails when ANY wheel job fails, tier-2 included. "Failure documented, release proceeds" is
@@ -276,19 +291,31 @@ Plan-07 §3.1 INFERRED this hazard and guessed the size win was small. The win i
 failure mode alone. A 1.7 MB saving on a 6.7 MB wheel against a 100 MB limit does not buy
 a silent death.
 
-### 6 and 7 — the platform matrix and musl. **NOT MEASURABLE HERE.**
+### 6 — the platform matrix. **ANSWERED by run 35457883578, not by this machine.**
 
-`file` on the installed binary reports its interpreter as
-`/nix/store/…-glibc-2.42-67/lib/ld-linux-x86-64.so.2`. maturin tagged the wheel
-`manylinux_2_39_x86_64`, and **that tag is an artifact of this host, not a property of the
-build**: the wheel would not run on a manylinux system at all. `auditwheel` is not
-installed here, and installing it would not fix the underlying problem.
+The developer-machine figure, kept because it is the worked example: `file` on the locally
+installed binary reports its interpreter as
+`/nix/store/…-glibc-2.42-67/lib/ld-linux-x86-64.so.2`, and maturin tagged that wheel
+`manylinux_2_39_x86_64`. **That tag was an artifact of the host, not a property of the
+build** — the wheel would not run on a manylinux system at all — and it was recorded here
+as unclaimable rather than published.
 
-**No manylinux baseline is claimed.** `release.yaml`'s `auditwheel show` step takes the
-measurement on the first run.
+MEASURED on a real runner by `auditwheel show`, the x86_64 linux wheel is
+**`manylinux_2_17_x86_64.manylinux2014_x86_64`**, 22 glibc versions older than the local
+figure. All five matrix targets compiled; see the tier table above for which were also
+executed.
 
-musl is likewise unbuilt. See the inference under the tier table above — ADR-0728 may have
-already removed the usual blocker, and nobody has checked.
+### 7 — musl. **STILL UNMEASURED, and it is not in the matrix.**
+
+No musl wheel has been built, by this run or any other. `x86_64-unknown-linux-musl` is
+absent from `release.yaml`'s matrix, so nothing about it is pending — it is simply not
+attempted, and tier 3's commitment is the sdist.
+
+INFERRED, and worth checking rather than assuming: the classic musl blocker for
+rust-analyzer is loading a proc-macro server as a dynamic library, and ADR-0728 disables
+proc-macro expansion in v0.1 outright. If that is the only obstacle, musllinux is cheaper
+than the tier table assumes. Adding the row is what would turn this paragraph into a
+measurement.
 
 ### 8 — wheel reproducibility. **The binary yes; the wheel no, and the cause is not ours.**
 

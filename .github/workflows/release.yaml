@@ -233,6 +233,13 @@ jobs:
           # The workspace analyses itself: it is a real Cargo workspace that
           # has been built, which is exactly the precondition ADR-0001's
           # carve-out names.
+          #
+          # THE `.` IS DELIBERATE AND MUST STAY. MEASURED 2026-09-19, run
+          # 35457883578: this line is what caught `reachgraph .` panicking
+          # inside `ra_ap_paths::AbsPathBuf::assert`. An absolute path here
+          # would have passed, and the most natural invocation a user types
+          # would have shipped broken. Every job that only cross-compiled the
+          # wheel went green on that same run.
           "$RUNNER_TEMP/smoke/bin/reachgraph" . -o "$RUNNER_TEMP/smoke-out"
           for f in index.html overview.html endpoints.json unreachable.json run.json; do
             test -f "$RUNNER_TEMP/smoke-out/$f" || { echo "::error::$f missing"; exit 1; }
@@ -389,12 +396,31 @@ jobs:
         run: |
           set -euo pipefail
           cargo install --locked --version 0.20.2 cargo-deny
+          cargo deny --version
           cargo deny check licenses advisories sources
 
+      # `--features cli` IS LOAD-BEARING, and its absence is a defect this
+      # workflow's own dispatch run found. MEASURED 2026-09-19, run
+      # 35457883578:
+      #
+      #   warning: none of the package's binaries are available for install
+      #   using the selected features
+      #     bin "cargo-about" requires the features: `cli`
+      #
+      # `cargo install` then EXITED 0 having installed nothing, and the failure
+      # surfaced one step later and one layer away as
+      # `error: no such command: 'about'`. A zero exit proved nothing, so the
+      # binary is asked to identify itself before anything depends on it — the
+      # next person reads "cargo-about was not installed" rather than a missing
+      # cargo subcommand.
       - name: THIRD-PARTY-LICENSES.md regenerates identically
         run: |
           set -euo pipefail
-          cargo install --locked --version 0.9.0 cargo-about
+          cargo install --locked --version 0.9.0 --features cli cargo-about
+          if ! cargo about --version; then
+            echo "::error::cargo-about was not installed — \`cargo install\` can exit 0 having installed no binary when the required features are not selected"
+            exit 1
+          fi
           cargo xtask third-party-licenses
 
       # `xtask/tests/packaging.rs` holds the repository-level half of plan-07
