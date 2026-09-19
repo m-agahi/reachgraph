@@ -1,0 +1,16 @@
+// The consumed contract. `CreateWidget` collides with api.proto's RPC name,
+// which is the measured M7 collision: one operation name, two services, two
+// packages, one repository.
+syntax = "proto3";
+
+package acme.store.v2;
+
+message CreateWidgetRequest {}
+message CreateWidgetResponse {}
+message GetWidgetRequest {}
+message GetWidgetResponse {}
+
+service WidgetDb {
+  rpc CreateWidget(CreateWidgetRequest) returns (CreateWidgetResponse);
+  rpc GetWidget(GetWidgetRequest) returns (GetWidgetResponse);
+}

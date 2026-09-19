@@ -27,6 +27,8 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+pub mod contract;
+pub mod keys;
 pub mod names;
 pub mod version;
 

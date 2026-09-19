@@ -1,0 +1,11 @@
+// A package with no version segment. ADR-0007: the version is None, never "v1".
+syntax = "proto3";
+
+package acme.legacy;
+
+message PingRequest {}
+message PingResponse {}
+
+service Old {
+  rpc Ping(PingRequest) returns (PingResponse);
+}

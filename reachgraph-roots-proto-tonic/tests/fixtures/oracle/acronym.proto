@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package acme.api.v1;
+
+message Empty {}
+
+service Odd {
+  rpc GetWidgetByID(Empty) returns (Empty);
+  rpc ExportCSV(Empty) returns (Empty);
+  rpc HTTPProxy(Empty) returns (Empty);
+  rpc CreateWidget(Empty) returns (Empty);
+  rpc ListWidgets(Empty) returns (Empty);
+  rpc TransitionTask(Empty) returns (Empty);
+  rpc GetHTTP2Stream(Empty) returns (Empty);
+  rpc V2Migrate(Empty) returns (Empty);
+}

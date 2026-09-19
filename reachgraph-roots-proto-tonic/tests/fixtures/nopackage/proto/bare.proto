@@ -1,0 +1,10 @@
+// No `package` declaration at all, so the join key carries no package prefix
+// and the version is None.
+syntax = "proto3";
+
+message PingRequest {}
+message PingResponse {}
+
+service Svc {
+  rpc Rpc(PingRequest) returns (PingResponse);
+}

@@ -1,0 +1,17 @@
+// The served contract. Reproduces the measured shape of
+// `proto/yadgar/taskapi/v1/taskapi.proto` without depending on that repository.
+syntax = "proto3";
+
+package acme.api.v1;
+
+import "acme/api/v1/types.proto";
+
+message CreateWidgetRequest {}
+message CreateWidgetResponse {}
+message ListWidgetsRequest {}
+message ListWidgetsResponse {}
+
+service Widgets {
+  rpc CreateWidget(CreateWidgetRequest) returns (CreateWidgetResponse);
+  rpc ListWidgets(ListWidgetsRequest) returns (ListWidgetsResponse);
+}
