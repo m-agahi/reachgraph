@@ -145,12 +145,20 @@ pub struct FixtureDetection {
 
 /// Mirrors [`reachgraph_plugin_api::Preflight`], minus one variant.
 ///
-/// **There is no `warned` spelling, deliberately.** `Preflight::Warned` was
-/// added to the contract on 2026-09-19, after plan-02 §2.2 was written, and
-/// plan-00 §8 question 7 — whether `Warned` also carries a `reason` alongside
-/// its `remediation` — is open until plan-03 has evidence. A fixture encoding
-/// invented here would answer that question by accident, in the one crate whose
-/// job is to keep such questions honest.
+/// **There is still no `warned` spelling, and the reason has changed.** The
+/// variant was added to the contract on 2026-09-19, after plan-02 §2.2 was
+/// written, and this comment used to say the spelling was withheld because
+/// plan-00 §8 question 7 — whether `Warned` also carries a `reason` — was open,
+/// so a fixture encoding invented here would have answered it by accident.
+///
+/// **Question 7 is now DECIDED** (2026-09-19, while `reachgraph-lang-rust` was
+/// written): `Warned` carries both. The withholding survives its original
+/// reason because a second one was always underneath it — plan-02 §2.2 fixes
+/// this format, and widening it is that plan's decision to make rather than a
+/// side effect of plan-03 needing somewhere to put a variant. The corpus is
+/// ADR-0008's mechanical n=2 and a case that returned `Warned` would be worth
+/// having; it is a plan-02 change, and it is named here so the next reader
+/// finds a decision rather than an oversight.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FixturePreflight {

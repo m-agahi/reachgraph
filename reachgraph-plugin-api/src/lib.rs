@@ -776,7 +776,19 @@ pub enum Preflight {
     ///
     /// A `Warned` plugin **runs**. Never return [`Preflight::Failed`] for a
     /// non-fatal finding (plan-03 §14 question 11).
+    ///
+    /// The shape is `Failed`'s, and that symmetry is deliberate rather than
+    /// convenient — plan-00 §8 question 7, DECIDED 2026-09-19 while plan-03
+    /// §11 was written. The discriminator plan-00 named was whether a plugin
+    /// fuses its finding and its fix into one string; plan-03 §11 check 4's
+    /// own draft remediation does exactly that. The argument recorded against
+    /// the field was that the finding already lives in a run record — and
+    /// MEASURED while building `reachgraph-lang-rust`, no run record exists in
+    /// this contract or in `reachgraph-core`, so the fact had nowhere else to
+    /// go.
     Warned {
+        /// What was checked and what was found.
+        reason: String,
         /// What the user should do about it. Structured guidance, not a log
         /// line.
         remediation: String,

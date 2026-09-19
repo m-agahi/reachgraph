@@ -239,6 +239,7 @@ fn preflight_warned_is_non_fatal_and_carries_remediation() {
     let outcomes = [
         Preflight::Ok,
         Preflight::Warned {
+            reason: "the repository has not been built".into(),
             remediation: "build the repository so generated code is indexed".into(),
         },
         Preflight::Failed {
@@ -257,8 +258,54 @@ fn preflight_warned_is_non_fatal_and_carries_remediation() {
 
     assert_eq!(fatal, vec![false, false, true]);
 
-    let Preflight::Warned { remediation } = &outcomes[1] else {
+    let Preflight::Warned { remediation, .. } = &outcomes[1] else {
         panic!("outcomes[1] is the Warned case");
     };
     assert!(!remediation.is_empty());
+}
+
+/// Plan-00 §8 question 7, **decided 2026-09-19 while plan-03 §11 was written**.
+///
+/// `Warned` carries a `reason` as well as a `remediation`, for the reason
+/// plan-00 §8 itself named as the discriminator: "treat a plugin that fuses
+/// finding and fix into one `remediation` string as the evidence that the field
+/// is wanted." Plan-03 §11's own draft text for check 4 is exactly that fusion
+/// — `"rustup component add rust-src — without it, calls into the standard
+/// library cannot be located …"` is a fix with a finding welded to its tail.
+///
+/// The argument recorded against the field was that a warning's fact is already
+/// in the run record. MEASURED 2026-09-19 while building `reachgraph-lang-rust`:
+/// **there is no run record.** No type in this crate and none in
+/// `reachgraph-core` carries per-unit plugin findings, so the fact had nowhere
+/// else to be spelled and the duplication the objection feared cannot arise.
+///
+/// A warning that says only what to do, without what was found, is
+/// ADR-0003's honest-absence rule broken once more: a value that says less than
+/// the plugin knows.
+#[test]
+fn preflight_warned_carries_the_finding_and_the_fix() {
+    let warned = Preflight::Warned {
+        reason: "the rust-src component is not installed, so calls into the \
+                 standard library cannot be located"
+            .into(),
+        remediation: "rustup component add rust-src".into(),
+    };
+
+    let Preflight::Warned {
+        reason,
+        remediation,
+    } = &warned
+    else {
+        panic!("the value under test is the Warned case");
+    };
+
+    // The two halves are separable. Fusing them into one string is what the
+    // decision above rejected, so the test that would pass on a fused value is
+    // not the test to write.
+    assert!(!reason.is_empty(), "a warning states what it found");
+    assert!(!remediation.is_empty(), "a warning states what to do");
+    assert!(
+        !remediation.contains("cannot be located"),
+        "the finding belongs in `reason`, not welded to the remediation"
+    );
 }

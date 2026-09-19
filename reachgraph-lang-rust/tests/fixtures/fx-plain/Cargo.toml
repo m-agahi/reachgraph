@@ -1,0 +1,7 @@
+# fx-plain — plan-03 §13 Tier B. Two crates, `a` calls `b`.
+#
+# `[workspace]` with its own members, so this tree is a workspace in its own
+# right rather than a member of reachgraph's. The parent excludes it.
+[workspace]
+resolver = "2"
+members = ["a", "b"]

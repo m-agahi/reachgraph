@@ -1,0 +1,17 @@
+#!/bin/sh
+# A program that RESOLVES, RUNS, EXITS 0 and proves nothing.
+#
+# design.md §10 MEASURED the real instance: on the author's machine
+# `command -v rust-analyzer` succeeds, `readlink -f` shows the target is
+# `rustup-1.29.0/bin/rustup` proxying to itself and looping, and
+# `rustup component list --installed` shows no rust-analyzer. A name resolving
+# is not a capability, and this file is that fact in executable form.
+#
+# CHECKED IN rather than written by the test, and the reason is a measured
+# flake. Creating an executable inside a multithreaded test binary that also
+# spawns cargo races with every other thread's fork: the child inherits the
+# open write descriptor for the window between fork and exec, and the later
+# `execve` fails with ETXTBSY, "Text file busy". A file that is already on disk
+# before the process starts cannot lose that race.
+echo 'info: syncing channel updates for 1.98.0-x86_64-unknown-linux-gnu'
+exit 0

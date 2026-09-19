@@ -1,0 +1,4 @@
+# fx-impl — plan-03 §13 Tier B. The fixture plan-04 binds against.
+[workspace]
+resolver = "2"
+members = ["i"]

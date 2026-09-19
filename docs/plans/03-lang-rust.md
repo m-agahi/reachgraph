@@ -3,6 +3,13 @@
 **Status:** ready to build. Two of §4's three ADR-0001 questions are decided; the third is
 measured and leaves one ADR-level decision open.
 **Date:** 2026-09-17
+**Amended:** 2026-09-19 (b) — from the build. Six claims in this plan are FALSIFIED by
+running code and are corrected in place, each marked **CORRECTED 2026-09-19**; questions 3,
+5 and 9a are answered; §15 lists every correction in one table. The headline: §4 D-C's
+in-process proc-macro route does not exist on the pinned toolchain, §9 question 9a's
+`extra_includes` loads the file but not the call, §11 check 2's remediation does not
+remediate, and §12's generic call is not missing — it reaches the trait declaration and
+never the implementation.
 **Amended:** 2026-09-19 — §14 question 11 resolved. `Preflight` gains
 `Warned { remediation }` in plan-00 §2, so §11's checks 3 and 4 return it instead of
 returning `Ok` and routing their finding to the run record. Changes are in §11 and §14.
@@ -253,6 +260,35 @@ MEASURED: `Explicit` takes a path to an **executable** and spawns it;
 spawned the same way. So through this API the only choices are _spawn a server binary_ or
 _disable expansion_. There is no third option in `load-cargo`.
 
+> **CORRECTED 2026-09-19 — the paragraph below is FALSIFIED on the pinned toolchain, and
+> the way it was measured is the lesson.** It was read from docs.rs, which builds with
+> features enabled on a nightly toolchain. MEASURED by compiling against
+> `ra_ap_proc_macro_srv` 0.0.352 on the pinned stable 1.98.0:
+>
+> - `src/lib.rs:11` is `#![cfg(feature = "in-rust-tree")]`, so **without that feature the
+>   crate exports nothing at all**. `ProcMacroSrv` does not exist —
+>   `error[E0425]: cannot find type ProcMacroSrv in crate ra_ap_proc_macro_srv`.
+> - With the feature it is `#![feature(proc_macro_internals, proc_macro_diagnostic,
+proc_macro_span, rustc_private)]` and `extern crate rustc_codegen_ssa /
+rustc_driver / rustc_interface / rustc_lexer / rustc_metadata / rustc_proc_macro /
+rustc_span`, which is `error[E0463]: can't find crate for rustc_codegen_ssa` on stable
+>   and needs a nightly toolchain with `rustc-dev` and `llvm-tools-preview`.
+>
+> **The expander seam itself is open** — `hir_expand::ProcMacroExpander` is a public trait,
+> `ProcMacrosBuilder::insert` and `ChangeWithProcMacros::set_proc_macros` are public — so
+> the wiring this section calls "the one remaining engineering unknown" is genuinely
+> available. What is not available is an expander to plug into it. Writing one means
+> re-implementing the proc-macro ABI bridge, which is ADR-0001's "write our own", a
+> different decision from "import it".
+>
+> So the only remaining route is spawning a server binary, and that is the ADR-level
+> decision this section flags. **It was not taken.** v0.1 ships
+> `ProcMacroServerChoice::None`, §11 check 3 reports it, and every `Provenance::engine`
+> carries `(proc-macros: disabled)`.
+>
+> A docs.rs signature is evidence that an API exists **somewhere**, not that it exists in
+> your build. Compile it.
+
 **MEASURED: the in-process capability nonetheless exists, one layer down.**
 `ra_ap_proc-macro-srv` 0.0.352 (MIT OR Apache-2.0, `has_lib: true`, `bin_names: []`,
 dependencies `ra_ap_intern`, `ra_ap_paths`, `ra_ap_span`, `ra_ap_stdx`, `rustc-hash` —
@@ -336,6 +372,28 @@ reloads; `NodeTable` is cleared with it.
 **Leak 5 (salsa lifecycle) never crosses the boundary.** No database, snapshot, `FileId`
 or `Cancellable` appears in any signature in `plugin-api`. `Cancellable::Err` is mapped to
 `PluginError` at the crate edge.
+
+> **ANSWERED 2026-09-19 (§14 question 5), by the compiler: `Send` but NOT `Sync`.**
+> `RootDatabase` reaches `salsa::plumbing::ZalsaLocal`, which holds a
+> `RefCell<QueryStack>` and an `UnsafeCell<HashMap<…>>`.
+>
+> So the sketch above is wrong in one word: **`Mutex<Option<Loaded>>`, not `RwLock`**.
+> `RwLock<T>: Sync` requires `T: Send + Sync`; `Mutex<T>: Sync` requires only `T: Send`.
+> The consequence is real and constrains every future caller — **calls into this plugin
+> serialise**, and two units cannot be walked concurrently through one `RustPlugin`.
+> ADR-0006 already concludes this is a build-time artifact rather than an interactive
+> tool, so the serialisation costs parallelism nothing was relying on.
+>
+> The alternative this section offers — mint a fresh snapshot per call under the lock —
+> does not help: `Analysis` is the same non-`Sync` type, so a stored snapshot and a fresh
+> one are equally unshareable. What the lock kind decides is whether the crate compiles.
+>
+> One more field changed for a measured reason: `Loaded.root` is the **workspace** root,
+> not the directory the caller named. With the caller's directory there,
+> `discover_units(<workspace>)` and `symbols_in(<member unit>)` rendered the same file two
+> different ways and a call target's `raw` stopped matching the `raw` the walk had emitted
+> for the same definition — which is §6's entire design, broken. A load now covers every
+> directory under the workspace root.
 
 **UNVERIFIED, and it constrains the above:** whether `AnalysisHost` and the `Analysis`
 snapshot it hands out are `Send` and `Sync`. rust-analyzer's own use is one snapshot per
@@ -442,6 +500,13 @@ Rust's unit of analysis is the **crate** (ADR-0008 leak 4).
 2. Load the workspace (§4 D-A: cargo is carved out of ADR-0001).
 3. Emit one `Unit` per **workspace member** crate:
    - `id: UnitId(<cargo package id>)` — stable, unique, no `|`.
+     **CORRECTED 2026-09-19:** this contradicts the line above it. One unit per target
+     means a package with a library and an integration test is two units, and two units
+     cannot share one id. What ships is `<package id>::<target name>::<target kind>`; the
+     package half is what §10 rules 3 and 4 compare, and `fx-impl` is the fixture that
+     catches a classifier comparing the whole thing. The package id itself is synthesised
+     as `<name>@<version> <manifest dir>` — MEASURED, `ra_ap_project_model::PackageData`
+     0.0.352 exposes no cargo package id field.
    - `display_name` — the crate name, plus target kind where a package has several
      (`mycrate`, `mycrate (test)`, `mycrate (build)`), so two units never display
      identically.
@@ -969,6 +1034,38 @@ Failed {
 }
 ```
 
+> **CORRECTED 2026-09-19 — this check WARNS, and its remediation is not the one above.**
+> Two things are wrong with it and both were measured rather than argued.
+>
+> **The remediation does not remediate.** MEASURED against a built single-member fixture:
+> after `cargo build`, the out-dir is still absent from the crate graph, the call into
+> generated code still produces no `CallItem`, and `goto_definition` on the call site
+> still returns nothing. §9 already says this in words — "a user who follows check 2's
+> remediation, builds the workspace and re-runs, gets the same empty result" — and this
+> section was written before that measurement. A remediation that does not work is worse
+> than none, because it carries the authority of a structured field.
+>
+> **And `Failed` contradicts D-D.** This section's own justification for refusing the run
+> is that `Failed` "is correct when the user can fix it in one command"; the premise is
+> now known false. §9 D-D then rules that v0.1 **ships** with generated code unindexed and
+> records the fact in coverage — which a refused run cannot do. The instruction that does
+> not bend is §14 question 11's: never emit a `Failed` for a non-fatal finding.
+>
+> What ships instead:
+>
+> ```
+> Warned {
+>   reason: "{pkgs} declare a build script whose generated code is not in the index. \
+>            reachgraph does not run builds and does not load build-script output, so \
+>            generated code — tonic client stubs among it — is not indexed and \
+>            cross-repo leaves do not appear in the graph.",
+>   remediation: "nothing on your side, and building the workspace does not help — \
+>                 reachgraph does not load generated code into the crate graph at all \
+>                 (plan-03 §9 D-D). Treat calls into generated code from these members \
+>                 as unmeasured rather than as absent",
+> }
+> ```
+
 MEASURED basis: design.md §8 prerequisite 2, and the §4 stub path that resolved only
 because `target/debug/build/…/out/` already existed.
 
@@ -1083,10 +1180,23 @@ are the evidence that decides it, so decide it while writing them.
 ## 12. Known gaps, carried into the artifact
 
 **Generics and trait dispatch.** rust-analyzer open issue **#19358**: call hierarchy misses
-calls through generics. MEASURED, design.md §8: the probe crossed the boundaries in one
-handler; gaps are expected elsewhere. The binding rule is design.md §8's and ADR-0004
-repeats it: **show a missing edge as missing; never infer one to fill a hole.** §13's
-`fx-generic` fixture asserts the gap rather than papering over it.
+calls through generics.
+
+> **CORRECTED 2026-09-19 — "misses" is the wrong word, and the right one matters more.**
+> MEASURED against `ra_ap` 0.0.352 with `fx-generic`: a call `value.run()` where
+> `value: &T, T: Op` **does** produce an edge — to the **trait's declaration**, `Op::run`.
+> The same call on a concrete `Only` produces an edge to the **implementation**,
+> `<Only as Op>::run`. The two targets are different nodes and the test asserts both.
+>
+> So what is missing is not the call; it is the **dispatch**. The generic caller never
+> reaches `Only`'s implementation, even though `Only` is the only implementor in the
+> crate. The failure mode to state plainly is the misleading one: a handler called only
+> through a generic looks reachable while the code that actually runs looks unreachable.
+> design.md §8's binding rule is unchanged and now has a sharper target — never infer the
+> vtable edge to fill the hole. MEASURED, design.md §8: the probe crossed the boundaries in one
+> handler; gaps are expected elsewhere. The binding rule is design.md §8's and ADR-0004
+> repeats it: **show a missing edge as missing; never infer one to fill a hole.** §13's
+> `fx-generic` fixture asserts the gap rather than papering over it.
 
 **Unresolved calls are invisible, not reported.** §9. `ra_ap` returns no `CallItem` for a
 call it cannot resolve, so there is no candidate set and `EdgeTarget::Unresolved` is never
@@ -1175,7 +1285,7 @@ is cited throughout this plan as measured evidence; no test may depend on it.
 | `fx-docs`    | `///` multi-line block, `//!` module doc, `#[doc = "…"]`                                                                       | full text, sigils stripped, **all** lines present. Explicitly asserts the failure design.md §5 measured: not last-line-only, not truncated at 83 chars, and a method's doc is non-empty                                                                                                                                                                                  |
 | `fx-impl`    | `trait Svc`; `impl Svc for Real` in `src/`; `impl Svc for Mock` in `tests/`; inherent `impl Real`                              | `container` set on every method; container `raw_kind` exactly `impl Svc for Real` / `impl Svc for Mock` / `impl Real`; `is_test` true only for the `tests/` one. **This is the fixture plan-04 binds against**, and its symbol dump is checked in as golden JSON for plan-04 to consume statically.                                                                      |
 | `fx-macro`   | an attribute proc-macro crate in the workspace, plus a build script writing a module into `OUT_DIR`, with a call crossing both | the edge exists, and the target is classified `Generated`. **The expensive, load-bearing test**: it is the in-repo equivalent of design.md §4's measured result, and it is the test that fails if §4 D-C ends at `ProcMacroServerChoice::None`, and the test that must be run against both a built and an unbuilt fixture because §4 D-B forbids reachgraph building it. |
-| `fx-generic` | a call dispatched through a generic parameter                                                                                  | **asserts the edge is absent**, citing rust-analyzer #19358, with a comment stating that an upstream fix makes this test fail and that the correct response is to delete the test and update §12 — not to relax the assertion                                                                                                                                            |
+| `fx-generic` | a call dispatched through a generic parameter, plus the same call on a concrete type as the control                            | **asserts the edge is absent**, citing rust-analyzer #19358, with a comment stating that an upstream fix makes this test fail and that the correct response is to delete the test and update §12 — not to relax the assertion                                                                                                                                            |
 
 ### Tier C — properties over Tier B output
 
@@ -1198,6 +1308,29 @@ is cited throughout this plan as measured evidence; no test may depend on it.
 - `no_symbol_range_exceeds_file_length` — catches an encoding mix-up (leak 3) that ASCII
   fixtures would otherwise hide. `fx-docs` therefore contains non-ASCII doc text on purpose.
 
+> **CORRECTED 2026-09-19 — two rows above assert the opposite of what they say.**
+>
+> `fx-macro` reads "the edge exists, and the target is classified `Generated`". It does
+> not exist: §9 D-D is the ruling and §4 D-C measured the reason, so the fixture asserts
+> the **D-D behaviour** instead — the edge into generated code is absent, the control edge
+> into local code beside it is present so an absent edge cannot be confused with a broken
+> fixture, and the absence is **reported** through the coverage statement. The row's
+> instruction to run it against both a built and an unbuilt fixture stands and is
+> honoured; what changed is which fact the built run establishes. The unbuilt run
+> asserts `Warned`, not the `Failed` §11 check 2 specified.
+>
+> `fx-generic` reads "asserts the edge is absent". The edge is present and points at the
+> trait declaration; what is absent is the edge to the implementation. See §12. The row's
+> real instruction — _an upstream fix makes this test fail and the correct response is to
+> delete the test and update §12, not to relax the assertion_ — is unchanged and is
+> written into the test.
+>
+> One row is also missing and has been added: **`probe_cargo` is exercised by an executed
+> shim**, not by supplying its outcome as data. §11 check 1a is stated as a prohibition
+> ("never `command -v`"), and a test that only asserts the message would stay green if the
+> probe were rewritten into a name lookup. The shim resolves, runs, exits 0 and prints
+> something useless — design.md §10's rustup proxy loop reproduced rather than described.
+
 ### Not tested here
 
 Graph construction, reachability, sharding — plan-01, against the fixture plugin. Proto
@@ -1218,24 +1351,37 @@ Question 3 is the only one still blocking engine-facing code.
 2. ~~**`load_out_dirs_from_check`: does reachgraph run `cargo check` itself?**~~
    **CLOSED 2026-09-17 — reachgraph never runs a build** (§4 D-B). An unbuilt repository
    is indexed with holes and the holes are recorded in the run record (§11, §12).
-3. **The proc-macro wiring seam, and the ADR-level question behind it.** (§4 D-C)
-   MEASURED: `ra_ap_proc-macro-srv` 0.0.352 exposes `ProcMacroSrv::{new, expand,
+3. ~~**The proc-macro wiring seam, and the ADR-level question behind it.**~~
+   **ANSWERED 2026-09-19 — the seam is open and there is nothing to put through it.**
+   `hir_expand::ProcMacroExpander` is a public trait and `ChangeWithProcMacros::
+set_proc_macros` is public, so supplying an expander is genuinely possible. But
+   `ra_ap_proc_macro_srv` 0.0.352 is `#![cfg(feature = "in-rust-tree")]` and exports
+   nothing without that feature, and with it needs nightly plus `rustc-dev` — MEASURED by
+   compiling, `E0425` then `E0463`. See §4 D-C.
+   **The only remaining route is spawning a server binary, and it was NOT taken.** v0.1
+   ships `ProcMacroServerChoice::None`, §11 check 3 reports it, and the ADR-level question
+   this plan flags is still open and still unasked. The original text follows.
+
+   > **The proc-macro wiring seam, and the ADR-level question behind it.** (§4 D-C)
+   > MEASURED: `ra_ap_proc-macro-srv` 0.0.352 exposes `ProcMacroSrv::{new, expand,
 list_macros}` and expands **in-process** by `dlopen`-ing the compiled dylib — no
-   subprocess. MEASURED: `ra_ap_load-cargo` offers no route to it; all three
-   `ProcMacroServerChoice` variants spawn a binary or disable expansion. UNVERIFIED: the
-   seam by which reachgraph supplies its own expander to the database instead of
-   `load-cargo`'s `ProcMacroClient`. **Verify that seam first** — success means no
-   subprocess is ever spawned and the ADR question never has to be asked. Only if the seam
-   is closed does spawning a proc-macro server become a live proposal, and that is an
-   ADR-level decision (the D-A carve-out does not cover it), not this plan's.
+   > subprocess. MEASURED: `ra_ap_load-cargo` offers no route to it; all three
+   > `ProcMacroServerChoice` variants spawn a binary or disable expansion. UNVERIFIED: the
+   > seam by which reachgraph supplies its own expander to the database instead of
+   > `load-cargo`'s `ProcMacroClient`. **Verify that seam first** — success means no
+   > subprocess is ever spawned and the ADR question never has to be asked. Only if the seam
+   > is closed does spawning a proc-macro server become a live proposal, and that is an
+   > ADR-level decision (the D-A carve-out does not cover it), not this plan's.
+
 4. ~~**The exact doc accessor.**~~ **CLOSED 2026-09-17** — MEASURED
    `ra_ap_hir::Docs::{into_docs() -> String, docs() -> &str}`, no `Display` and no
    `AsRef` (§8). The call is `hir_docs(db).map(|d| d.docs().to_owned())`. Residual: the
    borrowed accessor's exact return-type spelling, and whether sigils arrive stripped —
    both asserted by `fx-docs` (§13) rather than researched further. Fallback unchanged:
    name plus signature (ADR-0005), never markup scraping.
-5. **Are `AnalysisHost` and `Analysis` `Send` and `Sync`?** (§5) Decides whether `Loaded`
-   stores a snapshot or mints one per call under the lock.
+5. ~~**Are `AnalysisHost` and `Analysis` `Send` and `Sync`?**~~ **ANSWERED 2026-09-19 —
+   `Send`, not `Sync`.** The state is a `Mutex`, not an `RwLock`, and calls serialise.
+   See §5.
 6. **The `ra_ap_hir::Impl` accessors for trait and self type**, and the same-name-trait
    collision (§8). The string contract's _content_ is settled; the call that produces it is
    not, and the collision has no mitigation in v0.1.
@@ -1249,22 +1395,37 @@ list_macros}` and expands **in-process** by `dlopen`-ing the compiled dylib — 
    manufactures noise. v0.1 ships counters instead; v0.2 decides.
 9. **The exact direct-dependency set among the ~48 `ra_ap_*` crates** (§2). Settled by the
    first compile, not by this list.
-   9a. **Does `ProjectWorkspace::extra_includes` put an `OUT_DIR` into the VFS without running
-   build scripts?** (§9) **The highest-value unmeasured item in this plan**, and the only
-   one here that documentation cannot settle. MEASURED: the field is public and documented
-   as "Additional includes to add for the VFS"; MEASURED: the normal route is closed,
-   because `WorkspaceBuildScripts` has private fields and only `Default`, so
-   `set_build_scripts` cannot be handed data discovered on disk. Success recovers both
-   design.md §4's cross-repo leaf and plan-04 §11's consumed-root binding, at no cost —
-   which is why it is still worth measuring. **Failure is no longer a decision point**: §9
-   D-D rules that v0.1 then ships with generated code unindexed and says so in coverage.
-   Measure it; do not block on it.
-   9b. **plan-01 §11 question 8 is answered in §9** — partially, and the partition is the
-   answer: workspace members and dependency lib sources resolve at no extra cost; stdlib
-   resolves only with `rust-src` installed; `OUT_DIR` does not resolve under D-B, pending
-   9a. plan-01 §7.0's termination argument is **not** threatened by the `OUT_DIR` gap —
-   §9 explains why the unlocatable-but-reachable node does not arise there — but plan-01
-   should read that reasoning rather than take the conclusion on trust.
+   9a. ~~**Does `ProjectWorkspace::extra_includes` put an `OUT_DIR` into the VFS without
+   running build scripts?**~~ **ANSWERED 2026-09-19 in two stages, and the two stages are
+   the answer.** MEASURED against a built single-member fixture with a build script:
+   **(1) yes** — `CargoConfig::extra_includes` makes the generated file VFS-resident,
+   `vfs.file_id(OUT_DIR/gen.rs)` returning a `FileId` where without it the same lookup
+   returns `None`; **(2) no** — it does not make a call into that file resolve.
+   `outgoing_calls` returns `Some(0)` either way and `goto_definition` on the call site
+   returns zero targets, so it is name resolution that fails rather than the call
+   hierarchy, and injecting `OUT_DIR` through `load_workspace`'s `extra_env` as well does
+   not change it. A file in the VFS that belongs to no crate is **located, not indexed**.
+   §9 D-D's ruled branch therefore holds and `out_dir_mechanism` is `none`; reporting
+   `extra_includes` on the strength of stage 1 would claim coverage that does not exist.
+   The original text follows.
+
+   > **Does `ProjectWorkspace::extra_includes` put an `OUT_DIR` into the VFS without running
+   > build scripts?** (§9) **The highest-value unmeasured item in this plan**, and the only
+   > one here that documentation cannot settle. MEASURED: the field is public and documented
+   > as "Additional includes to add for the VFS"; MEASURED: the normal route is closed,
+   > because `WorkspaceBuildScripts` has private fields and only `Default`, so
+   > `set_build_scripts` cannot be handed data discovered on disk. Success recovers both
+   > design.md §4's cross-repo leaf and plan-04 §11's consumed-root binding, at no cost —
+   > which is why it is still worth measuring. **Failure is no longer a decision point**: §9
+   > D-D rules that v0.1 then ships with generated code unindexed and says so in coverage.
+   > Measure it; do not block on it.
+   > 9b. **plan-01 §11 question 8 is answered in §9** — partially, and the partition is the
+   > answer: workspace members and dependency lib sources resolve at no extra cost; stdlib
+   > resolves only with `rust-src` installed; `OUT_DIR` does not resolve under D-B, pending
+   > 9a. plan-01 §7.0's termination argument is **not** threatened by the `OUT_DIR` gap —
+   > §9 explains why the unlocatable-but-reachable node does not arise there — but plan-01
+   > should read that reasoning rather than take the conclusion on trust.
+
 10. **plan-00 §8 open question 1 is answered here** (§6): `edges_from` does not need a
     `&Unit`, because `NodeId::raw` is self-describing. It re-opens only if question 5
     forces a per-unit engine instance.
@@ -1285,3 +1446,79 @@ list_macros}` and expands **in-process** by `dlopen`-ing the compiled dylib — 
     non-fatal finding.** `Warned` is what that instruction was waiting for.
 
     Inherited open question: whether `Warned` also wants a `reason`. Plan-00 §8 question 7.
+
+---
+
+## 15. Corrections — what this plan asserted and the build falsified
+
+Added 2026-09-19, when the crate was written. Every row is a claim this document made,
+labelled MEASURED or decided, that running code contradicted. They are listed together
+because the pattern matters more than any one row: **four of the six came from reading a
+signature rather than compiling one**, and this project's own premise is that a derived
+claim must be traceable to its derivation.
+
+| §           | the plan said                                                                                              | what is true                                                                                                                                                                                                                    | where it is corrected |
+| ----------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| §4 D-C      | `ProcMacroSrv::{new, expand, list_macros}` is exposed, so in-process expansion is available one layer down | the crate is `#![cfg(feature = "in-rust-tree")]` and exports **nothing** without that feature; with it, it needs nightly plus `rustc-dev`. The signatures were read from docs.rs, which builds differently from this repository | §4 D-C, §14 q3        |
+| §5          | `loaded: RwLock<Option<Loaded>>`                                                                           | `RootDatabase` is `Send` but not `Sync`, so it is a `Mutex` and calls serialise                                                                                                                                                 | §5, §14 q5            |
+| §7          | `id: UnitId(<cargo package id>)`                                                                           | contradicts one unit per target in the same list; the id is `<package>::<target>::<kind>`                                                                                                                                       | §7                    |
+| §9 q9a      | unmeasured; success would recover the cross-repo leaf                                                      | `extra_includes` loads the file into the VFS and **not** into the crate graph. Located, not indexed                                                                                                                             | §14 q9a               |
+| §11 check 2 | `Failed`, remediation `cargo build --workspace once, then re-run`                                          | the command does not fix it, so the check `Warned`s and says so. `Failed` also contradicts D-D, which ships the index and records the gap                                                                                       | §11 check 2           |
+| §12, §13    | a call through a generic is **missing**                                                                    | it resolves — to the trait's **declaration**, never to the implementation. The dispatch is what is missing, not the call                                                                                                        | §12, §13              |
+
+### What was measured and is NOT corrected
+
+Recorded so a reader can tell a silence from an omission. §3's `ra_ap` signatures hold,
+with one addition: `CallHierarchyConfig` has gained `ra_fixture: RaFixtureConfig<'a>`
+since this plan quoted it, and `Analysis::goto_definition` has gained a config parameter
+too. §6's grammar, §8's kind table and impl-header grammar, §9's per-call-site edge rule,
+§9's two-step `Vfs` lookup including the `exists`-before-`file_path` panic, §10's five
+structural rules and §11 checks 1a, 1b, 3 and 4 all shipped as written.
+
+### Vendoring is NOT done, and the numbers are why it is a decision
+
+§2 and ADR-0001 require `cargo vendor` into the repository and `--locked` builds. The
+lockfile is committed and exact pins are in place; **the vendor tree is not**, because
+MEASURED 2026-09-19 it is a repository-weight decision this plan never priced:
+
+|                   |                                                                                              |
+| ----------------- | -------------------------------------------------------------------------------------------- |
+| vendored size     | **206 MB** (191,048,892 bytes), against a repository currently under 1 MB                    |
+| files             | 8,993 across 228 crate directories                                                           |
+| files over 500 kB | **21** — `check-added-large-files` defaults to `maxkb=500` and would refuse the commit       |
+| prebuilt binaries | **57.5 MB** of `.a` and `.lib` import libraries, the largest a 13 MB `windows_i686_gnu` blob |
+
+Two of those need naming rather than summing. **The binaries are not auditable source**,
+which is the property ADR-0001's "Vendor, do not fork" section says vendoring buys; they
+are Windows import libraries for a target this repository does not build. And **the
+pre-commit hooks would corrupt the tree**: vendored crates carry `.cargo-checksum.json`
+with a SHA-256 per file, `trailing-whitespace`, `end-of-file-fixer` and
+`mixed-line-ending --fix=lf` rewrite files in place, and 17 vendored `.rs` files in a
+3,000-file sample already carry trailing whitespace. A hook run would change them, the
+checksums would stop matching, and `cargo build --locked` would fail with "the listed
+checksum has changed". Excluding `vendor/` from those hooks is therefore a **prerequisite
+of vendoring**, not a tidy-up.
+
+None of that argues against ADR-0001; it argues that the vendoring step is its own change,
+with its own hook-configuration decision and its own review of 57 MB of binaries.
+
+### Two transitive pins that are not in any manifest
+
+MEASURED 2026-09-19 by builds that failed before them. Neither crate is a direct
+dependency, so neither can be pinned in `Cargo.toml`; the committed `Cargo.lock` is what
+holds them, and `cargo update` re-breaks the build loudly rather than silently.
+
+- **`salsa` 0.28.2, not 0.28.3/0.28.4.** `ra_ap_span` 0.0.352 asks for `^0.28.2`, and
+  0.28.3 — published 2026-09-18, four days **after** `ra_ap` 0.0.352 — changed
+  `IngredientImpl::intern`'s arity. The failure is `E0061` inside `ra_ap_span`'s own
+  `hygiene.rs`.
+- **`unicode-ident` 1.0.24, not 1.0.25/1.0.26.** `ra-ap-rustc_lexer` 0.166.0 asserts at
+  compile time that `unicode-ident` and `unicode-properties` agree on their Unicode
+  version. 1.0.25 (2026-09-16) does not agree with `unicode-properties` 0.1.4, and the
+  build fails with `E0080` on that assertion.
+
+This is what "0.0.x republished weekly with no semver promise" costs in practice, and it
+costs it through the **transitive** set rather than the pinned one. ADR-0001 item 3 —
+build `--locked` — is the containment, and MEASURED: the shared `ci-pr.yaml` runs
+`cargo test --all-features` **without** `--locked`. The committed lockfile holds in
+practice; the ADR's requirement is not enforced by the workflow.

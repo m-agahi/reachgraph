@@ -569,9 +569,13 @@ fn preflight_all(
         // it and checks nothing itself. Never `command -v`.
         match plugin.preflight(root) {
             Preflight::Ok => {}
-            Preflight::Warned { remediation } => {
+            Preflight::Warned {
+                reason,
+                remediation,
+            } => {
                 diagnostics.push(BuildDiagnostic::PreflightWarned {
                     plugin: plugin.id(),
+                    reason,
                     remediation,
                 });
             }

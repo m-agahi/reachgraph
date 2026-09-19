@@ -39,6 +39,8 @@ pub enum BuildDiagnostic {
     PreflightWarned {
         /// The plugin that reported it.
         plugin: PluginId,
+        /// What was checked and what was found.
+        reason: String,
         /// What the user should do about it.
         remediation: String,
     },

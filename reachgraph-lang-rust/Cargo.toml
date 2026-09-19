@@ -1,0 +1,40 @@
+# The Rust language plugin — plan-03. The only crate in the workspace permitted
+# to know that rust-analyzer exists (plan-03 §1), and the crate ADR-0008 leak 1
+# exists to contain: `NodeId` ↔ `FilePosition` happens here and nowhere else.
+[package]
+name = "reachgraph-lang-rust"
+description = "The reachgraph Rust plugin: symbols, call edges and classification over ra_ap_* (ADR-0004)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+reachgraph-plugin-api.workspace = true
+
+# ADR-0004: Rust imports its engine rather than shelling out to one. This is
+# the only crate in the workspace that names `ra_ap_*` (plan-03 §1), and
+# `engine_string_matches_pinned_version` reads the `ra_ap_ide` line below to
+# assert the `ENGINE` stamp against it.
+ra_ap_ide.workspace = true
+ra_ap_ide_db.workspace = true
+ra_ap_hir.workspace = true
+ra_ap_load-cargo.workspace = true
+ra_ap_project_model.workspace = true
+ra_ap_vfs.workspace = true
+ra_ap_paths.workspace = true
+ra_ap_syntax.workspace = true
+ra_ap_base_db.workspace = true
+ra_ap_span.workspace = true
+rustc-hash.workspace = true
+
+[features]
+# Plan-03 §13 Tier B. Each test behind this feature loads a real Cargo
+# workspace through cargo, which takes seconds rather than milliseconds — so
+# the fast suite stays fast and the slow one is asked for by name.
+#
+# The feature is DECLARED here, which is what makes `--all-features` turn it
+# on. A `cfg` no manifest declares is a test that never runs and never reports
+# that it did not.
+slow-tests = []
