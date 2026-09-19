@@ -144,8 +144,16 @@ pub fn bind_generated_client(symbols: &dyn SymbolIndex, operation: &Operation) -
 
     match bound.as_slice() {
         [one] => Binding::Bound(one.id.clone()),
-        _ => Binding::Unbound(UnboundReason::GeneratedStubNotIndexed {
+        [] => Binding::Unbound(UnboundReason::GeneratedStubNotIndexed {
             join_key: operation.join_key.clone(),
+        }),
+        // Two generated clients for one service cannot happen while `OUT_DIR`
+        // is unindexed, and reporting them as "the stub is not in the index"
+        // would be a false statement rather than a coarse one. The same rule as
+        // `bind_handler`: an ambiguous binding is a reported gap.
+        many => Binding::Unbound(UnboundReason::Ambiguous {
+            handler,
+            count: many.len(),
         }),
     }
 }

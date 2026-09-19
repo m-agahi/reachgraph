@@ -228,3 +228,35 @@ fn a_trait_impl_is_not_the_generated_client() {
         Binding::Unbound(UnboundReason::GeneratedStubNotIndexed { .. })
     ));
 }
+
+/// Two generated clients for one service are a reported gap, not a stub that
+/// "is not in the index".
+///
+/// Unreachable against `reachgraph-lang-rust` today — nothing under `target/`
+/// is indexed at all — and asserted anyway, because the reason string is what a
+/// user reads and the two situations are different facts about the world.
+#[test]
+fn two_generated_clients_are_ambiguous_rather_than_absent() {
+    let first = "target/debug/build/x-1111/out/acme.store.v2.rs";
+    let second = "target/debug/build/x-2222/out/acme.store.v2.rs";
+    let first_impl =
+        Sym::impl_block("WidgetDbClient", "impl WidgetDbClient<T>", first, 100).build();
+    let second_impl =
+        Sym::impl_block("WidgetDbClient", "impl WidgetDbClient<T>", second, 100).build();
+    let index = FakeIndex::new(vec![
+        Sym::method("create_widget", first, 110)
+            .inside(&first_impl)
+            .build(),
+        Sym::method("create_widget", second, 110)
+            .inside(&second_impl)
+            .build(),
+        first_impl,
+        second_impl,
+    ]);
+
+    let binding = bind_generated_client(&index, &op("WidgetDb", "CreateWidget"));
+    let Binding::Unbound(UnboundReason::Ambiguous { count, .. }) = &binding else {
+        panic!("two candidates are ambiguous, not absent: {binding:?}");
+    };
+    assert_eq!(*count, 2);
+}

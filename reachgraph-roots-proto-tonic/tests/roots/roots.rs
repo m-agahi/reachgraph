@@ -215,15 +215,19 @@ fn a_package_less_contract_keys_without_a_prefix() {
 #[test]
 fn a_service_with_no_evidence_says_so() {
     let (_plugin, roots) = roots_of("versioned", &FakeIndex::new(Vec::new()));
-    let root = &roots[0];
-    assert_eq!(root.direction, Direction::Consumed);
-    let RootBinding::Unbound { reason } = &root.binding else {
-        panic!("nothing in the fixture implements it: {root:?}");
-    };
-    assert!(
-        reason.contains("no first-party impl and no client reference"),
-        "{reason}"
-    );
+    assert_eq!(roots.len(), 2, "the fixture declares one RPC per version");
+
+    for root in &roots {
+        assert_eq!(root.direction, Direction::Consumed);
+        let RootBinding::Unbound { reason } = &root.binding else {
+            panic!("nothing in the fixture implements it: {root:?}");
+        };
+        assert!(
+            reason.contains("no first-party impl and no client reference"),
+            "{reason}"
+        );
+        assert!(reason.contains(&root.join_key), "{reason}");
+    }
 }
 
 /// Plan-04 §10 — coverage answers "what did you look at".
