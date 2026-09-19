@@ -35,6 +35,7 @@ pub mod ids;
 pub mod kinds;
 pub mod preflight;
 
+pub use engine::probe_program;
 pub use plugin::RustPlugin;
 
 use reachgraph_plugin_api::PluginId;

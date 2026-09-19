@@ -18,5 +18,6 @@ mod generated;
 mod generics;
 mod impls;
 mod plain;
+mod probe;
 mod properties;
 mod support;

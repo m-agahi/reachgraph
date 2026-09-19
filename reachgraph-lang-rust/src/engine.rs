@@ -136,20 +136,30 @@ fn display_path(root: &Path, path: &Path) -> String {
 /// resolving is not a capability, so the check runs the program and reads what
 /// it printed.
 pub(crate) fn probe_cargo() -> CargoProbe {
-    match Command::new("cargo").arg("--version").output() {
+    probe_program("cargo")
+}
+
+/// The probe itself, with the program named.
+///
+/// Parameterised so the mechanism can be tested rather than only its messages.
+/// A test can point it at a program that **resolves and proves nothing** —
+/// which is the rustup proxy loop, reproduced rather than described — without
+/// mutating `PATH` for every other test in the process.
+pub fn probe_program(program: &str) -> CargoProbe {
+    match Command::new(program).arg("--version").output() {
         Ok(output) if output.status.success() => {
             let line = String::from_utf8_lossy(&output.stdout).trim().to_owned();
             if line.starts_with("cargo ") {
                 CargoProbe::Responded { version: line }
             } else {
                 CargoProbe::DidNotRespond {
-                    detail: format!("`cargo --version` printed {line:?}, not a version line"),
+                    detail: format!("`{program} --version` printed {line:?}, not a version line"),
                 }
             }
         }
         Ok(output) => CargoProbe::DidNotRespond {
             detail: format!(
-                "`cargo --version` exited with {}: {}",
+                "`{program} --version` exited with {}: {}",
                 output.status,
                 String::from_utf8_lossy(&output.stderr).trim()
             ),
