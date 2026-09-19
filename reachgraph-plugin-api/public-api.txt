@@ -14,6 +14,12 @@
 
 ## reachgraph_plugin_api
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ArtifactFile {
+    pub path: String,
+    pub bytes: Vec<u8>,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Capability {
     Symbols,
@@ -173,6 +179,19 @@ pub enum RegistryError {
     CapabilityNotProvided { plugin: PluginId, capability: Capability },
 }
 
+#[derive(Debug)]
+pub enum RenderError {
+    Sink { path: String, source: std::io::Error },
+    Refused { reason: String },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct RenderInput<'a> {
+    pub view: &'a GraphView,
+    pub shards: &'a [Shard],
+    pub artifact: &'a [ArtifactFile],
+}
+
 #[derive(Clone, Debug)]
 pub struct Root {
     pub contract: ContractId,
@@ -285,6 +304,15 @@ pub trait Plugin: Send + Sync {
     fn notes(&self) -> Vec<String>;
 }
 
+pub trait Renderer: Send + Sync {
+    fn id(&self) -> PluginId;
+    fn render(
+        &self,
+        input: &RenderInput<'_>,
+        sink: &mut dyn OutputSink,
+    ) -> Result<(), RenderError>;
+}
+
 pub trait RootProvider: Plugin {
     fn roots(
         &self,
@@ -375,6 +403,14 @@ impl fmt::Display for RegistryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {}
 }
 
+impl fmt::Display for RenderError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {}
+}
+
 impl std::error::Error for PluginError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {}
+}
+
+impl std::error::Error for RenderError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {}
 }
