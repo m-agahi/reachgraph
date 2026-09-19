@@ -60,12 +60,99 @@ The decision instead:
 
 - Depend on `ra_ap_*` from crates.io.
 - Pin exact versions.
-- `cargo vendor` the sources into the repository.
+- ~~`cargo vendor` the sources into the repository.~~ **Amended 2026-09-19 — see below.**
 - Build with `--locked`.
 
 This yields auditable source in-tree and no network fetch at build time — supply-chain
 determinism — without owning the fork. An upstream update becomes a deliberate re-vendor,
 never a merge conflict.
+
+#### Amendment, 2026-09-19 — the vendor tree is produced at release time, not committed
+
+**`vendor/` is NOT committed to this repository.** The third bullet above is amended;
+every other part of the decision — depend, pin exact, build `--locked`, never fork — is
+unchanged and is now carrying more weight than it did, so it is enforced harder.
+
+**What the original bullet claimed, and what it actually produces.** The claim was
+"auditable source in-tree". MEASURED 2026-09-19, `cargo vendor --locked` on this
+workspace's committed `Cargo.lock`:
+
+| fact                                                  | measurement                                                    |
+| ----------------------------------------------------- | -------------------------------------------------------------- |
+| tree size                                             | 219 366 235 bytes across 11 877 files in 307 crate directories |
+| of which prebuilt binaries — Windows import libraries | 57 527 932 bytes in 8 `.a`/`.lib` files, 26.2% of the tree     |
+| files over `check-added-large-files`' 500 kB default  | 27                                                             |
+| compressed, for the sdist question                    | 35 991 848 bytes through `tar` into `gzip -6`                  |
+
+The first row is the cost. **The second row is the falsification:** a quarter of the tree
+is `libwindows.0.53.0.a` and `windows.0.53.0.lib`, prebuilt object archives for a target
+tier-1 does not build, and a prebuilt object archive is not auditable source. The bullet
+promised a property the mechanism does not deliver.
+
+The third row is a second, smaller cost that lands on the pre-commit configuration.
+Committing the tree needs `check-added-large-files` relaxed or `vendor/` excluded from it,
+**and** the three whitespace hooks excluded as well — every vendored crate carries a
+`.cargo-checksum.json` with a SHA-256 per file, so a hook that rewrites a byte makes
+`cargo build --locked` fail with "the listed checksum has changed". ADR-0738 already
+excludes `reachgraph-render-html/vendor/*.js` from those three hooks, and that precedent
+is narrow on purpose: five named files whose bytes are asserted against upstream hashes by
+a test. A `vendor/` exclusion is 11 877 files with no such test, plus a fourth hook
+weakened. Two broad weakenings to buy a property the tree does not have.
+
+**Three options were considered, not two.**
+
+| option                                             | offline build         | repository cost                        | determinism                                           |
+| -------------------------------------------------- | --------------------- | -------------------------------------- | ----------------------------------------------------- |
+| 1. commit `vendor/` — the original bullet          | yes, from a git clone | 219 MB, 11 877 files, 4 hooks weakened | `Cargo.lock` + the tree                               |
+| 2. `Cargo.lock` + `--locked` only                  | no                    | none                                   | `Cargo.lock`                                          |
+| **3. vendor at release time, into the sdist only** | yes, from the sdist   | none                                   | `Cargo.lock`, and the sdist's tree is derived from it |
+
+**Option 3 is taken, and it was BUILT before it was written down.** `cargo vendor
+--locked` runs in the release workflow, its output goes into the sdist, and the sdist
+builds with no network exactly as the original bullet intended. Nothing lands in git.
+
+MEASURED 2026-09-19 by producing one: the sdist is 36 426 802 bytes — 34.7% of PyPI's
+per-file limit, which its own help page states as 100.0 MiB — and carries all 11 877
+vendored files, the root manifest, `Cargo.lock`, all seven crates, `rust-toolchain.toml`
+and the `replace-with = "vendored-sources"` stanza. Unpacked, `cargo check --offline`
+built it in 25 s and reached the network not at all. A `.gitignore` entry for `vendor/`
+does not keep it out of the sdist: `[tool.maturin] include` wins, which is the one thing
+this design would have failed on.
+
+It cost one surprise, recorded in `docs/RELEASING.md` and in the workflow step that
+handles it: maturin trims `xtask` out of the workspace because it is `publish = false`
+and ships the untrimmed `Cargo.lock`, so `--locked` inside the sdist refuses a removal the
+sdist itself forced. A lockfile diff replaces the flag there.
+
+**What is lost, stated precisely.** A `git clone` plus `cargo build` reads crates.io. That
+is a loss of network _availability_, not of content determinism: MEASURED, the committed
+`Cargo.lock` carries a `checksum = "<sha256>"` for all 307 non-workspace packages, so a
+compromised or re-published crate fails the build rather than entering it. The vendor tree
+never added a guarantee about _what_ is compiled; it added a guarantee that the bytes are
+already on disk.
+
+**What replaces it, because the lockfile is now the whole of the determinism.**
+
+- `xtask/tests/packaging.rs::the_lockfile_holds_the_two_transitive_pins` asserts `salsa`
+  at exactly 0.28.2 and `unicode-ident` at exactly 1.0.24. Both are MEASURED
+  build-breakers one patch release later, both are transitive, and neither can be pinned
+  in a manifest — the lockfile is the only place they exist. The root `Cargo.toml` records
+  the two compile errors.
+- **`--locked` on every cargo invocation this repository controls**, as a pre-commit hook
+  rather than as a habit. MEASURED 2026-09-19: the shared `ci-pr.yaml` in `yadgarhq/actions`
+  runs `cargo test --all-features` and `cargo test --no-default-features` with **no
+  `--locked`**, so that leg would not notice a lockfile the working tree had drifted from.
+  The hook closes it on the local and the pull-request side, since `pre-commit/action`
+  runs every hook in CI with no skip list.
+- `cargo deny check` already runs as a hook: `unknown-registry = "deny"` and
+  `unknown-git = "deny"` keep the source set to crates.io, and `yanked = "deny"` is the
+  check the vendor tree could never perform, because a vendored copy of a yanked crate
+  looks exactly like a vendored copy of a live one.
+
+**What does not change.** Exact `=0.0.352` pins on the whole `ra_ap_*` family. An upstream
+bump is still its own pull request, still expected to break, and still runs plan-03 §13's
+full suite. The re-vendor step is gone; the deliberateness it was there to create is
+carried by the pin and by `--locked`.
 
 The same policy applies to every imported analysis crate, and the measured evidence says
 it is necessary rather than cautious. MEASURED 2026-09-17: `ra_ap_*` is 0.0.x republished
@@ -209,10 +296,14 @@ leaf.
 
 **Residual, honestly:**
 
-- crates.io dependencies remain. Vendoring makes them deterministic and auditable; it
-  does not make them absent.
-- **CVEs in vendored code become ours to patch and re-release.** This is a real,
-  recurring maintenance obligation, not a one-time cost.
+- crates.io dependencies remain. The exact pins and the committed `Cargo.lock` make them
+  deterministic; they do not make them absent. **Amended 2026-09-19:** the word
+  "auditable" stood here on the vendor tree, which no longer exists in git. What remains
+  is a per-crate SHA-256 in the lockfile — enough to detect a substitution, not enough to
+  call the dependency set read.
+- **CVEs in the dependency tree become ours to patch and re-release**, because the binary
+  links them statically. This is a real, recurring maintenance obligation, not a one-time
+  cost.
 - **Vendored JavaScript is invisible to Rust tooling.** Plan-05 vendors Cytoscape's UMD
   bundles in-tree and compiles them in with `include_str!`, because a CDN `<script src>`
   is a runtime download performed by the browser rather than by the binary. Removing npm
@@ -241,3 +332,17 @@ publisher of a `gopls`-binaries wheel ourselves.
 dead tool in `docs/design.md` §6 demanded setup before it returned value.
 
 **Fork rust-analyzer.** Rejected in favour of pinned-and-vendored dependencies, above.
+
+## History
+
+**2026-09-19 — the `cargo vendor` bullet is amended**, and the amendment is inline under
+"Vendor, do not fork" rather than here, because a reader of the decision must not be able
+to read the original bullet without it. The rest of the ADR is unchanged: one binary, no
+external tooling, no runtime downloads, depend-and-pin rather than fork, MIT OR
+Apache-2.0.
+
+The amendment was forced by measuring what the bullet produced. `cargo vendor --locked`
+writes 219 366 235 bytes, and 57 527 932 of them are prebuilt Windows import libraries —
+so "auditable source in-tree", the property the bullet was taken for, is not what the
+mechanism delivers. The offline-build property it also promised is kept, at the release
+boundary where it is actually consumed: the vendor tree is generated into the sdist.

@@ -13,3 +13,14 @@
 reachgraph-core/tests/golden/
 
 # The fixture corpus is hand-written and prettier DOES own it — no entry here.
+
+# `THIRD-PARTY-LICENSES.md` is GENERATED — `cargo xtask third-party-licenses`
+# — and the release checklist fails when regenerating it produces a diff
+# (plan-07 §6.2, §7.3). prettier reflows the tables and re-indents the
+# `<details>` blocks, so with it in scope the hook and the generator disagree
+# permanently and the notice can never be proved current.
+#
+# It is also mostly other people's words. A formatter has no business inside a
+# reproduced licence text — the same argument ADR-0738 makes for the vendored
+# JavaScript.
+THIRD-PARTY-LICENSES.md

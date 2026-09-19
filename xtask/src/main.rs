@@ -6,9 +6,11 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use xtask::golden::{self, GoldenTarget};
+use xtask::licenses;
 use xtask::SnapshotTarget;
 
-const USAGE: &str = "usage: cargo xtask (public-api | golden-symbols) [--bless]";
+const USAGE: &str =
+    "usage: cargo xtask (public-api | golden-symbols | third-party-licenses) [--bless]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -22,6 +24,8 @@ fn main() -> ExitCode {
         ["public-api", "--bless"] => public_api(true),
         ["golden-symbols"] => golden_symbols(false),
         ["golden-symbols", "--bless"] => golden_symbols(true),
+        ["third-party-licenses"] => third_party_licenses(false),
+        ["third-party-licenses", "--bless"] => third_party_licenses(true),
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(64)
@@ -75,6 +79,57 @@ fn golden_symbols(bless: bool) -> ExitCode {
         }
         Err(error) => {
             eprintln!("error: {}: {error}", target.golden.display());
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Regenerate, or check, `THIRD-PARTY-LICENSES.md` — plan-07 §6.2.
+///
+/// Same `--bless` rule as the two tasks above, and here it carries a second
+/// meaning. The notice is a legal obligation rather than a convenience, so the
+/// check half is what the release workflow runs: a notice that repaired itself
+/// on every build would go stale silently and still look current.
+fn third_party_licenses(bless: bool) -> ExitCode {
+    let root = workspace_root();
+    let notice = licenses::notice_path(&root);
+
+    let rendered = match licenses::render(&root) {
+        Ok(rendered) => rendered,
+        Err(error) => {
+            eprintln!("error: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if bless {
+        return match std::fs::write(&notice, &rendered) {
+            Ok(()) => {
+                println!("wrote {}", notice.display());
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("error: {}: {error}", notice.display());
+                ExitCode::FAILURE
+            }
+        };
+    }
+
+    match std::fs::read_to_string(&notice) {
+        Ok(checked_in) if checked_in == rendered => {
+            println!("{} is current", notice.display());
+            ExitCode::SUCCESS
+        }
+        Ok(_) => {
+            eprintln!(
+                "{} is out of date. A dependency changed and its notice did not — \
+                 run `cargo xtask third-party-licenses --bless`.",
+                notice.display()
+            );
+            ExitCode::FAILURE
+        }
+        Err(error) => {
+            eprintln!("error: {}: {error}", notice.display());
             ExitCode::FAILURE
         }
     }

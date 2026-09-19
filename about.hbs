@@ -1,0 +1,36 @@
+# Third-party licences
+
+reachgraph is distributed as a single statically linked binary, and the emitted artifact
+carries vendored JavaScript. Both are redistributions of other people's code, so both
+notices travel here.
+
+**This file is generated. Do not edit it.** Regenerate with
+`cargo xtask third-party-licenses`; CI fails if the regenerated file differs from the
+committed one.
+
+reachgraph's own licence is MIT OR Apache-2.0 — see `LICENSE-MIT` and `LICENSE-APACHE`.
+
+## Rust crates linked into the binary
+
+{{#each overview}}
+- **{{{name}}}** — {{count}} crate{{#if (ne count 1)}}s{{/if}}
+{{/each}}
+
+{{#each licenses}}
+### {{{name}}}
+
+Applies to:
+
+{{#each used_by}}
+- {{crate.name}} {{crate.version}}
+{{/each}}
+
+<details><summary>Licence text</summary>
+
+<pre>
+{{text}}
+</pre>
+
+</details>
+
+{{/each}}

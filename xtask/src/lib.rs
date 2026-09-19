@@ -26,6 +26,7 @@
 #![deny(missing_docs)]
 
 pub mod golden;
+pub mod licenses;
 
 use std::fmt;
 use std::fs;
