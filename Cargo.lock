@@ -27,6 +27,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
+name = "beef"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
+
+[[package]]
 name = "bitflags"
 version = "2.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -263,6 +269,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
 
 [[package]]
+name = "fnv"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
+
+[[package]]
 name = "foldhash"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -492,6 +504,15 @@ dependencies = [
 
 [[package]]
 name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
@@ -581,6 +602,40 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
+name = "logos"
+version = "0.15.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff472f899b4ec2d99161c51f60ff7075eeb3097069a36050d8037a6325eb8154"
+dependencies = [
+ "logos-derive",
+]
+
+[[package]]
+name = "logos-codegen"
+version = "0.15.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "192a3a2b90b0c05b27a0b2c43eecdb7c415e29243acc3f89cc8247a5b693045c"
+dependencies = [
+ "beef",
+ "fnv",
+ "lazy_static",
+ "proc-macro2",
+ "quote",
+ "regex-syntax",
+ "rustc_version",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "logos-derive"
+version = "0.15.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "605d9697bcd5ef3a42d38efc51541aa3d6a4a25f7ab6d1ed0da5ac632a26b470"
+dependencies = [
+ "logos-codegen",
+]
+
+[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -593,6 +648,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "miette"
+version = "7.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f98efec8807c63c752b5bd61f862c165c115b0a35685bdcfd9238c7aeb592b7"
+dependencies = [
+ "cfg-if",
+ "miette-derive",
+ "unicode-width",
+]
+
+[[package]]
+name = "miette-derive"
+version = "7.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db5b29714e950dbb20d5e6f74f9dcec4edbcc1067bb7f8ed198c097b8c1a818b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -803,6 +880,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "prost"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "528ac67416ff8646872a3c02cad9cc4ee5dc9f9540c9b10771855c95cb2e5ae1"
+dependencies = [
+ "bytes",
+ "prost-derive",
+]
+
+[[package]]
+name = "prost-derive"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
+dependencies = [
+ "anyhow",
+ "itertools 0.14.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "prost-types"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f94967dc7688f3054c7fac87473ffae4cc4c3904800e2d9f5b857246d8963b0a"
+dependencies = [
+ "prost",
+]
+
+[[package]]
+name = "protox-parse"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "072eee358134396a4643dff81cfff1c255c9fbd3fb296be14bdb6a26f9156366"
+dependencies = [
+ "logos",
+ "miette",
+ "prost-types",
+ "thiserror",
+]
+
+[[package]]
 name = "pulldown-cmark"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1006,7 +1127,7 @@ checksum = "d85f8f5db51a515c46e33f5ff427c6ca6d877e36df931849b8e21056c6bf93d5"
 dependencies = [
  "arrayvec",
  "either",
- "itertools",
+ "itertools 0.15.0",
  "la-arena",
  "ra-ap-rustc_type_ir",
  "ra_ap_base_db",
@@ -1040,7 +1161,7 @@ dependencies = [
  "either",
  "fst",
  "indexmap",
- "itertools",
+ "itertools 0.15.0",
  "la-arena",
  "ra-ap-rustc_abi",
  "ra-ap-rustc_parse_format",
@@ -1070,7 +1191,7 @@ checksum = "2e584a4031c431db6a20e76e83e64ffa3e1a31e442247d8b298addffbc234232"
 dependencies = [
  "cov-mark",
  "either",
- "itertools",
+ "itertools 0.15.0",
  "ra_ap_base_db",
  "ra_ap_cfg",
  "ra_ap_intern",
@@ -1101,7 +1222,7 @@ dependencies = [
  "either",
  "ena",
  "indexmap",
- "itertools",
+ "itertools 0.15.0",
  "la-arena",
  "oorandom",
  "petgraph",
@@ -1143,7 +1264,7 @@ dependencies = [
  "cov-mark",
  "dot",
  "either",
- "itertools",
+ "itertools 0.15.0",
  "nohash-hasher",
  "oorandom",
  "pulldown-cmark",
@@ -1176,7 +1297,7 @@ checksum = "f1bd4f7ff35b2e55b2559ccfc569a34200b0945e78f5407cad30c311b2938867"
 dependencies = [
  "cov-mark",
  "either",
- "itertools",
+ "itertools 0.15.0",
  "ra_ap_hir",
  "ra_ap_ide_db",
  "ra_ap_stdx",
@@ -1192,7 +1313,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbf12b9d09978bc5403f184e433c2d1813257d14fcf2ec3e2de6162347963e06"
 dependencies = [
  "cov-mark",
- "itertools",
+ "itertools 0.15.0",
  "ra_ap_base_db",
  "ra_ap_hir",
  "ra_ap_ide_db",
@@ -1215,7 +1336,7 @@ dependencies = [
  "crossbeam-channel",
  "either",
  "fst",
- "itertools",
+ "itertools 0.15.0",
  "line-index",
  "memchr",
  "nohash-hasher",
@@ -1246,7 +1367,7 @@ checksum = "910fa29097e77b6661d01bacdc625b87d054b534a4e9e77897a6ee6a3d7bde06"
 dependencies = [
  "cov-mark",
  "either",
- "itertools",
+ "itertools 0.15.0",
  "ra_ap_cfg",
  "ra_ap_hir",
  "ra_ap_ide_db",
@@ -1265,7 +1386,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4dea8e1c1ba181657cd0841366821e5c0c184b4913cd3d6a29ec514b06123862"
 dependencies = [
  "cov-mark",
- "itertools",
+ "itertools 0.15.0",
  "ra_ap_hir",
  "ra_ap_ide_db",
  "ra_ap_parser",
@@ -1294,7 +1415,7 @@ checksum = "714cbf4632c3722c144dae74c8c454497b902d9fd2e25328163c509fbc3d8c47"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
- "itertools",
+ "itertools 0.15.0",
  "ra_ap_hir_expand",
  "ra_ap_ide_db",
  "ra_ap_intern",
@@ -1404,7 +1525,7 @@ checksum = "660a998bb108bb7a8a561eabd43f23879c7d9959e4cae3318635f754e47bed22"
 dependencies = [
  "anyhow",
  "cargo_metadata",
- "itertools",
+ "itertools 0.15.0",
  "la-arena",
  "ra_ap_base_db",
  "ra_ap_cfg",
@@ -1447,7 +1568,7 @@ checksum = "d3a5a19381d885e40fe3c02d7b173cbff222a82b1da90f885c41fc6c69257f97"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-utils",
- "itertools",
+ "itertools 0.15.0",
  "jod-thread",
  "libc",
  "miow",
@@ -1462,7 +1583,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d9b5c51a7fed9b29b940f3b2d50017892f56bf85666240443b6ef2aa05ad6f2"
 dependencies = [
  "either",
- "itertools",
+ "itertools 0.15.0",
  "ra-ap-rustc_lexer",
  "ra_ap_parser",
  "ra_ap_stdx",
@@ -1652,6 +1773,15 @@ name = "reachgraph-plugin-api"
 version = "0.1.0"
 
 [[package]]
+name = "reachgraph-roots-proto-tonic"
+version = "0.1.0"
+dependencies = [
+ "prost-types",
+ "protox-parse",
+ "reachgraph-plugin-api",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1659,6 +1789,12 @@ checksum = "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d"
 dependencies = [
  "bitflags",
 ]
+
+[[package]]
+name = "regex-syntax"
+version = "0.8.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "rowan"
@@ -1705,6 +1841,15 @@ checksum = "486c2179b4796f65bfe2ee33679acf0927ac83ecf583ad6c91c3b4570911b9ad"
 dependencies = [
  "bitflags",
  "smallvec",
+]
+
+[[package]]
+name = "rustc_version"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
+dependencies = [
+ "semver",
 ]
 
 [[package]]
@@ -2176,6 +2321,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7df058c713841ad818f1dc5d3fd88063241cc61f49f5fbea4b951e8cf5a8d71d"
 
 [[package]]
+name = "unicode-width"
+version = "0.1.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af"
+
+[[package]]
 name = "url"
 version = "2.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2338,6 +2489,8 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
+ "reachgraph-lang-rust",
+ "reachgraph-plugin-api",
  "syn 2.0.119",
 ]
 

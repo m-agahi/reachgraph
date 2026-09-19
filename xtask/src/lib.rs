@@ -25,6 +25,8 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+pub mod golden;
+
 use std::fmt;
 use std::fs;
 use std::io;
