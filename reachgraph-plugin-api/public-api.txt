@@ -1,0 +1,245 @@
+# reachgraph-plugin-api — public API surface
+#
+# GENERATED. Regenerate with `cargo xtask public-api --bless`, which is a
+# deliberate command on purpose: a snapshot that repairs itself when the test
+# fails asserts nothing (plan-02 §7.2.1).
+#
+# `public_api_snapshot_matches` asserts this file byte for byte. A diff here is
+# a change to the plugin contract — an added field, a changed signature, a
+# leaked type — and it is a diff somebody has to read. The assertion makes the
+# change visible; it cannot make anyone look.
+#
+# Doc comments and function bodies are normalised away; derives, bounds and
+# signatures are not.
+
+## reachgraph_plugin_api
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Capability {
+    Symbols,
+    Edges,
+    Roots,
+    Classify,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Category {
+    FirstParty,
+    Generated,
+    WorkspaceSibling,
+    ThirdParty,
+    Stdlib,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct ContractId(pub String);
+
+#[derive(Clone, Debug)]
+pub struct Coverage {
+    pub contracts: Vec<ContractId>,
+    pub versions: Vec<(ContractId, Option<String>)>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Detection {
+    pub marker_files: &'static [&'static str],
+    pub extensions: &'static [&'static str],
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Direction {
+    Served,
+    Consumed,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum DocFormat {
+    Plain,
+    Markdown,
+}
+
+#[derive(Clone, Debug)]
+pub struct Edge {
+    pub from: NodeId,
+    pub to: EdgeTarget,
+    pub call_site: Option<SourceRange>,
+    pub provenance: Provenance,
+    pub inference_mode: InferenceMode,
+}
+
+#[derive(Clone, Debug)]
+pub enum EdgeTarget {
+    Resolved(NodeId),
+    Unresolved { name: String, candidates: Vec<NodeId> },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum InferenceMode {
+    Resolved,
+    Lexical,
+    TypeInferred,
+    Enclosure,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct NodeId {
+    pub plugin: PluginId,
+    pub raw: String,
+}
+
+#[derive(Debug)]
+pub enum PluginError {
+    Io { plugin: PluginId, path: PathBuf, source: std::io::Error },
+    Parse { plugin: PluginId, path: PathBuf, detail: String },
+    UnknownUnit { plugin: PluginId, unit: UnitId },
+    UnknownNode { plugin: PluginId, node: NodeId },
+    Engine { plugin: PluginId, engine: String, detail: String },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct PluginId(pub &'static str);
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PositionEncoding {
+    Utf8Bytes,
+    Utf16CodeUnits,
+    Utf32CodePoints,
+}
+
+#[derive(Clone, Debug)]
+pub enum Preflight {
+    Ok,
+    Warned { remediation: String },
+    Failed { reason: String, remediation: String },
+}
+
+#[derive(Clone, Debug)]
+pub struct Provenance {
+    pub plugin: PluginId,
+    pub engine: String,
+}
+
+#[derive(Default)]
+pub struct Registry {}
+
+#[derive(Clone, Debug)]
+pub struct Root {
+    pub contract: ContractId,
+    pub version: Option<String>,
+    pub service: String,
+    pub operation: String,
+    pub direction: Direction,
+    pub join_key: String,
+    pub binding: RootBinding,
+}
+
+#[derive(Clone, Debug)]
+pub enum RootBinding {
+    Bound(NodeId),
+    Unbound { reason: String },
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct SourceRange {
+    pub file: PathBuf,
+    pub span: Option<Span>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Span {
+    pub start: u32,
+    pub end: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct Symbol {
+    pub id: NodeId,
+    pub name: String,
+    pub kind: SymbolKind,
+    pub raw_kind: String,
+    pub range: SourceRange,
+    pub doc: Option<String>,
+    pub doc_format: DocFormat,
+    pub container: Option<NodeId>,
+    pub is_test: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SymbolKind {
+    Function,
+    Method,
+    Type,
+    Module,
+    Field,
+    Other,
+}
+
+#[derive(Clone, Debug)]
+pub struct Unit {
+    pub id: UnitId,
+    pub display_name: String,
+    pub root: PathBuf,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct UnitId(pub String);
+
+pub trait Classifier: Plugin {
+    fn classify(&self, path: &Path, unit: &Unit) -> Category;
+}
+
+pub trait EdgeProvider: LanguagePlugin {
+    fn edges_in(&self, unit: &Unit) -> Result<Vec<Edge>, PluginError>;
+    fn edges_from(&self, node: &NodeId) -> Result<Vec<Edge>, PluginError>;
+}
+
+pub trait LanguagePlugin: Plugin {
+    fn discover_units(&self, root: &Path) -> Result<Vec<Unit>, PluginError>;
+}
+
+pub trait Plugin: Send + Sync {
+    fn id(&self) -> PluginId;
+    fn provides(&self) -> &[Capability];
+    fn position_encoding(&self) -> PositionEncoding;
+    fn detection(&self) -> Detection;
+    fn preflight(&self, root: &Path) -> Preflight;
+}
+
+pub trait RootProvider: Plugin {
+    fn roots(
+        &self,
+        repo_root: &Path,
+        symbols: &dyn SymbolIndex,
+    ) -> Result<Vec<Root>, PluginError>;
+    fn coverage(&self) -> Coverage;
+}
+
+pub trait SymbolIndex {
+    fn by_name(&self, name: &str) -> Vec<&Symbol>;
+    fn in_file(&self, path: &Path) -> Vec<&Symbol>;
+    fn get(&self, id: &NodeId) -> Option<&Symbol>;
+}
+
+pub trait SymbolProvider: LanguagePlugin {
+    fn symbols_in(&self, unit: &Unit) -> Result<Vec<Symbol>, PluginError>;
+}
+
+impl Registry {
+    pub fn new() -> Self {}
+    pub fn register(&mut self, plugin: Box<dyn Plugin>) {}
+    pub fn plugins(&self) -> impl Iterator<Item = &dyn Plugin> {}
+    pub fn detect(&self, root: &Path) -> Vec<&dyn Plugin> {}
+    pub fn select(&self, id: PluginId) -> Option<&dyn Plugin> {}
+}
+
+impl fmt::Display for PluginError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {}
+}
+
+impl fmt::Display for PluginId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {}
+}
+
+impl std::error::Error for PluginError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {}
+}
