@@ -55,3 +55,15 @@ prettyplease = "0.2.25"
 quote = "1.0.37"
 proc-macro2 = "1.0.92"
 serde_json = "1.0.133"
+
+# The fixture's JSON format (plan-02 §2). `derive` only — `reachgraph-fixture`
+# declares its own serde-able mirror of every contract enum rather than deriving
+# on the contract types, because `reachgraph-plugin-api` has no dependencies and
+# adding serde there would add it to every plugin (plan-00 §1).
+serde = { version = "1.0.215", features = ["derive"] }
+
+# `assert_impl_all!` — plan-02 §7.2's compile-level guard. Dev-side only.
+static_assertions = "1.1.0"
+
+# Compile-fail cases (plan-02 §7.3). Dev-side only.
+trybuild = "1.0.101"
