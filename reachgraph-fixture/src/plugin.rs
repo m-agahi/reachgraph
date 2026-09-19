@@ -8,7 +8,7 @@ use reachgraph_plugin_api::{
     Capability, Category, Classifier, ContractId, Coverage, Detection, DocFormat, Edge,
     EdgeProvider, EdgeTarget, InferenceMode, LanguagePlugin, NodeId, Plugin, PluginError, PluginId,
     PositionEncoding, Preflight, Provenance, Root, RootBinding, RootProvider, Symbol, SymbolIndex,
-    SymbolKind, SymbolProvider, Unit, UnitId,
+    SymbolKind, SymbolProvider, Unit, UnitId, VersionKey,
 };
 
 use crate::format::{
@@ -431,7 +431,10 @@ impl RootProvider for FixturePlugin {
                 .coverage
                 .versions
                 .iter()
-                .map(|entry| (ContractId(entry.contract.clone()), entry.version.clone()))
+                .map(|entry| VersionKey {
+                    contract: ContractId(entry.contract.clone()),
+                    version: entry.version.clone(),
+                })
                 .collect(),
         }
     }

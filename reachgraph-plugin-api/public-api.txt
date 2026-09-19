@@ -31,13 +31,13 @@ pub enum Category {
     Stdlib,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct ContractId(pub String);
 
 #[derive(Clone, Debug)]
 pub struct Coverage {
     pub contracts: Vec<ContractId>,
-    pub versions: Vec<(ContractId, Option<String>)>,
+    pub versions: Vec<VersionKey>,
 }
 
 #[derive(Clone, Debug)]
@@ -73,6 +73,28 @@ pub enum EdgeTarget {
     Unresolved { name: String, candidates: Vec<NodeId> },
 }
 
+#[derive(Clone, Debug)]
+pub struct GraphView {
+    pub nodes: Vec<Node>,
+    pub edges: Vec<Edge>,
+    pub roots: Vec<Root>,
+    pub plugins: Vec<PluginDescriptor>,
+    pub coverage: IndexCoverage,
+}
+
+#[derive(Clone, Debug)]
+pub struct IndexCoverage {
+    pub contracts: Vec<ContractId>,
+    pub versions: Vec<VersionKey>,
+    pub roots_total: usize,
+    pub roots_bound: usize,
+    pub unbound_roots: Vec<UnboundRoot>,
+    pub units_indexed: Vec<UnitId>,
+    pub plugins: Vec<PluginId>,
+    pub traversal_terminal_categories: Vec<Category>,
+    pub partial: bool,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum InferenceMode {
     Resolved,
@@ -81,10 +103,27 @@ pub enum InferenceMode {
     Enclosure,
 }
 
+#[derive(Clone, Debug)]
+pub struct Node {
+    pub id: NodeId,
+    pub symbol: Option<Symbol>,
+    pub category: Option<Category>,
+    pub unit: Option<UnitId>,
+    pub depth: Option<u32>,
+    pub frontier: bool,
+}
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct NodeId {
     pub plugin: PluginId,
     pub raw: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct PluginDescriptor {
+    pub id: PluginId,
+    pub position_encoding: PositionEncoding,
+    pub capabilities: Vec<Capability>,
 }
 
 #[derive(Debug)]
@@ -139,6 +178,14 @@ pub enum RootBinding {
     Unbound { reason: String },
 }
 
+#[derive(Clone, Debug)]
+pub struct Shard {
+    pub root: Root,
+    pub depth_limit: Option<u32>,
+    pub frontier: Vec<NodeId>,
+    pub view: GraphView,
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct SourceRange {
     pub file: PathBuf,
@@ -175,14 +222,30 @@ pub enum SymbolKind {
 }
 
 #[derive(Clone, Debug)]
+pub struct UnboundRoot {
+    pub contract: ContractId,
+    pub version: Option<String>,
+    pub service: String,
+    pub operation: String,
+    pub direction: Direction,
+    pub reason: String,
+}
+
+#[derive(Clone, Debug)]
 pub struct Unit {
     pub id: UnitId,
     pub display_name: String,
     pub root: PathBuf,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct UnitId(pub String);
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct VersionKey {
+    pub contract: ContractId,
+    pub version: Option<String>,
+}
 
 pub trait Classifier: Plugin {
     fn classify(&self, path: &Path, unit: &Unit) -> Category;
@@ -226,6 +289,26 @@ pub trait SymbolIndex {
 
 pub trait SymbolProvider: LanguagePlugin {
     fn symbols_in(&self, unit: &Unit) -> Result<Vec<Symbol>, PluginError>;
+}
+
+impl GraphView {
+    pub fn new(
+        nodes: Vec<Node>,
+        edges: Vec<Edge>,
+        roots: Vec<Root>,
+        plugins: Vec<PluginDescriptor>,
+        coverage: IndexCoverage,
+    ) -> Self {}
+    pub fn node(&self, id: &NodeId) -> Option<&Node> {}
+    pub fn depth_of(&self, id: &NodeId) -> Option<u32> {}
+    pub fn max_depth(&self) -> Option<u32> {}
+    pub fn nodes_at_depth(&self, depth: u32) -> Vec<&Node> {}
+    pub fn container_of(&self, id: &NodeId) -> Option<&Node> {}
+    pub fn container_chain(&self, id: &NodeId) -> Vec<&Node> {}
+    pub fn contained_in(&self, id: &NodeId) -> Vec<&Node> {}
+    pub fn nodes_in_unit(&self, unit: &UnitId) -> Vec<&Node> {}
+    pub fn out_edges(&self, id: &NodeId) -> Vec<&Edge> {}
+    pub fn in_edges(&self, id: &NodeId) -> Vec<&Edge> {}
 }
 
 impl Registry {

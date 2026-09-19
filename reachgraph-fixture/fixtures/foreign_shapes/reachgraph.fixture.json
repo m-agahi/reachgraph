@@ -1,0 +1,170 @@
+{
+  "fixture_version": 1,
+  "plugin_id": "fixture",
+  "position_encoding": "utf8_bytes",
+  "capabilities": ["symbols", "edges", "roots", "classify"],
+  "detection": {
+    "marker_files": [],
+    "extensions": []
+  },
+  "preflight": "ok",
+  "engine": "reachgraph-fixture 0.1.0",
+  "units": [
+    {
+      "id": "unit:app",
+      "display_name": "app",
+      "root": "src"
+    }
+  ],
+  "symbols": {
+    "unit:app": [
+      {
+        "raw": "go:pkg/Server.Handle",
+        "name": "Handle",
+        "kind": "other",
+        "raw_kind": "go_receiver",
+        "file": "src/server.go",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "java:com.acme.Store",
+        "name": "Store",
+        "kind": "other",
+        "raw_kind": "java_class",
+        "file": "vendor/store.java",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "py:acme.Client",
+        "name": "Client",
+        "kind": "other",
+        "raw_kind": "py_class",
+        "file": "node_modules/client.py",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "go:stdlib/fmt.Println",
+        "name": "Println",
+        "kind": "other",
+        "raw_kind": "go_receiver",
+        "file": "/usr/lib/go/fmt/print.go",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:behind_third_party",
+        "name": "behind_third_party",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/behind.rs",
+        "doc": "Reached only through a third-party node, which is what the declared traversal limitation costs.",
+        "doc_format": "markdown",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "java:com.acme.Unused",
+        "name": "Unused",
+        "kind": "other",
+        "raw_kind": "java_class",
+        "file": "vendor/unused.java",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      }
+    ]
+  },
+  "edges": {
+    "unit:app": [
+      {
+        "from": "go:pkg/Server.Handle",
+        "to": {
+          "resolved": "java:com.acme.Store"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "lexical"
+      },
+      {
+        "from": "go:pkg/Server.Handle",
+        "to": {
+          "resolved": "py:acme.Client"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "enclosure"
+      },
+      {
+        "from": "go:pkg/Server.Handle",
+        "to": {
+          "resolved": "go:stdlib/fmt.Println"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      },
+      {
+        "from": "java:com.acme.Store",
+        "to": {
+          "resolved": "fn:behind_third_party"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      }
+    ]
+  },
+  "roots": [
+    {
+      "contract": "acme.shapes",
+      "version": "v1",
+      "service": "ShapeService",
+      "operation": "Handle",
+      "direction": "served",
+      "join_key": "acme.shapes.v1.ShapeService/Handle",
+      "binding": {
+        "bound": "go:pkg/Server.Handle"
+      }
+    }
+  ],
+  "coverage": {
+    "contracts": ["acme.shapes"],
+    "versions": [
+      {
+        "contract": "acme.shapes",
+        "version": "v1"
+      }
+    ]
+  },
+  "classify": [
+    {
+      "prefix": "src/",
+      "category": "first_party"
+    },
+    {
+      "prefix": "vendor/",
+      "category": "third_party"
+    },
+    {
+      "prefix": "node_modules/",
+      "category": "third_party"
+    },
+    {
+      "prefix": "/usr/lib/go/",
+      "category": "stdlib"
+    }
+  ],
+  "classify_fallback": "first_party"
+}

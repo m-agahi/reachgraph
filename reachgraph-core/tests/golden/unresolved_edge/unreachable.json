@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "claim": "not reachable from any endpoint version in this index",
+  "coverage": {
+    "contracts": [
+      "acme.task"
+    ],
+    "versions": [
+      {
+        "contract": "acme.task",
+        "version": "v1"
+      }
+    ],
+    "roots_total": 1,
+    "roots_bound": 1,
+    "unbound_roots": [],
+    "units_indexed": [
+      "unit:app"
+    ],
+    "plugins": [
+      "fixture"
+    ],
+    "traversal_terminal_categories": [
+      "third_party",
+      "stdlib"
+    ],
+    "partial": false
+  },
+  "nodes": [
+    {
+      "id": {
+        "plugin": "fixture",
+        "raw": "fn:db/execute_pg"
+      },
+      "name": "execute",
+      "file": "src/db/postgres.rs",
+      "category": "first_party",
+      "is_test": false,
+      "possibly_reachable_via_unresolved": true
+    },
+    {
+      "id": {
+        "plugin": "fixture",
+        "raw": "fn:db/execute_sqlite"
+      },
+      "name": "execute",
+      "file": "src/db/sqlite.rs",
+      "category": "first_party",
+      "is_test": false,
+      "possibly_reachable_via_unresolved": true
+    }
+  ],
+  "counts_by_category": {
+    "first_party": 2,
+    "generated": 0,
+    "workspace_sibling": 0,
+    "third_party": 0,
+    "stdlib": 0,
+    "unclassified": 0
+  },
+  "unresolved_edge_count": 1
+}

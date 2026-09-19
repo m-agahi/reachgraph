@@ -1,0 +1,147 @@
+{
+  "fixture_version": 1,
+  "plugin_id": "fixture",
+  "position_encoding": "utf8_bytes",
+  "capabilities": ["symbols", "edges", "roots", "classify"],
+  "detection": {
+    "marker_files": [],
+    "extensions": []
+  },
+  "preflight": "ok",
+  "engine": "reachgraph-fixture 0.1.0",
+  "units": [
+    {
+      "id": "unit:app",
+      "display_name": "app",
+      "root": "src"
+    }
+  ],
+  "symbols": {
+    "unit:app": [
+      {
+        "raw": "fn:a",
+        "name": "a",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/a.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:b",
+        "name": "b",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/b.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:c",
+        "name": "c",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/c.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:x",
+        "name": "x",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/x.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      }
+    ]
+  },
+  "edges": {
+    "unit:app": [
+      {
+        "from": "fn:a",
+        "to": {
+          "resolved": "fn:b"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      },
+      {
+        "from": "fn:b",
+        "to": {
+          "resolved": "fn:c"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      },
+      {
+        "from": "fn:c",
+        "to": {
+          "resolved": "fn:a"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      },
+      {
+        "from": "fn:x",
+        "to": {
+          "resolved": "fn:c"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      }
+    ]
+  },
+  "roots": [
+    {
+      "contract": "acme.cycle",
+      "version": "v1",
+      "service": "CycleService",
+      "operation": "Alpha",
+      "direction": "served",
+      "join_key": "acme.cycle.v1.CycleService/Alpha",
+      "binding": {
+        "bound": "fn:a"
+      }
+    },
+    {
+      "contract": "acme.cycle",
+      "version": "v1",
+      "service": "CycleService",
+      "operation": "Beta",
+      "direction": "served",
+      "join_key": "acme.cycle.v1.CycleService/Beta",
+      "binding": {
+        "bound": "fn:x"
+      }
+    }
+  ],
+  "coverage": {
+    "contracts": ["acme.cycle"],
+    "versions": [
+      {
+        "contract": "acme.cycle",
+        "version": "v1"
+      }
+    ]
+  },
+  "classify": [
+    {
+      "prefix": "src/",
+      "category": "first_party"
+    }
+  ],
+  "classify_fallback": "third_party"
+}

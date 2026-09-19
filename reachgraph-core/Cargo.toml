@@ -1,7 +1,9 @@
-# SKELETON. plan-01 fills it; this PR creates it because
-# `no_plugin_depends_on_core` cannot assert anything about a crate that does
-# not exist — a dependency-direction guard over a graph with no `core` node
-# passes by finding nothing.
+# The waist (ADR-0003). Graph assembly, reachability, the complement over all
+# roots, per-version classification and sharding.
+#
+# Three dependencies and no more, which is plan-01 §2's list. No `ra_ap_*`
+# (plan-00 §6.1 asserts its absence), no language crate, no plugin crate
+# outside `dev-dependencies`.
 [package]
 name = "reachgraph-core"
 description = "The reachgraph waist: graph assembly, reachability and sharding over the plugin-api schema."
@@ -10,6 +12,23 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+# One integration-test target, declared rather than discovered. A shared helper
+# module compiled into several `tests/*.rs` binaries is unused in whichever of
+# them does not call it, which `-D warnings` makes a failure — and an `allow`
+# attribute to silence it would be the first suppression in the tree.
+autotests = false
+
+[[test]]
+name = "waist"
+path = "tests/waist/main.rs"
 
 [dependencies]
 reachgraph-plugin-api.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+# The whole test corpus (ADR-0008, plan-02 §7.6). The edge points core →
+# fixture, which is the direction `no_plugin_depends_on_core` permits: the
+# guard refuses a plugin reaching `core`, not `core` reaching a plugin.
+reachgraph-fixture.workspace = true

@@ -1,0 +1,187 @@
+{
+  "fixture_version": 1,
+  "plugin_id": "fixture",
+  "position_encoding": "utf8_bytes",
+  "capabilities": ["symbols", "edges", "roots", "classify"],
+  "detection": {
+    "marker_files": [],
+    "extensions": []
+  },
+  "preflight": "ok",
+  "engine": "reachgraph-fixture 0.1.0",
+  "units": [
+    {
+      "id": "unit:app",
+      "display_name": "app",
+      "root": "src"
+    }
+  ],
+  "symbols": {
+    "unit:app": [
+      {
+        "raw": "fn:step0",
+        "name": "step0",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/step0.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:step1",
+        "name": "step1",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/step1.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:step2",
+        "name": "step2",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/step2.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:step3",
+        "name": "step3",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/step3.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:step4",
+        "name": "step4",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/step4.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:step5",
+        "name": "step5",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/step5.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:step6",
+        "name": "step6",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/step6.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      }
+    ]
+  },
+  "edges": {
+    "unit:app": [
+      {
+        "from": "fn:step0",
+        "to": {
+          "resolved": "fn:step1"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      },
+      {
+        "from": "fn:step1",
+        "to": {
+          "resolved": "fn:step2"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      },
+      {
+        "from": "fn:step2",
+        "to": {
+          "resolved": "fn:step3"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      },
+      {
+        "from": "fn:step3",
+        "to": {
+          "resolved": "fn:step4"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      },
+      {
+        "from": "fn:step4",
+        "to": {
+          "resolved": "fn:step5"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      },
+      {
+        "from": "fn:step5",
+        "to": {
+          "resolved": "fn:step6"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      }
+    ]
+  },
+  "roots": [
+    {
+      "contract": "acme.deep",
+      "version": "v1",
+      "service": "DeepService",
+      "operation": "Walk",
+      "direction": "served",
+      "join_key": "acme.deep.v1.DeepService/Walk",
+      "binding": {
+        "bound": "fn:step0"
+      }
+    }
+  ],
+  "coverage": {
+    "contracts": ["acme.deep"],
+    "versions": [
+      {
+        "contract": "acme.deep",
+        "version": "v1"
+      }
+    ]
+  },
+  "classify": [
+    {
+      "prefix": "src/",
+      "category": "first_party"
+    }
+  ],
+  "classify_fallback": "third_party"
+}

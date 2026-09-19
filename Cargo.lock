@@ -82,7 +82,10 @@ dependencies = [
 name = "reachgraph-core"
 version = "0.1.0"
 dependencies = [
+ "reachgraph-fixture",
  "reachgraph-plugin-api",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

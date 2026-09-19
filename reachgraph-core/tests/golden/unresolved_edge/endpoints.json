@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "generated_by": {
+    "tool": "reachgraph",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "id": "fixture",
+      "position_encoding": "utf8_bytes",
+      "capabilities": [
+        "symbols",
+        "edges",
+        "roots",
+        "classify"
+      ]
+    }
+  ],
+  "operations": [
+    {
+      "contract": "acme.task",
+      "service": "TaskService",
+      "operation": "CreateTask",
+      "direction": "served",
+      "versions": [
+        {
+          "version": "v1",
+          "join_key": "acme.task.v1.TaskService/CreateTask",
+          "binding": {
+            "state": "bound",
+            "node": {
+              "plugin": "fixture",
+              "raw": "fn:db/insert_task"
+            }
+          },
+          "shard": "graph/acme.task__v1__TaskService__CreateTask__served__233f0a8e254bdee3.json",
+          "node_count": 1,
+          "frontier_count": 0
+        }
+      ]
+    }
+  ],
+  "coverage": {
+    "contracts": [
+      "acme.task"
+    ],
+    "versions": [
+      {
+        "contract": "acme.task",
+        "version": "v1"
+      }
+    ],
+    "roots_total": 1,
+    "roots_bound": 1,
+    "unbound_roots": [],
+    "units_indexed": [
+      "unit:app"
+    ],
+    "plugins": [
+      "fixture"
+    ],
+    "traversal_terminal_categories": [
+      "third_party",
+      "stdlib"
+    ],
+    "partial": false
+  }
+}

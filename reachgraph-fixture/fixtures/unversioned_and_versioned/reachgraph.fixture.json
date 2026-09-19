@@ -1,0 +1,157 @@
+{
+  "fixture_version": 1,
+  "plugin_id": "fixture",
+  "position_encoding": "utf8_bytes",
+  "capabilities": ["symbols", "edges", "roots", "classify"],
+  "detection": {
+    "marker_files": [],
+    "extensions": []
+  },
+  "preflight": "ok",
+  "engine": "reachgraph-fixture 0.1.0",
+  "units": [
+    {
+      "id": "unit:app",
+      "display_name": "app",
+      "root": "src"
+    }
+  ],
+  "symbols": {
+    "unit:app": [
+      {
+        "raw": "fn:unversioned/ping",
+        "name": "ping_unversioned",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/unversioned.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:v1/ping",
+        "name": "ping_v1",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/v1.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:none/ping",
+        "name": "ping_none",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/none.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:shared/reply",
+        "name": "reply",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/reply.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      }
+    ]
+  },
+  "edges": {
+    "unit:app": [
+      {
+        "from": "fn:unversioned/ping",
+        "to": {
+          "resolved": "fn:shared/reply"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      },
+      {
+        "from": "fn:v1/ping",
+        "to": {
+          "resolved": "fn:shared/reply"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      },
+      {
+        "from": "fn:none/ping",
+        "to": {
+          "resolved": "fn:shared/reply"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      }
+    ]
+  },
+  "roots": [
+    {
+      "contract": "acme.ping",
+      "version": null,
+      "service": "PingService",
+      "operation": "Ping",
+      "direction": "served",
+      "join_key": "acme.ping.PingService/Ping",
+      "binding": {
+        "bound": "fn:unversioned/ping"
+      }
+    },
+    {
+      "contract": "acme.ping",
+      "version": "v1",
+      "service": "PingService",
+      "operation": "Ping",
+      "direction": "served",
+      "join_key": "acme.ping.v1.PingService/Ping",
+      "binding": {
+        "bound": "fn:v1/ping"
+      }
+    },
+    {
+      "contract": "acme.ping",
+      "version": "none",
+      "service": "PingService",
+      "operation": "Ping",
+      "direction": "served",
+      "join_key": "acme.ping.none.PingService/Ping",
+      "binding": {
+        "bound": "fn:none/ping"
+      }
+    }
+  ],
+  "coverage": {
+    "contracts": ["acme.ping"],
+    "versions": [
+      {
+        "contract": "acme.ping",
+        "version": null
+      },
+      {
+        "contract": "acme.ping",
+        "version": "v1"
+      },
+      {
+        "contract": "acme.ping",
+        "version": "none"
+      }
+    ]
+  },
+  "classify": [
+    {
+      "prefix": "src/",
+      "category": "first_party"
+    }
+  ],
+  "classify_fallback": "third_party"
+}

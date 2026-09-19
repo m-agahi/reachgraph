@@ -1,0 +1,93 @@
+{
+  "fixture_version": 1,
+  "plugin_id": "fixture",
+  "position_encoding": "utf8_bytes",
+  "capabilities": ["symbols", "edges", "roots"],
+  "detection": {
+    "marker_files": [],
+    "extensions": []
+  },
+  "preflight": "ok",
+  "engine": "reachgraph-fixture 0.1.0",
+  "units": [
+    {
+      "id": "unit:app",
+      "display_name": "app",
+      "root": "src"
+    }
+  ],
+  "symbols": {
+    "unit:app": [
+      {
+        "raw": "fn:entry",
+        "name": "entry",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/entry.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:reached",
+        "name": "reached",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/reached.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:unreached",
+        "name": "unreached",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/unreached.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      }
+    ]
+  },
+  "edges": {
+    "unit:app": [
+      {
+        "from": "fn:entry",
+        "to": {
+          "resolved": "fn:reached"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      }
+    ]
+  },
+  "roots": [
+    {
+      "contract": "acme.plain",
+      "version": "v1",
+      "service": "PlainService",
+      "operation": "Enter",
+      "direction": "served",
+      "join_key": "acme.plain.v1.PlainService/Enter",
+      "binding": {
+        "bound": "fn:entry"
+      }
+    }
+  ],
+  "coverage": {
+    "contracts": ["acme.plain"],
+    "versions": [
+      {
+        "contract": "acme.plain",
+        "version": "v1"
+      }
+    ]
+  },
+  "classify": [],
+  "classify_fallback": "third_party"
+}
