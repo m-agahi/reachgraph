@@ -86,10 +86,28 @@ fn an_undocumented_item_has_no_doc_rather_than_an_empty_one() {
 
     assert_eq!(undocumented.doc, None);
 
-    // And an item whose doc block is present but empty is the same absence.
-    // `Some("")` would be a value claiming the engine found something.
-    let empty = named(&symbols, "empty_doc");
-    assert_eq!(empty.doc, None, "an empty doc block is an absent doc");
+    // And a doc block that is PRESENT and EMPTY is the same absence.
+    // `Some("")` or `Some("\n")` would be a value claiming the engine found
+    // something.
+    //
+    // MEASURED which spellings reach which: `#[doc = ""]` and `#[doc = "   "]`
+    // arrive from the engine as `None` already, so only `///` with no text
+    // exercises this crate's own guard. The mutation sweep found that out —
+    // with only the attribute spellings in the fixture, deleting the guard
+    // left the suite green. All three are asserted, and the one that matters
+    // is named.
+    for name in ["empty_doc", "spaces_doc"] {
+        assert_eq!(
+            named(&symbols, name).doc,
+            None,
+            "{name}: an empty doc attribute is an absent doc"
+        );
+    }
+    assert_eq!(
+        named(&symbols, "whitespace_doc").doc,
+        None,
+        "a `///` block with no text is an absent doc, not Some(\"\\n\")"
+    );
 }
 
 /// The `//!` module doc reaches the module symbol.

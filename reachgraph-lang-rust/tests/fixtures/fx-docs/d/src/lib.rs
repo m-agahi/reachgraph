@@ -42,3 +42,18 @@ pub fn undocumented() -> u32 {
 pub fn empty_doc() -> u32 {
     4
 }
+
+// Three spellings of an empty doc, because they are NOT equivalent and the
+// difference is measured rather than assumed: the two attribute forms arrive
+// from the engine as no docs at all, and only this one — a `///` block with no
+// text — reaches this crate's own honest-absence guard.
+///
+///
+pub fn whitespace_doc() -> u32 {
+    5
+}
+
+#[doc = "   "]
+pub fn spaces_doc() -> u32 {
+    6
+}
