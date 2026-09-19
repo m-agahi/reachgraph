@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "version_keys": [
+    {
+      "contract": "acme.task",
+      "version": "v1"
+    }
+  ],
+  "nodes": [
+    {
+      "id": {
+        "plugin": "fixture",
+        "raw": "fn:db/insert_task"
+      },
+      "reached_by": [0],
+      "class": null
+    },
+    {
+      "id": {
+        "plugin": "fixture",
+        "raw": "fn:db/execute_pg"
+      },
+      "reached_by": [],
+      "class": null
+    },
+    {
+      "id": {
+        "plugin": "fixture",
+        "raw": "fn:db/execute_sqlite"
+      },
+      "reached_by": [],
+      "class": null
+    }
+  ],
+  "summary_by_contract": {}
+}

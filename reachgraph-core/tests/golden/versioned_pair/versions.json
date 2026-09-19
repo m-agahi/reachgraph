@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "version_keys": [
+    {
+      "contract": "acme.task",
+      "version": "v1"
+    },
+    {
+      "contract": "acme.task",
+      "version": "v2"
+    }
+  ],
+  "nodes": [
+    {
+      "id": {
+        "plugin": "fixture",
+        "raw": "impl:TaskService_for_TaskServer"
+      },
+      "reached_by": [],
+      "class": null
+    },
+    {
+      "id": {
+        "plugin": "fixture",
+        "raw": "fn:v1/create_task"
+      },
+      "reached_by": [0],
+      "class": "v1_only"
+    },
+    {
+      "id": {
+        "plugin": "fixture",
+        "raw": "fn:v2/create_task"
+      },
+      "reached_by": [1],
+      "class": "v2_only"
+    },
+    {
+      "id": {
+        "plugin": "fixture",
+        "raw": "fn:shared/persist"
+      },
+      "reached_by": [0, 1],
+      "class": "both"
+    },
+    {
+      "id": {
+        "plugin": "fixture",
+        "raw": "fn:v1only/legacy_audit"
+      },
+      "reached_by": [0],
+      "class": "v1_only"
+    },
+    {
+      "id": {
+        "plugin": "fixture",
+        "raw": "fn:v2only/validate"
+      },
+      "reached_by": [1],
+      "class": "v2_only"
+    },
+    {
+      "id": {
+        "plugin": "fixture",
+        "raw": "fn:orphan/unused_helper"
+      },
+      "reached_by": [],
+      "class": null
+    }
+  ],
+  "summary_by_contract": {
+    "acme.task": {
+      "v1_only": 2,
+      "v2_only": 2,
+      "both": 1
+    }
+  }
+}

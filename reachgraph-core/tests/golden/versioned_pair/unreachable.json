@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "claim": "not reachable from any endpoint version in this index",
+  "coverage": {
+    "contracts": ["acme.task"],
+    "versions": [
+      {
+        "contract": "acme.task",
+        "version": "v1"
+      },
+      {
+        "contract": "acme.task",
+        "version": "v2"
+      }
+    ],
+    "roots_total": 2,
+    "roots_bound": 2,
+    "unbound_roots": [],
+    "units_indexed": ["unit:app"],
+    "plugins": ["fixture"],
+    "traversal_terminal_categories": ["third_party", "stdlib"],
+    "partial": false
+  },
+  "nodes": [
+    {
+      "id": {
+        "plugin": "fixture",
+        "raw": "impl:TaskService_for_TaskServer"
+      },
+      "name": "TaskServer",
+      "file": "src/service/mod.rs",
+      "category": "first_party",
+      "is_test": false,
+      "possibly_reachable_via_unresolved": false
+    },
+    {
+      "id": {
+        "plugin": "fixture",
+        "raw": "fn:orphan/unused_helper"
+      },
+      "name": "unused_helper",
+      "file": "src/util.rs",
+      "category": "first_party",
+      "is_test": false,
+      "possibly_reachable_via_unresolved": false
+    }
+  ],
+  "counts_by_category": {
+    "first_party": 2,
+    "generated": 0,
+    "workspace_sibling": 0,
+    "third_party": 0,
+    "stdlib": 0,
+    "unclassified": 0
+  },
+  "unresolved_edge_count": 0
+}

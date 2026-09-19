@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "root": {
+    "contract": "acme.task",
+    "version": "v1",
+    "service": "TaskService",
+    "operation": "CreateTask",
+    "direction": "served",
+    "join_key": "acme.task.v1.TaskService/CreateTask",
+    "binding": {
+      "state": "bound",
+      "node": {
+        "plugin": "fixture",
+        "raw": "fn:db/insert_task"
+      }
+    }
+  },
+  "depth_limit": 3,
+  "plugins": [
+    {
+      "id": "fixture",
+      "position_encoding": "utf8_bytes",
+      "capabilities": ["symbols", "edges", "roots", "classify"]
+    }
+  ],
+  "nodes": [
+    {
+      "id": {
+        "plugin": "fixture",
+        "raw": "fn:db/insert_task"
+      },
+      "symbol": {
+        "name": "insert_task",
+        "kind": "function",
+        "raw_kind": "fn",
+        "range": {
+          "file": "src/db/insert.rs",
+          "span": null
+        },
+        "doc": "Insert a task through whichever backend is configured.",
+        "doc_format": "markdown",
+        "is_test": false,
+        "container": null
+      },
+      "unit": "unit:app",
+      "category": "first_party",
+      "depth": 0,
+      "frontier": false
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "plugin": "fixture",
+        "raw": "fn:db/insert_task"
+      },
+      "to": {
+        "state": "unresolved",
+        "name": "execute",
+        "candidates": [
+          {
+            "plugin": "fixture",
+            "raw": "fn:db/execute_pg"
+          },
+          {
+            "plugin": "fixture",
+            "raw": "fn:db/execute_sqlite"
+          }
+        ]
+      },
+      "call_site": null,
+      "provenance": {
+        "plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0"
+      },
+      "inference_mode": "lexical"
+    }
+  ],
+  "frontier": [],
+  "stats": {
+    "node_count": 1,
+    "edge_count": 1,
+    "unresolved_edge_count": 1
+  }
+}

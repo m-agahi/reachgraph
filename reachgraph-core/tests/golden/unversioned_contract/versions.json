@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "version_keys": [
+    {
+      "contract": "acme.legacy",
+      "version": null
+    }
+  ],
+  "nodes": [
+    {
+      "id": {
+        "plugin": "fixture",
+        "raw": "fn:legacy/handle_ping"
+      },
+      "reached_by": [0],
+      "class": null
+    }
+  ],
+  "summary_by_contract": {}
+}

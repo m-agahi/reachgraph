@@ -1,0 +1,87 @@
+{
+  "fixture_version": 1,
+  "plugin_id": "fixture_b",
+  "position_encoding": "utf8_bytes",
+  "capabilities": ["symbols", "edges", "roots", "classify"],
+  "detection": {
+    "marker_files": [],
+    "extensions": []
+  },
+  "preflight": "ok",
+  "engine": "reachgraph-fixture 0.1.0",
+  "units": [
+    {
+      "id": "unit:b",
+      "display_name": "fixture_b",
+      "root": "src"
+    }
+  ],
+  "symbols": {
+    "unit:b": [
+      {
+        "raw": "fn:shared/same_raw",
+        "name": "same_raw",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/b/same.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:b/callee",
+        "name": "callee",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/b/callee.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      }
+    ]
+  },
+  "edges": {
+    "unit:b": [
+      {
+        "from": "fn:shared/same_raw",
+        "to": {
+          "resolved": "fn:b/callee"
+        },
+        "provenance_plugin": "fixture_b",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      }
+    ]
+  },
+  "roots": [
+    {
+      "contract": "acme.b",
+      "version": "v1",
+      "service": "SharedService",
+      "operation": "Same",
+      "direction": "served",
+      "join_key": "acme.b.v1.SharedService/Same",
+      "binding": {
+        "bound": "fn:shared/same_raw"
+      }
+    }
+  ],
+  "coverage": {
+    "contracts": ["acme.b"],
+    "versions": [
+      {
+        "contract": "acme.b",
+        "version": "v1"
+      }
+    ]
+  },
+  "classify": [
+    {
+      "prefix": "src/",
+      "category": "first_party"
+    }
+  ],
+  "classify_fallback": "third_party"
+}

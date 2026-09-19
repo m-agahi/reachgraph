@@ -180,6 +180,7 @@ pub struct UnreachableNode {
 }
 
 /// One bound root and the walk it produced.
+#[derive(Debug)]
 struct BoundRoot {
     root: Root,
     start: NodeIdx,
@@ -190,6 +191,7 @@ struct BoundRoot {
 }
 
 /// The built index. Construction is `build`; everything else reads it.
+#[derive(Debug)]
 pub struct Index {
     graph: Graph,
     roots: Vec<Root>,

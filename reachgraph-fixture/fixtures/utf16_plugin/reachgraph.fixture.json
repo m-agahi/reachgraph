@@ -1,0 +1,87 @@
+{
+  "fixture_version": 1,
+  "plugin_id": "fixture16",
+  "position_encoding": "utf16_code_units",
+  "capabilities": ["symbols", "edges", "roots", "classify"],
+  "detection": {
+    "marker_files": [],
+    "extensions": []
+  },
+  "preflight": "ok",
+  "engine": "reachgraph-fixture 0.1.0",
+  "units": [
+    {
+      "id": "unit:ui",
+      "display_name": "ui",
+      "root": "src"
+    }
+  ],
+  "symbols": {
+    "unit:ui": [
+      {
+        "raw": "fn:ui/render",
+        "name": "render",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/ui/render.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:ui/paint",
+        "name": "paint",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/ui/paint.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      }
+    ]
+  },
+  "edges": {
+    "unit:ui": [
+      {
+        "from": "fn:ui/render",
+        "to": {
+          "resolved": "fn:ui/paint"
+        },
+        "provenance_plugin": "fixture16",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      }
+    ]
+  },
+  "roots": [
+    {
+      "contract": "acme.ui",
+      "version": "v1",
+      "service": "UiService",
+      "operation": "Render",
+      "direction": "served",
+      "join_key": "acme.ui.v1.UiService/Render",
+      "binding": {
+        "bound": "fn:ui/render"
+      }
+    }
+  ],
+  "coverage": {
+    "contracts": ["acme.ui"],
+    "versions": [
+      {
+        "contract": "acme.ui",
+        "version": "v1"
+      }
+    ]
+  },
+  "classify": [
+    {
+      "prefix": "src/",
+      "category": "first_party"
+    }
+  ],
+  "classify_fallback": "third_party"
+}

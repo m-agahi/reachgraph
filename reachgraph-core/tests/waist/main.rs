@@ -10,4 +10,14 @@
 
 mod support;
 
+mod doubles;
+
+mod artifact;
 mod assemble;
+mod classify;
+mod guards;
+mod opacity;
+mod reach;
+mod registry;
+mod versions;
+mod view;

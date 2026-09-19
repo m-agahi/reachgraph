@@ -1,0 +1,127 @@
+{
+  "fixture_version": 1,
+  "plugin_id": "fixture",
+  "position_encoding": "utf8_bytes",
+  "capabilities": ["symbols", "edges", "roots", "classify"],
+  "detection": {
+    "marker_files": [],
+    "extensions": []
+  },
+  "preflight": "ok",
+  "engine": "reachgraph-fixture 0.1.0",
+  "units": [
+    {
+      "id": "unit:app",
+      "display_name": "app",
+      "root": "src"
+    },
+    {
+      "id": "unit:db",
+      "display_name": "db",
+      "root": "src/db"
+    }
+  ],
+  "symbols": {
+    "unit:app": [
+      {
+        "raw": "mod:service",
+        "name": "service",
+        "kind": "module",
+        "raw_kind": "mod",
+        "file": "src/service/mod.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "impl:TaskServer",
+        "name": "TaskServer",
+        "kind": "type",
+        "raw_kind": "impl TaskService for TaskServer",
+        "file": "src/service/mod.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": "mod:service"
+      },
+      {
+        "raw": "fn:service/create_task",
+        "name": "create_task",
+        "kind": "method",
+        "raw_kind": "fn",
+        "file": "src/service/create.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": "impl:TaskServer"
+      }
+    ],
+    "unit:db": [
+      {
+        "raw": "mod:db",
+        "name": "db",
+        "kind": "module",
+        "raw_kind": "mod",
+        "file": "src/db/mod.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:db/insert",
+        "name": "insert",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/db/insert.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": "mod:db"
+      }
+    ]
+  },
+  "edges": {
+    "unit:app": [
+      {
+        "from": "fn:service/create_task",
+        "to": {
+          "resolved": "fn:db/insert"
+        },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      }
+    ]
+  },
+  "roots": [
+    {
+      "contract": "acme.task",
+      "version": "v1",
+      "service": "TaskService",
+      "operation": "CreateTask",
+      "direction": "served",
+      "join_key": "acme.task.v1.TaskService/CreateTask",
+      "binding": {
+        "bound": "fn:service/create_task"
+      }
+    }
+  ],
+  "coverage": {
+    "contracts": ["acme.task"],
+    "versions": [
+      {
+        "contract": "acme.task",
+        "version": "v1"
+      }
+    ]
+  },
+  "classify": [
+    {
+      "prefix": "src/",
+      "category": "first_party"
+    }
+  ],
+  "classify_fallback": "third_party"
+}

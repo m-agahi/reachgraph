@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "root": {
+    "contract": "acme.legacy",
+    "version": null,
+    "service": "PingService",
+    "operation": "Ping",
+    "direction": "served",
+    "join_key": "acme.legacy.PingService/Ping",
+    "binding": {
+      "state": "bound",
+      "node": {
+        "plugin": "fixture",
+        "raw": "fn:legacy/handle_ping"
+      }
+    }
+  },
+  "depth_limit": 3,
+  "plugins": [
+    {
+      "id": "fixture",
+      "position_encoding": "utf8_bytes",
+      "capabilities": ["symbols", "edges", "roots", "classify"]
+    }
+  ],
+  "nodes": [
+    {
+      "id": {
+        "plugin": "fixture",
+        "raw": "fn:legacy/handle_ping"
+      },
+      "symbol": {
+        "name": "handle_ping",
+        "kind": "function",
+        "raw_kind": "fn",
+        "range": {
+          "file": "src/legacy/ping.rs",
+          "span": null
+        },
+        "doc": "Answer a ping. Predates versioning.",
+        "doc_format": "markdown",
+        "is_test": false,
+        "container": null
+      },
+      "unit": "unit:app",
+      "category": "first_party",
+      "depth": 0,
+      "frontier": false
+    }
+  ],
+  "edges": [],
+  "frontier": [],
+  "stats": {
+    "node_count": 1,
+    "edge_count": 0,
+    "unresolved_edge_count": 0
+  }
+}
