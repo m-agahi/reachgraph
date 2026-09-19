@@ -20,7 +20,12 @@
     {
       "id": "fixture",
       "position_encoding": "utf8_bytes",
-      "capabilities": ["symbols", "edges", "roots", "classify"]
+      "capabilities": [
+        "symbols",
+        "edges",
+        "roots",
+        "classify"
+      ]
     }
   ],
   "nodes": [

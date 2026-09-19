@@ -12,7 +12,9 @@
         "plugin": "fixture",
         "raw": "fn:legacy/handle_ping"
       },
-      "reached_by": [0],
+      "reached_by": [
+        0
+      ],
       "class": null
     }
   ],

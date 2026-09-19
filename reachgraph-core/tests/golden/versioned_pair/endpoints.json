@@ -8,7 +8,12 @@
     {
       "id": "fixture",
       "position_encoding": "utf8_bytes",
-      "capabilities": ["symbols", "edges", "roots", "classify"]
+      "capabilities": [
+        "symbols",
+        "edges",
+        "roots",
+        "classify"
+      ]
     }
   ],
   "operations": [
@@ -50,7 +55,9 @@
     }
   ],
   "coverage": {
-    "contracts": ["acme.task"],
+    "contracts": [
+      "acme.task"
+    ],
     "versions": [
       {
         "contract": "acme.task",
@@ -64,9 +71,16 @@
     "roots_total": 2,
     "roots_bound": 2,
     "unbound_roots": [],
-    "units_indexed": ["unit:app"],
-    "plugins": ["fixture"],
-    "traversal_terminal_categories": ["third_party", "stdlib"],
+    "units_indexed": [
+      "unit:app"
+    ],
+    "plugins": [
+      "fixture"
+    ],
+    "traversal_terminal_categories": [
+      "third_party",
+      "stdlib"
+    ],
     "partial": false
   }
 }

@@ -2,7 +2,9 @@
   "schema_version": 1,
   "claim": "not reachable from any endpoint version in this index",
   "coverage": {
-    "contracts": ["acme.task"],
+    "contracts": [
+      "acme.task"
+    ],
     "versions": [
       {
         "contract": "acme.task",
@@ -16,9 +18,16 @@
     "roots_total": 2,
     "roots_bound": 2,
     "unbound_roots": [],
-    "units_indexed": ["unit:app"],
-    "plugins": ["fixture"],
-    "traversal_terminal_categories": ["third_party", "stdlib"],
+    "units_indexed": [
+      "unit:app"
+    ],
+    "plugins": [
+      "fixture"
+    ],
+    "traversal_terminal_categories": [
+      "third_party",
+      "stdlib"
+    ],
     "partial": false
   },
   "nodes": [

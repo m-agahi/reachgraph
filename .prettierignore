@@ -1,0 +1,15 @@
+# Generated artifacts asserted BYTE FOR BYTE, so a formatter must not touch
+# them.
+#
+# `golden_artifacts_match` compares the emitted bytes against these files —
+# that is what makes them a regression net for the renderer that reads the
+# artifact, rather than a check that the same JSON was produced in some
+# formatting. prettier collapses a short array onto one line and
+# `serde_json::to_vec_pretty` does not, so leaving them in scope makes the hook
+# and the test disagree permanently.
+#
+# Regenerate with `REACHGRAPH_BLESS=1 cargo test -p reachgraph-core`, which is a
+# deliberate command for the reason `cargo xtask public-api --bless` is one.
+reachgraph-core/tests/golden/
+
+# The fixture corpus is hand-written and prettier DOES own it — no entry here.

@@ -12,7 +12,9 @@
         "plugin": "fixture",
         "raw": "fn:db/insert_task"
       },
-      "reached_by": [0],
+      "reached_by": [
+        0
+      ],
       "class": null
     },
     {

@@ -24,7 +24,9 @@
         "plugin": "fixture",
         "raw": "fn:v1/create_task"
       },
-      "reached_by": [0],
+      "reached_by": [
+        0
+      ],
       "class": "v1_only"
     },
     {
@@ -32,7 +34,9 @@
         "plugin": "fixture",
         "raw": "fn:v2/create_task"
       },
-      "reached_by": [1],
+      "reached_by": [
+        1
+      ],
       "class": "v2_only"
     },
     {
@@ -40,7 +44,10 @@
         "plugin": "fixture",
         "raw": "fn:shared/persist"
       },
-      "reached_by": [0, 1],
+      "reached_by": [
+        0,
+        1
+      ],
       "class": "both"
     },
     {
@@ -48,7 +55,9 @@
         "plugin": "fixture",
         "raw": "fn:v1only/legacy_audit"
       },
-      "reached_by": [0],
+      "reached_by": [
+        0
+      ],
       "class": "v1_only"
     },
     {
@@ -56,7 +65,9 @@
         "plugin": "fixture",
         "raw": "fn:v2only/validate"
       },
-      "reached_by": [1],
+      "reached_by": [
+        1
+      ],
       "class": "v2_only"
     },
     {
