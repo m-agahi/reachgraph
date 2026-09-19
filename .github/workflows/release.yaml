@@ -1,0 +1,373 @@
+name: release
+
+# The packaging workflow `ci.yaml`'s comment block promised. It is separate
+# from `ci.yaml` because the shared `ci-release.yaml` in yadgarhq/actions gates
+# its jobs on `Containerfile` and `chart/`, and publishes container images and
+# Helm charts to ghcr. This repository publishes a Python wheel through
+# maturin, so none of that applies and nothing is shared.
+#
+# TAG-TRIGGERED, and `workflow_dispatch` alongside it so the whole matrix can
+# be exercised without minting a tag. A dispatch run builds and checks; it does
+# NOT publish — the publish job is gated on the ref being a tag AND on a
+# protected environment.
+#
+# `--locked` IS ON EVERY CARGO INVOCATION HERE BUT ONE, and that is load-bearing
+# rather than decorative. ADR-0001's 2026-09-19 amendment removed the vendor
+# tree from git, which makes the committed `Cargo.lock` the whole of this
+# project's build determinism. MEASURED 2026-09-19: the shared `ci-pr.yaml`
+# runs `cargo test --all-features` with no `--locked`, so that leg would not
+# notice a drifted lockfile. This one would.
+#
+# The exception is the build INSIDE the unpacked sdist, and its step says at
+# length why: maturin trims `xtask` out of the workspace and ships the
+# untrimmed lockfile, so `--locked` refuses a removal the sdist itself forced.
+# A lockfile diff asserts the same property there instead.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # THE TIER TABLE IS PROPOSED, NOT MEASURED, and this job is the measurement.
+  # Plan-07 §9 measurements 6 and 7 cannot be run on a developer machine:
+  # `auditwheel` reads the glibc symbols a built wheel actually requires, and a
+  # NixOS build reports a platform tag that says nothing about a manylinux
+  # runner. The first run of this workflow is what fills the table in.
+  #
+  # `fail-fast: false` so one tier-2 failure does not hide a tier-1 one. The
+  # tier is carried per row and enforced in the gate job below, because
+  # `continue-on-error` marks a job green and would make a tier-1 failure
+  # invisible to a required check.
+  wheels:
+    name: wheel ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Tier 1 — must build, smoke-tested. A failure fails the release.
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            tier: "1"
+            smoke: true
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            tier: "1"
+            smoke: true
+          # Tier 2 — built, best effort. A failure is recorded and the release
+          # proceeds. None is smoke-tested: the runner cannot execute them.
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            tier: "2"
+            smoke: false
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+            tier: "2"
+            smoke: false
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+            tier: "2"
+            smoke: false
+    steps:
+      - uses: actions/checkout@v4
+
+      # THE CHANNEL IS READ, NEVER RESTATED. `rust-toolchain.toml` is the pin —
+      # its own comment explains why a floating channel makes a green branch go
+      # red without a commit — and maturin-action builds inside a container
+      # where a host `rustup` has no say. Writing the version again here would
+      # be a second place to forget.
+      - name: read the pinned toolchain
+        id: toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
+          test -n "$channel"
+          echo "tier ${{ matrix.tier }} target ${{ matrix.target }} on $channel" >> "$GITHUB_STEP_SUMMARY"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+
+      - name: build the wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          rust-toolchain: ${{ steps.toolchain.outputs.channel }}
+          target: ${{ matrix.target }}
+          # `auto` picks the oldest manylinux image the build actually
+          # satisfies rather than asserting one. Which tag that turns out to be
+          # is plan-07 §9 measurement 6 and is READ OFF this run, never
+          # declared ahead of it.
+          manylinux: auto
+          args: --release --locked --out dist
+          sccache: "true"
+
+      - name: the wheel contains an executable and no Python
+        shell: bash
+        run: |
+          set -euo pipefail
+          wheel=$(ls dist/*.whl)
+          echo "::notice::$wheel is $(stat -c%s "$wheel" 2>/dev/null || stat -f%z "$wheel") bytes"
+          python3 - "$wheel" <<'PY'
+          import sys, zipfile
+          names = zipfile.ZipFile(sys.argv[1]).namelist()
+
+          # plan-07 §8.2 `wheel_has_no_python_module`. CONDITIONAL on §1.2's
+          # bin-only decision standing: if a launcher is ever forced, this
+          # check is REPLACED by one asserting the launcher is present, not
+          # deleted quietly. A guard that fires on a sanctioned design change
+          # is a guard that gets deleted the first time it fires.
+          python_files = [n for n in names if n.endswith(".py")]
+          assert not python_files, f"the wheel carries Python: {python_files}"
+
+          scripts = [n for n in names if ".data/scripts/" in n]
+          assert scripts, f"no executable in .data/scripts/: {names}"
+
+          # plan-07 §1.1: the wheel is not tied to an interpreter ABI. A
+          # cp3xx tag here means the bindings setting is wrong.
+          tag = sys.argv[1].rsplit("/", 1)[-1].split("-")[2]
+          assert tag == "py3", f"interpreter tag is {tag!r}, expected 'py3'"
+          PY
+
+      - name: the wheel is under PyPI's per-file limit
+        shell: bash
+        run: |
+          set -euo pipefail
+          # MEASURED from PyPI's own help page, 2026-09-19: the default
+          # per-file limit is 100 MB and a project may request an increase.
+          # The check is deliberately tighter than the limit, because the
+          # moment to find out is here rather than at `twine upload`.
+          limit=$((100 * 1024 * 1024))
+          for f in dist/*; do
+            size=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f")
+            echo "$f: $size bytes"
+            if [ "$size" -ge "$limit" ]; then
+              echo "::error::$f is $size bytes, at or over PyPI's $limit-byte per-file limit"
+              exit 1
+            fi
+          done
+
+      - name: auditwheel reports the manylinux tag actually satisfied
+        if: startsWith(matrix.target, 'x86_64-unknown-linux') || startsWith(matrix.target, 'aarch64-unknown-linux')
+        shell: bash
+        run: |
+          set -euo pipefail
+          pipx run auditwheel show dist/*.whl | tee "$RUNNER_TEMP/auditwheel.txt"
+          {
+            echo "### manylinux tag for ${{ matrix.target }}"
+            echo '```'
+            cat "$RUNNER_TEMP/auditwheel.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Plan-07 §8.1. The point is that the INSTALLED binary works end to end,
+      # not that it starts: a `--version` that prints and an analysis that
+      # writes no artifact are the same green tick.
+      - name: smoke test the installed wheel
+        if: matrix.smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/smoke"
+          "$RUNNER_TEMP/smoke/bin/pip" install --no-index dist/*.whl
+
+          installed=$("$RUNNER_TEMP/smoke/bin/reachgraph" --version)
+          echo "installed: $installed"
+
+          # plan-07 §8.2 `version_is_single_sourced`. The wheel's metadata
+          # version and the binary's own must be one number, because a
+          # packaging mismatch is invisible until a user reports the wrong one.
+          metadata=$(basename dist/*.whl | cut -d- -f2)
+          case "$installed" in
+            *"$metadata"*) ;;
+            *) echo "::error::binary says '$installed', wheel metadata says '$metadata'"; exit 1 ;;
+          esac
+
+          # The workspace analyses itself: it is a real Cargo workspace that
+          # has been built, which is exactly the precondition ADR-0001's
+          # carve-out names.
+          "$RUNNER_TEMP/smoke/bin/reachgraph" . -o "$RUNNER_TEMP/smoke-out"
+          for f in index.html overview.html endpoints.json unreachable.json run.json; do
+            test -f "$RUNNER_TEMP/smoke-out/$f" || { echo "::error::$f missing"; exit 1; }
+          done
+          test -d "$RUNNER_TEMP/smoke-out/vendor" || { echo "::error::vendor/ missing"; exit 1; }
+          test -f "$RUNNER_TEMP/smoke-out/vendor/LICENSES.txt" || { echo "::error::the artifact carries no licence notice"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.target }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  # ADR-0001's 2026-09-19 amendment, discharged. `vendor/` is not in git; it is
+  # built HERE and goes into the sdist, so the sdist keeps the offline-build
+  # property the original bullet was taken for and the repository pays nothing.
+  #
+  # MEASURED 2026-09-19: the tree is 219 366 235 bytes and compresses to
+  # 35 991 848, so a vendored sdist sits well inside PyPI's per-file limit.
+  # Plan-07 §4.1's decision gate therefore resolves to "wheels plus a vendored
+  # sdist", and this job is the gate's evidence rather than its assumption.
+  sdist:
+    name: sdist, with the vendor tree in it
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: vendor the dependency tree
+        run: |
+          set -euo pipefail
+          cargo vendor --locked vendor/ > "$RUNNER_TEMP/vendor-stanza.toml"
+          cat "$RUNNER_TEMP/vendor-stanza.toml" >> .cargo/config.toml
+          echo "vendored $(find vendor -type f | wc -l) files, $(du -sb vendor | cut -f1) bytes"
+
+      - name: build the sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+
+      # `--offline` is the check that the vendoring is actually complete. It
+      # is also, HERE, strictly stronger than `--locked`: the sdist ships a
+      # `.cargo/config.toml` that replaces `crates-io` with the vendored
+      # directory, so a crate the tree is missing cannot be resolved from
+      # anywhere and the build stops. A vendored sdist that cannot build
+      # offline is worse than no sdist, because it looks self-contained and is
+      # not.
+      #
+      # `--locked` IS DELIBERATELY ABSENT FROM THIS ONE COMMAND, which is the
+      # only place in this workflow it is. MEASURED 2026-09-19 by building a
+      # real sdist: maturin REWRITES the root `[workspace] members` list,
+      # dropping `xtask` because it is `publish = false`, and ships the
+      # repository's `Cargo.lock` unchanged. The lockfile then holds two
+      # entries — `xtask` and its `prettyplease` dependency — that the trimmed
+      # workspace no longer has, and `--locked` refuses to remove them:
+      # "cannot update the lock file ... because --locked was passed". Without
+      # the flag the build succeeds and the lockfile loses exactly those two
+      # entries and nothing else, which the diff below asserts rather than
+      # assumes.
+      - name: the sdist builds with no network
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/unpacked"
+          tar -xzf dist/*.tar.gz -C "$RUNNER_TEMP/unpacked" --strip-components=1
+          test -d "$RUNNER_TEMP/unpacked/vendor" || { echo "::error::the sdist carries no vendor/"; exit 1; }
+          test -f "$RUNNER_TEMP/unpacked/.cargo/config.toml" || { echo "::error::the sdist carries no vendored-sources config"; exit 1; }
+          grep -q 'replace-with = "vendored-sources"' "$RUNNER_TEMP/unpacked/.cargo/config.toml"
+
+          grep '^name = ' "$RUNNER_TEMP/unpacked/Cargo.lock" | sort > "$RUNNER_TEMP/lock-before.txt"
+          cargo build --manifest-path "$RUNNER_TEMP/unpacked/Cargo.toml" \
+            --release --offline -p reachgraph-cli
+          grep '^name = ' "$RUNNER_TEMP/unpacked/Cargo.lock" | sort > "$RUNNER_TEMP/lock-after.txt"
+
+          # Nothing may be ADDED, and nothing but the dev-side workspace
+          # members may be removed. An added line would mean the vendored tree
+          # resolved a package the committed lockfile had not, which is the
+          # failure `--locked` would normally catch and cannot here.
+          if comm -13 "$RUNNER_TEMP/lock-before.txt" "$RUNNER_TEMP/lock-after.txt" | grep .; then
+            echo "::error::the sdist build ADDED packages to the lockfile"; exit 1
+          fi
+          removed=$(comm -23 "$RUNNER_TEMP/lock-before.txt" "$RUNNER_TEMP/lock-after.txt" | sed 's/^name = //;s/"//g' | sort | tr '\n' ' ')
+          expected="prettyplease xtask "
+          if [ "$removed" != "$expected" ]; then
+            echo "::error::the sdist build changed the lockfile beyond the dev-side members: removed [$removed], expected [$expected]"
+            exit 1
+          fi
+
+      - name: the sdist is under PyPI's per-file limit
+        run: |
+          set -euo pipefail
+          limit=$((100 * 1024 * 1024))
+          size=$(stat -c%s dist/*.tar.gz)
+          echo "sdist: $size bytes"
+          if [ "$size" -ge "$limit" ]; then
+            echo "::error::the sdist is $size bytes, at or over PyPI's $limit-byte per-file limit"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  # Plan-07 §6.2 and §6.3, as jobs rather than as sentences. Both read files
+  # that are in git, so neither needs a wheel and neither is in the matrix.
+  licences:
+    name: attribution and the crabviz line
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: cargo deny — the licence allow-list
+        run: |
+          set -euo pipefail
+          cargo install --locked cargo-deny
+          cargo deny check licenses advisories sources
+
+      - name: THIRD-PARTY-LICENSES.md regenerates identically
+        run: |
+          set -euo pipefail
+          cargo install --locked cargo-about
+          cargo xtask third-party-licenses
+
+      # `xtask/tests/packaging.rs` holds the repository-level half of plan-07
+      # §8.2 — the crabviz scan, the two transitive pins, the bin-only wheel
+      # declaration. It runs in `ci-pr.yaml` too; it runs here because a
+      # release must not depend on somebody having opened a pull request.
+      - name: the packaging guards
+        run: cargo test --locked -p xtask --test packaging
+
+  # A required-check shape rather than a publish gate: it fails when a TIER-1
+  # wheel failed, and passes when only tier-2 did. `needs` alone cannot express
+  # that, because a needed job that failed blocks everything downstream.
+  gate:
+    name: passed
+    needs: [wheels, sdist, licences]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: tier-1 wheels, the sdist and the licence checks all succeeded
+        run: |
+          set -euo pipefail
+          if [ "${{ needs.sdist.result }}" != "success" ]; then
+            echo "::error::the sdist job did not succeed"; exit 1
+          fi
+          if [ "${{ needs.licences.result }}" != "success" ]; then
+            echo "::error::the licence jobs did not succeed"; exit 1
+          fi
+          if [ "${{ needs.wheels.result }}" != "success" ]; then
+            echo "::error::a wheel failed to build. Tier-2 failures are documented and the release proceeds, but that is a decision a human takes — re-run this job after recording which target failed."
+            exit 1
+          fi
+
+  # Plan-07 §7.2. NO LONG-LIVED TOKEN: Trusted Publishing mints a short-lived
+  # OIDC credential, and PEP 740 attestations sign each file against the
+  # workflow that built it.
+  #
+  # `environment:` is not decoration here — it is where the approval lives, and
+  # it is the reason a `workflow_dispatch` run can exercise the whole matrix
+  # without any chance of publishing.
+  publish:
+    name: publish to PyPI
+    needs: [gate]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/reachgraph
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - run: ls -l dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          attestations: true
