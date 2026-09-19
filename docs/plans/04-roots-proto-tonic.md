@@ -479,15 +479,49 @@ to tell a contract with no services from a contract that was never opened.
 
 ### A `.proto` that fails to parse is a hard error
 
-`Coverage` has no slot for "found but unreadable", and inventing one by omission is exactly
-the partial-index bug. So: a discovered `.proto` that `protox-parse` rejects makes
-`roots()` return `Err(PluginError)` and fails the run.
+**Amended 2026-09-19 by ADR-0743. This section is kept because its argument is still
+load-bearing; only its conclusion changed.**
 
-This is a deliberate choice of loud over lenient. The lenient alternative — skip the file,
-carry on — produces an index that looks complete, silently omits a contract's roots, and
-reports every function behind them as not reachable from any endpoint. ADR-0007 calls that
-class of false positive the one that permanently destroys trust. Refusing to produce an
-artifact is recoverable; producing a confidently wrong one is not.
+As written:
+
+> `Coverage` has no slot for "found but unreadable", and inventing one by omission is exactly
+> the partial-index bug. So: a discovered `.proto` that `protox-parse` rejects makes
+> `roots()` return `Err(PluginError)` and fails the run.
+>
+> This is a deliberate choice of loud over lenient. The lenient alternative — skip the file,
+> carry on — produces an index that looks complete, silently omits a contract's roots, and
+> reports every function behind them as not reachable from any endpoint. ADR-0007 calls that
+> class of false positive the one that permanently destroys trust. Refusing to produce an
+> artifact is recoverable; producing a confidently wrong one is not.
+
+Both premises hold. Omission **by silence** is the partial-index bug, and an omitted
+contract does make live code read as unreachable. What the section missed is that those
+premises do not choose between two options but between three, and it rejected the worst
+one rather than the alternative to its own:
+
+1. skip the file silently — the bug, rejected then and rejected now;
+2. fail the run — what was chosen;
+3. **record the file and carry on** — what ADR-0743 chose instead.
+
+MEASURED 2026-09-19, release.yaml run 35459855283: option 2 is what made both native-runner
+smoke tests exit 1 against reachgraph's own repository, over the truncated fixture at
+`tests/fixtures/broken/proto/broken.proto`. The tool could not analyse itself, and no
+repository holding a partial or vendored-sample contract got anything at all. "Refusing to
+produce an artifact is recoverable" is true only for the person who can fix the contract;
+for everybody else the artifact simply does not exist.
+
+The slot `Coverage` did not have is now there: `Coverage::unexamined_contracts`, one entry
+per file found and not read, carrying the parser's own message. It raises
+`IndexCoverage::partial`, which puts a non-dismissible banner on the page and names the file
+in `rg-unexamined`. So the index states the shortfall instead of hiding it, and the user
+keeps the roots of every contract that did read.
+
+**The boundary.** Per file: recorded. Per tree: fatal. A discovered file that cannot be read
+— bytes that are not UTF-8, or syntax the parser rejects — is recorded, because the
+repository was still enumerated and the claim stays exact. `discover` failing stays
+`PluginError::Io`, because a directory that cannot be walked yields no file to name and no
+count to state; recording "something under here, unknown" would be an assertion about a tree
+nobody enumerated.
 
 ---
 

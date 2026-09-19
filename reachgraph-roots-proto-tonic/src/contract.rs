@@ -53,9 +53,15 @@ pub struct ContractFile {
 
 /// A `.proto` file that could not be read as one.
 ///
-/// Plan-04 §10: `Coverage` has no slot for "found but unreadable", and
-/// inventing one by omission is the partial-index bug ADR-0007 exists to
-/// prevent. So this is an error rather than a skipped file.
+/// Plan-04 §10 wrote that `Coverage` had no slot for "found but unreadable",
+/// and that inventing one **by omission** is the partial-index bug ADR-0007
+/// exists to prevent. Both halves were right; the conclusion drawn from them —
+/// fail the run — was not the only way to keep them. ADR-0743 added the slot
+/// explicitly, so the file is named rather than omitted.
+///
+/// This type is unchanged and still an error: `parse` reports a file it could
+/// not read, and [`crate::plugin`] decides what that costs. The boundary moved
+/// to the caller, not into here.
 #[derive(Debug)]
 pub struct ProtoParseError {
     contract: ContractId,

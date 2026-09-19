@@ -123,6 +123,11 @@ impl Plugin for ProtoTonicPlugin {
     ///
     /// A note belongs here only for something the contract has no field for,
     /// which is why `reachgraph-lang-rust` has three and this crate has none.
+    /// ADR-0743 is the rule applied rather than an exception to it: a contract
+    /// this plugin could not read is a
+    /// [`reachgraph_plugin_api::UnexaminedContract`], so writing the same fact
+    /// here as prose would be the second spelling this method exists to
+    /// refuse.
     fn notes(&self) -> Vec<String> {
         Vec::new()
     }
