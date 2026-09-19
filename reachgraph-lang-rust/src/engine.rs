@@ -8,7 +8,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use ra_ap_hir::{Crate, HasAttrs as _, Impl, Module, ModuleDef};
+use ra_ap_hir::{Crate, HasAttrs as _, HasSource as _, Impl, Module, ModuleDef};
 use ra_ap_ide::{Analysis, AnalysisHost, CallHierarchyConfig, FilePosition, RootDatabase};
 use ra_ap_ide_db::ra_fixture::RaFixtureConfig;
 use ra_ap_load_cargo::{load_workspace, LoadCargoConfig, ProcMacroServerChoice};
@@ -26,7 +26,7 @@ use reachgraph_plugin_api::{
 use crate::classify::{classify_facts, CrateOrigin, PathFacts};
 use crate::coverage::{MemberCoverage, OutDirMechanism, ProcMacroExpansion, RustCoverage};
 use crate::ids::{node_id, RawParts};
-use crate::kinds::{map_kind, render_impl_header, RustItem};
+use crate::kinds::{declared_trait_name, map_kind, render_impl_header, RustItem};
 use crate::preflight::{CargoProbe, PreflightFacts, WorkspaceProbe};
 use crate::{ENGINE, PLUGIN_ID};
 
@@ -615,8 +615,24 @@ impl Loaded {
     /// name, so plan-04 compares against that directly and never resolves a
     /// Rust import. `Trait::name` is the declared name; the use-path is not
     /// available here and is not wanted.
+    ///
+    /// # The resolver is not the only route, and MEASURED it is not enough
+    ///
+    /// `Impl::trait_` answers `None` whenever the trait is not in the crate
+    /// graph, and on a real tonic repository it always is not: the service
+    /// trait is declared in build-script output, which plan-03 §9 D-D does not
+    /// load. The header then dropped the clause the source plainly contains
+    /// and every served root went unbound — see
+    /// [`crate::kinds::declared_trait_name`] and `fx-attr`.
+    ///
+    /// So the resolved name is preferred and the written one is the fallback.
+    /// Both produce the declared name; only the first needs the trait to
+    /// exist.
     fn impl_header(&self, db: &RootDatabase, imp: Impl) -> String {
-        let trait_name = imp.trait_(db).map(|tr| tr.name(db).as_str().to_owned());
+        let trait_name = imp
+            .trait_(db)
+            .map(|tr| tr.name(db).as_str().to_owned())
+            .or_else(|| written_trait_name(db, imp));
         render_impl_header(trait_name.as_deref(), &self_type_name(db, imp))
     }
 
@@ -690,6 +706,18 @@ impl Loaded {
         )
         .map_err(|error| engine_error(error.to_string()))
     }
+}
+
+/// The trait an impl block names in source, when the resolver could not.
+///
+/// A pure read of the syntax tree: the node is already parsed, the text is
+/// already there, and nothing is expanded, resolved or guessed to obtain it.
+fn written_trait_name(db: &RootDatabase, imp: Impl) -> Option<String> {
+    use ra_ap_syntax::AstNode as _;
+
+    let source = imp.source(db)?;
+    let written = source.value.trait_()?;
+    declared_trait_name(&written.syntax().text().to_string())
 }
 
 /// The self type's name, as the impl header and the impl symbol both spell it.

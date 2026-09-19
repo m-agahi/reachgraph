@@ -98,3 +98,45 @@ pub fn render_impl_header(trait_name: Option<&str>, self_ty: &str) -> String {
         None => format!("impl {self_ty}"),
     }
 }
+
+/// The declared trait name in an impl header, read from the text the source
+/// wrote — `"api::v1::Svc<T>"` gives `Svc`.
+///
+/// # Why this exists
+///
+/// MEASURED 2026-09-19 on `/home/max/git/yadgarhq/task`: `hir::Impl::trait_`
+/// answers `None` for `impl TaskService for Task`, because `TaskService` is
+/// declared in build-script output that plan-03 §9 D-D leaves out of the crate
+/// graph. The header then read `impl Task`, plan-04 §7's anchored
+/// `impl <Trait> for <Self>` rule saw no trait, all six served roots went
+/// unbound, no shard was written and the whole repository read as not
+/// reachable from any endpoint. The fixture `fx-attr` holds that shape, with
+/// two controls showing the attribute macro above the block is not the cause.
+///
+/// # Why reading it from the source is not inference
+///
+/// ADR-0728 keeps calls *through* an unexpanded macro absent rather than
+/// guessed, because they were genuinely not measured. A trait clause is not a
+/// call: it is written in the file, and plan-03 §8 already specifies this
+/// field as the trait's **declared** name rather than a resolved path — so the
+/// syntax and the resolver are two routes to one string, and the resolver is
+/// merely the one that stops working when the trait is not in the index.
+///
+/// `None` for anything that is not a plain path: a tuple, a reference, a
+/// `dyn` type. A header cannot name those as a trait, and returning a
+/// mangled fragment would be worse than saying nothing.
+pub fn declared_trait_name(written: &str) -> Option<String> {
+    let without_generics = written.split('<').next()?.trim();
+    let last = without_generics.rsplit("::").next()?.trim();
+
+    let mut characters = last.chars();
+    let first = characters.next()?;
+    if !(first.is_alphabetic() || first == '_') {
+        return None;
+    }
+    if !characters.all(|character| character.is_alphanumeric() || character == '_') {
+        return None;
+    }
+
+    Some(last.to_owned())
+}

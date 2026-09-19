@@ -13,6 +13,7 @@
 
 #![cfg(feature = "slow-tests")]
 
+mod attrs;
 mod docs;
 mod generated;
 mod generics;
