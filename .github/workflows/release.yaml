@@ -27,9 +27,13 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
-permissions:
-  contents: read
-
+# NO WORKFLOW-LEVEL `permissions:` BLOCK, for the reason `ci.yaml`'s comment
+# block records: a top-level block becomes a cap a later job has to fight, and
+# when it bites the symptom is a run with ZERO JOBS, no logs and no
+# annotations, whose only report is the word `failure`. Nothing in that points
+# at permissions. The permissions live on the job — and here one job needs
+# `id-token: write` for Trusted Publishing, which is exactly the grant a
+# read-only cap would silently refuse.
 env:
   CARGO_TERM_COLOR: always
 
@@ -47,6 +51,8 @@ jobs:
   wheels:
     name: wheel ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -213,6 +219,8 @@ jobs:
   sdist:
     name: sdist, with the vendor tree in it
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -298,6 +306,8 @@ jobs:
   licences:
     name: attribution and the crabviz line
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -328,6 +338,7 @@ jobs:
     needs: [wheels, sdist, licences]
     if: always()
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: tier-1 wheels, the sdist and the licence checks all succeeded
         run: |
