@@ -410,19 +410,41 @@ fn a_contract_that_is_not_utf8_is_recorded_too() {
 /// state. Recording "something under here, unknown, unread" would be a claim
 /// about a tree nobody enumerated, which is the partial-index bug wearing the
 /// opposite costume.
+///
+/// # This end of the boundary is over-determined, MEASURED
+///
+/// `roots()` walks the tree twice — once for `.proto` and once for `.rs` — and
+/// both walks fail on the same unreadable directory. MEASURED 2026-09-19 by
+/// mutation: replacing the contract walk's `?` with `unwrap_or_default()` left
+/// this assertion passing, because the second walk still returned the error.
+/// So the `expect_err` below states the behaviour a caller sees and does **not**
+/// pin which walk produced it. `discover` is asserted separately for that
+/// reason: it is the call the boundary actually rests on, and a refactor that
+/// made it swallow an unreadable directory would leave the plugin claiming a
+/// covered set over a tree it never enumerated — with nothing else in this file
+/// to notice.
 #[test]
 fn a_repository_that_cannot_be_walked_is_still_an_error() {
-    let plugin = ProtoTonicPlugin::new();
-    let index = FakeIndex::new(Vec::new());
     let missing = std::env::temp_dir().join("reachgraph-proto-no-such-repository");
     let _ = std::fs::remove_dir_all(&missing);
 
+    // The call the rule is about: enumeration fails rather than reporting an
+    // empty repository, which is a different and much quieter lie.
+    reachgraph_roots_proto_tonic::contract::discover(&missing)
+        .expect_err("a directory that cannot be read is not a directory holding no contract");
+
+    let plugin = ProtoTonicPlugin::new();
+    let index = FakeIndex::new(Vec::new());
     let error = plugin
         .roots(&missing, &index)
         .expect_err("a tree that cannot be enumerated is not a tree that was covered");
     assert!(
         matches!(error, reachgraph_plugin_api::PluginError::Io { .. }),
         "{error:?}"
+    );
+    assert!(
+        plugin.coverage().contracts.is_empty() && plugin.coverage().unexamined_contracts.is_empty(),
+        "a run that never enumerated the tree earns neither list"
     );
 }
 
