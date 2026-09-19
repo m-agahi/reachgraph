@@ -3,7 +3,10 @@
 **Status:** ready to build. Two of §4's three ADR-0001 questions are decided; the third is
 measured and leaves one ADR-level decision open.
 **Date:** 2026-09-17
-**Depends on:** [plan-00](00-workspace-and-plugin-api.md) (as amended 2026-09-17), plan-01
+**Amended:** 2026-09-19 — §14 question 11 resolved. `Preflight` gains
+`Warned { remediation }` in plan-00 §2, so §11's checks 3 and 4 return it instead of
+returning `Ok` and routing their finding to the run record. Changes are in §11 and §14.
+**Depends on:** [plan-00](00-workspace-and-plugin-api.md) (as amended 2026-09-19), plan-01
 (waist), plan-02 (fixture plugin); ADR-0001, ADR-0003, ADR-0004, ADR-0005, ADR-0008
 **Blocks:** plan-04 (consumes the `Symbol` shape), plan-06
 
@@ -1008,11 +1011,12 @@ unbound consumed roots.
 
 ### Check 3 — proc-macro expansion mode is recorded, not refused
 
-`Preflight` is binary: `Ok` or `Failed`. Degraded proc-macro expansion is not a reason to
-refuse to run — MEASURED, design.md §4 shows what is _lost_ (the `#[tonic::async_trait]`
-crossing), and losing an edge class is a reported gap, not a broken run.
+Degraded proc-macro expansion is not a reason to refuse to run — MEASURED, design.md §4
+shows what is _lost_ (the `#[tonic::async_trait]` crossing), and losing an edge class is a
+reported gap, not a broken run.
 
-So: return `Ok`, and record the expansion mode in **both** places it matters — the run
+So: return `Warned { remediation }` when expansion is degraded and `Ok` when it is not,
+and record the expansion mode in **both** places it matters — the run
 record above, and `Provenance::engine`
 (`"ra_ap_ide 0.0.352 (proc-macros: disabled)"`), so that a single edge carries the
 provenance of the mode that produced it.
@@ -1042,7 +1046,7 @@ running. What is lost is the ability to _classify_ those targets as `Stdlib` and
 deliberately rather than by absence — a real but small difference, and one that belongs in
 the record rather than in an error.
 
-So: check it, return `Ok`, and record it.
+So: check it, return `Warned { remediation }`, and record it.
 
 ```
 rust_src_available: false
@@ -1054,12 +1058,25 @@ remediation: "rustup component add rust-src — without it, calls into the stand
 The remediation text is carried in the run record beside the flag, so a reader who wonders
 why a node is external finds the fix next to the symptom.
 
-**The same `Preflight` type limitation as check 3.** `Preflight` is `Ok | Failed` and has
-no warning variant (plan-00 §2), so a non-fatal finding cannot be expressed in the return
-value at all. Both check 3 and check 4 therefore return `Ok` and route their finding to the
-run record. Two checks now needing a shape the type does not have is weak evidence that
-`Preflight` wants a third variant; it is **not** this plan's call to make, and it is logged
-as §14 open question 11 rather than worked around by abusing `Failed`.
+**RESOLVED 2026-09-19 — `Preflight` gained `Warned { remediation }` (plan-00 §2).** This
+paragraph used to record the opposite: that `Preflight` was `Ok | Failed`, that neither
+check 3 nor check 4 could express its non-fatal finding in the return value, and that both
+therefore returned `Ok` and routed the finding to the run record. Two checks needing a
+shape the type did not have was logged as §14 question 11 rather than worked around by
+abusing `Failed`.
+
+The variant now exists, so both checks return `Warned` and the remediation text travels in
+the type ADR-0003 field 5 built to carry it. **The refusal that was right stays right:**
+never return `Failed` for a non-fatal finding. A plugin that would have run must not report
+as one that cannot.
+
+The run record still carries the flag beside the finding (`out_dir_loaded`,
+`rust_src_available`). `Warned` is the return value; the record is the artifact, and a
+consumer reading the artifact after the run has no return value to read.
+
+Still open, and inherited rather than closed: whether `Warned` should carry a `reason`
+alongside its `remediation`, the way `Failed` does. Plan-00 §8 question 7. These two checks
+are the evidence that decides it, so decide it while writing them.
 
 ---
 
@@ -1123,16 +1140,16 @@ These run in milliseconds and are the bulk of the suite. Each requires the logic
 test to be a free function over plain data, which is itself the point: it forces the
 engine-facing half and the decision-making half apart.
 
-| test                                     | asserts                                                                                                                                                                                                                                          |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `node_id_encode_decode_roundtrip`        | `(unit, offset, path)` → `raw` → back, byte-identical. Cases: a path containing `\|`, a non-ASCII path, a path with spaces, offset 0, offset `u32::MAX`.                                                                                         |
-| `node_id_is_a_pure_function_of_location` | the same `(unit, path, offset)` from `symbols_in` and from a `CallItem` target produce byte-identical `raw`                                                                                                                                      |
-| `symbol_kind_mapping_table`              | every row of §8's table, including that `raw_kind` is preserved verbatim for `Trait`, `Impl`, `Macro`, `Static`                                                                                                                                  |
-| `impl_header_rendering`                  | `impl TaskService for Task`, `impl MockDb`, generic self type, trait with generic args — exact strings, since plan-04 parses them                                                                                                                |
-| `classifier_rules_over_synthetic_facts`  | `classify_facts(&PathFacts) -> Category` over all five categories. Sysroot cases supplied as data: a nix store path, a rustup toolchain path, `/usr/lib/rustlib/src/`. **The test passes without any of those strings appearing in the source.** |
-| `classifier_generated_prefix`            | `target/debug/build/x-hash/out/y.rs` → `Generated`; `target/debug/deps/…` → not `Generated`                                                                                                                                                      |
-| `preflight_failure_messages`             | the exact `reason` and `remediation` strings of §11. Reviewing remediation text is the point; a test is how it gets reviewed.                                                                                                                    |
-| `engine_string_matches_pinned_version`   | `ENGINE` **starts with** `"ra_ap_ide <version>"` for the version pinned in `Cargo.toml` — a prefix assertion, per §11's grammar, so an appended run-mode suffix does not break it. Catches a re-vendor that forgot the stamp.                    |
+| test                                     | asserts                                                                                                                                                                                                                                                                 |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `node_id_encode_decode_roundtrip`        | `(unit, offset, path)` → `raw` → back, byte-identical. Cases: a path containing `\|`, a non-ASCII path, a path with spaces, offset 0, offset `u32::MAX`.                                                                                                                |
+| `node_id_is_a_pure_function_of_location` | the same `(unit, path, offset)` from `symbols_in` and from a `CallItem` target produce byte-identical `raw`                                                                                                                                                             |
+| `symbol_kind_mapping_table`              | every row of §8's table, including that `raw_kind` is preserved verbatim for `Trait`, `Impl`, `Macro`, `Static`                                                                                                                                                         |
+| `impl_header_rendering`                  | `impl TaskService for Task`, `impl MockDb`, generic self type, trait with generic args — exact strings, since plan-04 parses them                                                                                                                                       |
+| `classifier_rules_over_synthetic_facts`  | `classify_facts(&PathFacts) -> Category` over all five categories. Sysroot cases supplied as data: a nix store path, a rustup toolchain path, `/usr/lib/rustlib/src/`. **The test passes without any of those strings appearing in the source.**                        |
+| `classifier_generated_prefix`            | `target/debug/build/x-hash/out/y.rs` → `Generated`; `target/debug/deps/…` → not `Generated`                                                                                                                                                                             |
+| `preflight_outcome_messages`             | the exact `reason` and `remediation` strings of §11, for every `Failed` **and** every `Warned` outcome. Reviewing remediation text is the point; a test is how it gets reviewed. A `Warned` check that returns `Ok`, or a `Failed` for a non-fatal finding, fails here. |
+| `engine_string_matches_pinned_version`   | `ENGINE` **starts with** `"ra_ap_ide <version>"` for the version pinned in `Cargo.toml` — a prefix assertion, per §11's grammar, so an appended run-mode suffix does not break it. Catches a re-vendor that forgot the stamp.                                           |
 
 ### Tier B — integration, against checked-in fixture workspaces
 
@@ -1251,10 +1268,20 @@ list_macros}` and expands **in-process** by `dlopen`-ing the compiled dylib — 
 10. **plan-00 §8 open question 1 is answered here** (§6): `edges_from` does not need a
     `&Unit`, because `NodeId::raw` is self-describing. It re-opens only if question 5
     forces a per-unit engine instance.
-11. **`Preflight` has no warning variant.** (§11) Checks 3 and 4 both produce findings that
-    are non-fatal but materially change what the output means, and `Ok | Failed` cannot
-    express either — so both return `Ok` and route the finding to the run record. That
-    works, and it leaves the structured remediation text (ADR-0003 field 5's actual point)
-    outside the type designed to carry it. Two independent instances at n=1 is weak
-    evidence for a third variant, not strong evidence; raise it at n=2, and never emit a
-    `Failed` for a non-fatal finding in the meantime.
+11. ~~**`Preflight` has no warning variant.**~~
+    **RESOLVED 2026-09-19 — `Preflight` gains `Warned { remediation }`.** See plan-00 §2
+    and §11 above.
+
+    The question was raised as "two independent instances at n=1 is weak evidence for a
+    third variant; raise it at n=2". It was answered earlier than that, and the reason is
+    worth recording because it is not "two became enough". `Ok | Failed` was not a missing
+    convenience — it was ADR-0003's honest-absence rule broken in a fifth place: a value
+    that says less than the plugin knows. A plugin that found something and returned `Ok`
+    reports indistinguishably from one that found nothing, which is the same defect as a
+    sentinel `Span { 0, 0 }` and a `confidence: 0.55`. That argument does not need a
+    second language to become true.
+
+    The instruction the question carried stands unweakened: **never emit a `Failed` for a
+    non-fatal finding.** `Warned` is what that instruction was waiting for.
+
+    Inherited open question: whether `Warned` also wants a `reason`. Plan-00 §8 question 7.

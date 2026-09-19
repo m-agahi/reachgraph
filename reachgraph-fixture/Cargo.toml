@@ -1,0 +1,22 @@
+# SKELETON. plan-02 fills it with `FixturePlugin` and the JSON corpus. What it
+# already carries is the neutrality guard pair of plan-02 §7.2 — those assert
+# over `cargo metadata`, so they need no fixture code to run, and putting them
+# here now means PR B adds `fixture_implements_every_trait` to a file that
+# already exists.
+[package]
+name = "reachgraph-fixture"
+description = "The reachgraph fixture plugin: a LanguagePlugin that is not a language (ADR-0008)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+reachgraph-plugin-api.workspace = true
+
+[dev-dependencies]
+# Reading `cargo metadata --format-version 1`. Dev-only: nothing in this
+# crate's library uses it, and ADR-0001's no-subprocess rule is about the
+# shipped binary rather than a test harness (plan-02 §7.2 says so explicitly).
+serde_json.workspace = true

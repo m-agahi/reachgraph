@@ -1,0 +1,57 @@
+# The virtual workspace of docs/plans/00-workspace-and-plugin-api.md §1. Seven
+# crates are named there; four exist today, and the two that are still empty
+# exist ON PURPOSE rather than as placeholders nobody filled in.
+#
+# `reachgraph-core` has to exist for `no_plugin_depends_on_core` to assert
+# anything. A dependency-direction guard over a graph that contains no `core`
+# node passes by having nothing to find, which is the failure mode plan-02 §7.2
+# calls a green tick meaning nothing. `reachgraph-cli` exists for the same
+# reason from the other side: it is the one crate the guard must EXEMPT, so the
+# exemption has to be exercised too.
+#
+# `reachgraph-lang-rust`, `reachgraph-roots-proto-tonic` and
+# `reachgraph-render-html` are absent rather than empty. Nothing asserts over
+# them yet, so an empty crate would buy no guard and would only pre-commit a
+# name.
+[workspace]
+resolver = "2"
+members = [
+    "reachgraph-plugin-api",
+    "reachgraph-core",
+    "reachgraph-fixture",
+    "reachgraph-cli",
+    "xtask",
+]
+
+[workspace.package]
+version = "0.1.0"
+# 2021 and resolver 2, matching yadgarhq/estate. The pinned toolchain supports
+# 2024; adopting it is a decision with no forcing reason behind it yet, and
+# this repository has enough of those already.
+edition = "2021"
+rust-version = "1.98"
+# ADR-0001. Both, not either: the Rust ecosystem's convention, and the licence
+# pair deny.toml's allow list is written around.
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/m-agahi/reachgraph"
+
+[workspace.dependencies]
+reachgraph-plugin-api = { path = "reachgraph-plugin-api", version = "0.1.0" }
+reachgraph-core = { path = "reachgraph-core", version = "0.1.0" }
+reachgraph-fixture = { path = "reachgraph-fixture", version = "0.1.0" }
+xtask = { path = "xtask", version = "0.1.0" }
+
+# Parsing and rendering Rust source, for the public-API snapshot (plan-02
+# §7.2.1). Both are dev-side only: `xtask` is not a dependency of any shipped
+# crate, so ADR-0001's single-binary rule is untouched.
+syn = { version = "2.0.90", default-features = false, features = [
+    "full",
+    "parsing",
+    "printing",
+    "clone-impls",
+    "proc-macro",
+] }
+prettyplease = "0.2.25"
+quote = "1.0.37"
+proc-macro2 = "1.0.92"
+serde_json = "1.0.133"

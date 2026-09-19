@@ -1,0 +1,19 @@
+# NO DEPENDENCIES, and the empty section below is a statement rather than an
+# omission. `plugin_api_has_no_ra_ap_dependency` (plan-00 §6.1) asserts that
+# `ra_ap_*` is absent from this crate's dependency graph; a graph with no edges
+# at all discharges it by construction, and every later addition here is a line
+# somebody has to justify in review.
+#
+# It also keeps the crate cheap to depend on. Every plugin takes this
+# dependency and nothing else from the workspace (plan-00 §1), so anything
+# added here is added to every plugin.
+[package]
+name = "reachgraph-plugin-api"
+description = "The reachgraph plugin contract: the traits a plugin implements and the schema types it exchanges with the waist."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]

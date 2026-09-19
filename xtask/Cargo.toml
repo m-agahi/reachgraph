@@ -1,0 +1,22 @@
+# The development task runner. `cargo xtask public-api --bless` (plan-02
+# §7.2.1) regenerates the checked-in public-API snapshot.
+#
+# NOT A DEPENDENCY OF ANYTHING SHIPPED. It is a workspace member so that
+# `cargo test --workspace` runs its guard and `cargo clippy --all-targets`
+# lints it, and nothing else depends on it — so ADR-0001's single-binary and
+# no-subprocess rules are untouched by what it pulls in.
+[package]
+name = "xtask"
+description = "Development tasks for reachgraph: the public-API snapshot renderer."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+syn.workspace = true
+prettyplease.workspace = true
+proc-macro2.workspace = true
+quote.workspace = true
