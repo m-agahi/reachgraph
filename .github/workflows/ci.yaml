@@ -27,11 +27,24 @@ name: ci
 # Python wheel through maturin. Packaging gets its own workflow when it lands
 # (docs/plans/07-packaging-pypi.md).
 #
-# `edited` IS SUBSCRIBED, so a pull request body fixed after the fact re-runs
-# the template check instead of leaving the gate red. `checks: read` below is
+# `edited` IS SUBSCRIBED so that a body fixed after the fact re-runs the
+# template check and tells you the body is now valid. `checks: read` below is
 # the price of that subscription rather than a spare permission: on an `edited`
 # event most jobs skip, and the shared workflow reads the verdict already
 # standing on the commit before it accepts those skips as success.
+#
+# WHAT `edited` DOES NOT DO, measured here on 2026-09-19: it cannot turn a red
+# run green. The gate refuses to carry a verdict forward when the standing
+# `ci / passed` on that commit concluded failure, and says so — "editing the
+# description cannot make a red run green". Re-running the original workflow
+# does not work either, because a re-run replays the ORIGINAL event payload and
+# therefore re-reads the OLD body, failing on text the pull request no longer
+# contains. Only a fresh push carries the current body. Fix the body, then push.
+#
+# THE TRAP THAT CAUSED THAT, worth knowing before writing a body: every line
+# under `## Changelog` is matched against the Conventional Commits pattern on
+# its own. A bullet wrapped at 72 columns fails, because the continuation line
+# parses as a malformed entry. Wrap the prose sections; never wrap a bullet.
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
