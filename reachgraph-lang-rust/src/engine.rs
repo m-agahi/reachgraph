@@ -74,6 +74,16 @@ struct UnitFacts {
 
 /// A loaded workspace, and the whole of this crate's mutable state.
 pub(crate) struct Loaded {
+    /// The **workspace** root, which is not the directory the caller named.
+    ///
+    /// Every path in a `NodeId` and a `SourceRange` is rendered relative to
+    /// this, so it has to be a property of the workspace rather than of the
+    /// entry point. MEASURED as a defect first: with the caller's directory
+    /// here, `discover_units(<workspace>)` and `symbols_in(<member unit>)`
+    /// rendered the same file two different ways, and a call target's `raw`
+    /// stopped matching the `raw` the walk had emitted for the same
+    /// definition. Plan-03 §6's whole design rests on those two being
+    /// byte-identical.
     root: PathBuf,
     host: AnalysisHost,
     vfs: Vfs,
@@ -83,9 +93,14 @@ pub(crate) struct Loaded {
 }
 
 impl Loaded {
-    /// The directory this load was for. A different one invalidates it.
-    pub(crate) fn root(&self) -> &Path {
-        &self.root
+    /// Whether a directory the caller named is inside this workspace.
+    ///
+    /// Cargo manifest discovery walks **up**, so any directory under the
+    /// workspace root resolves the same workspace. Reloading for a member
+    /// directory would be wasted work, and — before the workspace root became
+    /// the anchor above — it silently re-anchored every path this crate emits.
+    pub(crate) fn covers(&self, directory: &Path) -> bool {
+        directory.starts_with(&self.root)
     }
 
     /// What the run could not see.
@@ -183,7 +198,7 @@ pub(crate) fn load(root: &Path) -> Result<Loaded, PluginError> {
         .rust_lib_src_root()
         .map(|it| PathBuf::from(it.as_str()));
 
-    let (units, member_coverage) = enumerate_units(root, &workspace)?;
+    let (workspace_root, units, member_coverage) = enumerate_units(root, &workspace)?;
 
     let load_config = LoadCargoConfig {
         load_out_dirs_from_check: false,
@@ -198,7 +213,7 @@ pub(crate) fn load(root: &Path) -> Result<Loaded, PluginError> {
             .map_err(|error| engine_error(format!("could not load {root:?}: {error}")))?;
 
     Ok(Loaded {
-        root: root.to_path_buf(),
+        root: workspace_root,
         host: AnalysisHost::with_database(db),
         vfs,
         sysroot_src: sysroot_src.clone(),
@@ -214,10 +229,11 @@ pub(crate) fn load(root: &Path) -> Result<Loaded, PluginError> {
 
 /// Plan-03 §7 — one `Unit` per workspace member target, and one coverage row
 /// per workspace member package.
+#[allow(clippy::type_complexity)]
 fn enumerate_units(
     root: &Path,
     workspace: &ProjectWorkspace,
-) -> Result<(Vec<UnitFacts>, Vec<MemberCoverage>), PluginError> {
+) -> Result<(PathBuf, Vec<UnitFacts>, Vec<MemberCoverage>), PluginError> {
     let ProjectWorkspaceKind::Cargo { cargo, .. } = &workspace.kind else {
         return Err(engine_error(
             "this workspace is not a Cargo workspace; reachgraph indexes Rust through cargo",
@@ -292,7 +308,11 @@ fn enumerate_units(
 
     units.sort_by(|a, b| a.unit.id.0.cmp(&b.unit.id.0));
     members.sort_by(|a, b| a.package.cmp(&b.package));
-    Ok((units, members))
+    Ok((
+        PathBuf::from(cargo.workspace_root().as_str()),
+        units,
+        members,
+    ))
 }
 
 /// The display qualifier plan-03 §7 asks for, so two units never display
@@ -499,9 +519,38 @@ impl Loaded {
             }
         }
 
+        // A trait's own associated functions. MEASURED as a defect first:
+        // a call on a generic or through a trait object resolves to the
+        // TRAIT's declaration rather than to any impl's, so a walk that
+        // emitted only impl items produced edge targets with no `Symbol` —
+        // breaking plan-01 §7.0's provider obligation for a target that is
+        // both located AND inside an enumerated unit.
+        for def in module.declarations(db) {
+            let ModuleDef::Trait(tr) = def else {
+                continue;
+            };
+            let Some(located) = self.located(
+                sema,
+                ra_ap_ide_db::defs::Definition::Trait(tr),
+                RustItem::Trait,
+            ) else {
+                continue;
+            };
+            let trait_id = self.node_id_for(&facts.unit.id, &located.path, located.def_offset)?;
+            for item in tr.items(db) {
+                let ra_ap_hir::AssocItem::Function(function) = item else {
+                    continue;
+                };
+                let definition = ra_ap_ide_db::defs::Definition::Function(function);
+                if let Some(located) = self.located(sema, definition, RustItem::Method) {
+                    self.emit(located, facts, Some(trait_id.clone()), out)?;
+                }
+            }
+        }
+
         for imp in module.impl_defs(db) {
             let header = self.impl_header(db, imp);
-            let Some(located) = self.located(
+            let Some(mut located) = self.located(
                 sema,
                 ra_ap_ide_db::defs::Definition::SelfType(imp),
                 RustItem::Impl {
@@ -510,6 +559,11 @@ impl Loaded {
             ) else {
                 continue;
             };
+            // Plan-03 §8: the impl symbol's `name` is the self type's name,
+            // e.g. `Task`. MEASURED that `NavigationTarget` answers `"impl"`
+            // for a `SelfType` definition, which is the keyword rather than
+            // the subject and would render as a wall of identical nodes.
+            located.name = self_type_name(db, imp);
             let impl_id = self.emit(located, facts, module_id.clone(), out)?;
 
             for item in imp.items(db) {
@@ -537,12 +591,7 @@ impl Loaded {
     /// available here and is not wanted.
     fn impl_header(&self, db: &RootDatabase, imp: Impl) -> String {
         let trait_name = imp.trait_(db).map(|tr| tr.name(db).as_str().to_owned());
-        let self_ty = imp
-            .self_ty(db)
-            .as_adt()
-            .map(|adt| adt.name(db).as_str().to_owned())
-            .unwrap_or_else(|| "_".to_owned());
-        render_impl_header(trait_name.as_deref(), &self_ty)
+        render_impl_header(trait_name.as_deref(), &self_type_name(db, imp))
     }
 
     fn located(
@@ -615,6 +664,19 @@ impl Loaded {
         )
         .map_err(|error| engine_error(error.to_string()))
     }
+}
+
+/// The self type's name, as the impl header and the impl symbol both spell it.
+///
+/// A non-ADT self type — `impl Trait for &str`, `impl Trait for (A, B)` — has
+/// no name to take, and `"_"` says so rather than inventing one. Plan-03 §14
+/// question 6 records that the string contract has no mitigation for a
+/// collision; this is the same honesty one step down.
+fn self_type_name(db: &RootDatabase, imp: Impl) -> String {
+    imp.self_ty(db)
+        .as_adt()
+        .map(|adt| adt.name(db).as_str().to_owned())
+        .unwrap_or_else(|| "_".to_owned())
 }
 
 /// The mapping from `hir` to plan-03 §8's table.

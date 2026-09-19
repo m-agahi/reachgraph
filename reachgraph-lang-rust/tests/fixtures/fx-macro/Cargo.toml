@@ -1,0 +1,4 @@
+# fx-macro — plan-03 §13 Tier B, the expensive load-bearing one.
+[workspace]
+resolver = "2"
+members = ["m"]

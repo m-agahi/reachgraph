@@ -67,7 +67,7 @@ impl RustPlugin {
         f: impl FnOnce(&Loaded) -> Result<T, PluginError>,
     ) -> Result<T, PluginError> {
         let mut guard = self.loaded.lock().map_err(|_| poisoned())?;
-        let stale = guard.as_ref().is_none_or(|loaded| loaded.root() != root);
+        let stale = guard.as_ref().is_none_or(|loaded| !loaded.covers(root));
         if stale {
             // A different root invalidates the whole of `Loaded`, the `Vfs`
             // interning included (plan-03 §6's consistency rule). Nothing is
@@ -84,6 +84,11 @@ impl RustPlugin {
     /// carries its own crate directory rather than the repository's. Loading
     /// from the unit's own root is correct for a Cargo workspace: manifest
     /// discovery walks **up**, so any member resolves the same workspace.
+    ///
+    /// What is NOT correct is anchoring the emitted paths to it — see
+    /// `Loaded::root`. A load reached through a member directory covers the
+    /// whole workspace and renders paths against the workspace root, so
+    /// `discover_units` and `symbols_in` agree on every `NodeId`.
     fn root_of(unit: &Unit) -> &Path {
         &unit.root
     }

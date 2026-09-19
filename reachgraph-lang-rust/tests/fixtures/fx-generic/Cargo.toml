@@ -1,0 +1,4 @@
+# fx-generic — plan-03 §12, rust-analyzer issue #19358.
+[workspace]
+resolver = "2"
+members = ["g"]

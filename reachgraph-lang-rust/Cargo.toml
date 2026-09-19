@@ -28,3 +28,13 @@ ra_ap_syntax.workspace = true
 ra_ap_base_db.workspace = true
 ra_ap_span.workspace = true
 rustc-hash.workspace = true
+
+[features]
+# Plan-03 §13 Tier B. Each test behind this feature loads a real Cargo
+# workspace through cargo, which takes seconds rather than milliseconds — so
+# the fast suite stays fast and the slow one is asked for by name.
+#
+# The feature is DECLARED here, which is what makes `--all-features` turn it
+# on. A `cfg` no manifest declares is a test that never runs and never reports
+# that it did not.
+slow-tests = []

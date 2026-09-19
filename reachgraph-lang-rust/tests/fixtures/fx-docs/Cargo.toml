@@ -1,0 +1,4 @@
+# fx-docs — plan-03 §13 Tier B, ADR-0005.
+[workspace]
+resolver = "2"
+members = ["d"]

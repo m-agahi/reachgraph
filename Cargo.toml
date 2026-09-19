@@ -24,6 +24,13 @@ members = [
     "reachgraph-cli",
     "xtask",
 ]
+# Plan-03 §13's Tier B fixtures are real Cargo workspaces, and they must not
+# become members of this one. Each carries its own `[workspace]` table, and the
+# exclusion says so from this side too — a fixture that joined the parent
+# workspace would be formatted, linted and built by every command here, and
+# `fx-macro` would have its build script run by a `cargo build` nobody asked to
+# generate anything.
+exclude = ["reachgraph-lang-rust/tests/fixtures"]
 
 [workspace.package]
 version = "0.1.0"
