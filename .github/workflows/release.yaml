@@ -202,6 +202,22 @@ jobs:
           test -d "$RUNNER_TEMP/smoke-out/vendor" || { echo "::error::vendor/ missing"; exit 1; }
           test -f "$RUNNER_TEMP/smoke-out/vendor/LICENSES.txt" || { echo "::error::the artifact carries no licence notice"; exit 1; }
 
+          # Plan-07 §8.1's last line. `serve` is the ONLY path that reaches a
+          # sharded page: `file://` blocks `fetch()`, which is the whole reason
+          # ADR-0006 has a server at all. A smoke test that stops at the file
+          # listing has not exercised it.
+          "$RUNNER_TEMP/smoke/bin/reachgraph" serve "$RUNNER_TEMP/smoke-out" --port 8731 &
+          served=$!
+          trap 'kill "$served" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 40); do
+            curl -fsS -o /dev/null "http://127.0.0.1:8731/index.html" && break
+            sleep 0.25
+          done
+          curl -fsS -o /dev/null "http://127.0.0.1:8731/index.html"
+          shard=$(find "$RUNNER_TEMP/smoke-out/graph" -name '*.json' -print -quit)
+          curl -fsS -o /dev/null "http://127.0.0.1:8731/graph/$(basename "$shard")"
+          curl -fsS -o /dev/null "http://127.0.0.1:8731/vendor/cytoscape.min.js"
+
       - uses: actions/upload-artifact@v4
         with:
           name: wheel-${{ matrix.target }}
@@ -311,16 +327,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # BOTH TOOLS ARE PINNED BY VERSION, and the second one is the reason.
+      # `cargo xtask third-party-licenses` byte-compares a generated file
+      # against a committed one, and the generator IS cargo-about — so a
+      # floating install makes a change in its template rendering or its
+      # `overview` grouping fail this check for a reason no contributor caused.
+      # The committed notice was produced by 0.9.0. Pinning the toolchain and
+      # then floating the tool that writes the artifact would leave the one
+      # input that matters unpinned.
       - name: cargo deny — the licence allow-list
         run: |
           set -euo pipefail
-          cargo install --locked cargo-deny
+          cargo install --locked --version 0.20.2 cargo-deny
           cargo deny check licenses advisories sources
 
       - name: THIRD-PARTY-LICENSES.md regenerates identically
         run: |
           set -euo pipefail
-          cargo install --locked cargo-about
+          cargo install --locked --version 0.9.0 cargo-about
           cargo xtask third-party-licenses
 
       # `xtask/tests/packaging.rs` holds the repository-level half of plan-07

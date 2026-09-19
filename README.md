@@ -45,15 +45,16 @@ reachgraph analyses a whole repository in one pass. It is a CI-generated artefac
 interactive tool: run it in a workflow and read the output, rather than expecting it to
 answer a question while you wait.
 
-**MEASURED 2026-09-19**, release profile, warm page cache, against one small Rust
-workspace — 8 units, 227 symbols, 364 edges: **6.0 s wall, 901 MB peak resident**
-(`command time -v ./target/release/reachgraph …`; the binary's own `run.json` reports
-5.16 s, of which 4.83 s is analysis).
+**MEASURED 2026-09-19**, the shipped release profile, warm page cache, against one small
+Rust workspace — 8 units, 227 symbols, 364 edges: **4.86 s wall and 900 MB peak resident**.
+Three runs of `command time -v ./target/release/reachgraph …` gave 4.86 / 4.63 / 4.91 s
+and 900 224 / 898 248 / 901 044 kB; the medians are the numbers above. The binary's own
+`run.json` accounts for 4.53 / 4.30 / 4.60 s of those, nearly all of it analysis.
 
 That figure is one repository and it is small. **It does not establish what reachgraph
 costs on a large one.** `docs/design.md` §8's "minutes, not seconds" was measured against
 the LSP round-trip architecture ADR-0001 rejected, and it has never been re-measured
-against the linked engine at scale. Peak resident memory is the number to watch: 901 MB
+against the linked engine at scale. Peak resident memory is the number to watch: 900 MB
 on 227 symbols is rust-analyzer's own working set, and it grows with the repository
 rather than with the graph.
 

@@ -152,6 +152,14 @@ fn every_vendored_bundle_is_attributed() {
 /// The architecture is borrowed openly and `docs/` says so; that is where the
 /// credit belongs and it is why `docs/` is exempt. Everything a build reads is
 /// not.
+///
+/// **Plan-07 §6.3 also says "anywhere under `vendor/`", and this walk skips a
+/// directory of that name.** That is deliberate rather than an omission, and
+/// it is covered from the other side: ADR-0001's 2026-09-19 amendment means no
+/// vendor tree is ever committed, and the one the release workflow generates is
+/// derived entirely from `Cargo.lock` — which this guard reads. A crabviz
+/// dependency cannot reach a generated `vendor/` without first appearing in the
+/// lockfile.
 #[test]
 fn crabviz_appears_in_nothing_a_build_reads() {
     let root = workspace_root();
