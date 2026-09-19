@@ -247,10 +247,47 @@ jobs:
           test -d "$RUNNER_TEMP/smoke-out/vendor" || { echo "::error::vendor/ missing"; exit 1; }
           test -f "$RUNNER_TEMP/smoke-out/vendor/LICENSES.txt" || { echo "::error::the artifact carries no licence notice"; exit 1; }
 
+          # ADR-0006 shards per BOUND root, so the count is a fact the artifact
+          # always states and this is the assertion that holds on every
+          # repository: one shard per bound root, no more and no fewer. Both
+          # numbers are read off the artifact rather than off the run report's
+          # stdout — the emitted files are the authority here as everywhere.
+          #
+          # MEASURED 2026-09-19: on THIS repository both numbers are zero, and
+          # that is correct rather than a regression. reachgraph's only `.proto`
+          # files are test fixtures under
+          # `reachgraph-roots-proto-tonic/tests/fixtures/`, whose handlers sit on
+          # `tests/` paths — which ADR-0730 excludes from the symbol index, so
+          # all 18 roots are unbound and no shard is written. Anyone reading
+          # `0 shards` here as a failure will go looking for a bug that is not
+          # there.
+          #
+          # Both numbers are counted by `python3` — already a hard dependency of
+          # this step, which built the venv above — rather than by a glob.
+          # MEASURED 2026-09-19: `shards=$(ls -1 .../graph/*.json 2>/dev/null |
+          # wc -l)` aborts under `set -euo pipefail` when `graph/` does not
+          # exist, because `ls` exits non-zero and `pipefail` propagates it. That
+          # is precisely the zero-shard case this assertion exists to allow, so
+          # the check would have failed on the one repository it was written for.
+          bound=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["coverage"]["roots_bound"])' "$RUNNER_TEMP/smoke-out/endpoints.json")
+          shards=$(python3 -c 'import pathlib,sys; d=pathlib.Path(sys.argv[1]); print(len(list(d.glob("*.json"))) if d.is_dir() else 0)' "$RUNNER_TEMP/smoke-out/graph")
+          echo "bound roots: $bound, shards: $shards"
+          test "$bound" = "$shards" || { echo "::error::$bound bound root(s) produced $shards shard(s)"; exit 1; }
+
           # Plan-07 §8.1's last line. `serve` is the ONLY path that reaches a
           # sharded page: `file://` blocks `fetch()`, which is the whole reason
           # ADR-0006 has a server at all. A smoke test that stops at the file
           # listing has not exercised it.
+          #
+          # The serve assertion is the UNCONDITIONAL fetch of
+          # `vendor/cytoscape.min.js`: a real file, out of a subdirectory, over
+          # HTTP — which is the whole of what §8.1 asks for and is true of every
+          # artifact this tool writes. The shard fetch is conditional, and that
+          # is not a weakening: the shard COUNT is already asserted above against
+          # a number the artifact states, so a missing `graph/` is a checked fact
+          # rather than a skipped check. Fetching one arbitrary shard proved less
+          # than the equality does, and it could only ever run on a repository
+          # that happened to bind something.
           "$RUNNER_TEMP/smoke/bin/reachgraph" serve "$RUNNER_TEMP/smoke-out" --port 8731 &
           served=$!
           trap 'kill "$served" 2>/dev/null || true' EXIT
@@ -259,9 +296,11 @@ jobs:
             sleep 0.25
           done
           curl -fsS -o /dev/null "http://127.0.0.1:8731/index.html"
-          shard=$(find "$RUNNER_TEMP/smoke-out/graph" -name '*.json' -print -quit)
-          curl -fsS -o /dev/null "http://127.0.0.1:8731/graph/$(basename "$shard")"
           curl -fsS -o /dev/null "http://127.0.0.1:8731/vendor/cytoscape.min.js"
+          if [ "$shards" -gt 0 ]; then
+            shard=$(python3 -c 'import pathlib,sys; print(sorted(pathlib.Path(sys.argv[1]).glob("*.json"))[0].name)' "$RUNNER_TEMP/smoke-out/graph")
+            curl -fsS -o /dev/null "http://127.0.0.1:8731/graph/$shard"
+          fi
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
