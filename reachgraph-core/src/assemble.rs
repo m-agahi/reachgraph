@@ -293,7 +293,7 @@ impl Index {
         let mut roots: Vec<Root> = Vec::new();
         let mut contracts: Vec<ContractId> = Vec::new();
         let mut version_keys: Vec<VersionKey> = Vec::new();
-        let unexamined_contracts: Vec<UnexaminedContract> = Vec::new();
+        let mut unexamined_contracts: Vec<UnexaminedContract> = Vec::new();
 
         for provider in &inputs.roots {
             let plugin = provider.id();
@@ -320,6 +320,20 @@ impl Index {
                 if !version_keys.contains(&key) {
                     version_keys.push(key);
                 }
+            }
+
+            // ADR-0743. A provider that returned roots and named a file it
+            // could not read did not fail, so `tolerate` never sees it — this
+            // is the only place the flag can be raised for it. An index built
+            // over less than the repository holds is partial whether the
+            // shortfall came from a provider that failed outright or from one
+            // that ran and skipped a file, because a consumer weakens the same
+            // claim either way.
+            for entry in coverage.unexamined_contracts {
+                if !unexamined_contracts.contains(&entry) {
+                    unexamined_contracts.push(entry);
+                }
+                partial = true;
             }
         }
 
