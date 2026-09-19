@@ -20,23 +20,41 @@
 //! (plan-00 §6.1) asserts over the effective surface. With one module the two
 //! cannot disagree.
 //!
+//! # The graph types, and why they carry no serde derive
+//!
+//! [`Node`], [`GraphView`], [`Shard`], [`IndexCoverage`] and
+//! [`PluginDescriptor`] are named as residents of this crate by plan-00 §1 and
+//! defined by plan-01 §3. They are here.
+//!
+//! Plan-01 §3 sketches each with `#[derive(Serialize, Deserialize)]`. **That
+//! is not implementable and the artifact schema lives in `reachgraph-core`
+//! instead.** [`PluginId`] holds a `&'static str`; `NodeId` holds a
+//! `PluginId`; every type above holds a `NodeId`. `Deserialize<'de> for &'a
+//! str` requires `'de: 'a`, so a `&'static str` field can only be deserialized
+//! from an input that is itself `&'static` and needs no unescaping — an
+//! accident of one call site rather than a contract. Widening `PluginId` to
+//! `String` was considered and rejected before this crate shipped: it costs
+//! `Copy` and a cheap hash on `NodeId`, which the waist hashes constantly.
+//!
+//! So the derives are absent, this crate keeps its empty dependency list, and
+//! `reachgraph-core` owns a serde mirror of the artifact — the same split
+//! `reachgraph-fixture` already makes for its own input format, and for the
+//! same stated reason.
+//!
 //! # What is not here yet
 //!
-//! `Node`, `GraphView`, `Shard`, `IndexCoverage` and `PluginDescriptor` are
-//! named as residents of this crate by plan-00 §1 and **defined by plan-01
-//! §3**, which owns their shape and their serde contract.
-//!
-//! `Renderer` is the one trait of plan-00 §3 that is absent, because
-//! `Renderer::render` takes a `&GraphView` and arrives when that type does.
-//! [`OutputSink`] is here already: its signature needs nothing plan-01 has not
-//! yet written, and plan-01 §8.6 has the waist's own `emit.rs` writing through
-//! it, so deferring it would have made the waist wait on the renderer.
+//! `Renderer` is the one trait of plan-00 §3 that is absent. Its `render`
+//! takes a `&GraphView`, which now exists, so the trait is plan-05's to add
+//! with the renderer that needs it. [`OutputSink`] is here already: plan-01
+//! §8.6 has the waist's own `emit.rs` writing through it.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 // ---------------------------------------------------------------------------
 // Identity
@@ -196,7 +214,7 @@ pub struct Symbol {
 // ---------------------------------------------------------------------------
 
 /// ADR-0008 leak 4. "What is the unit of analysis" is per-language.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct UnitId(pub String);
 
 /// One unit of analysis: a Rust crate, a Go package, a Python source root.
@@ -301,7 +319,12 @@ pub enum Category {
 // ---------------------------------------------------------------------------
 
 /// ADR-0007. The contract an operation belongs to.
-#[derive(Clone, PartialEq, Eq, Debug)]
+///
+/// `Hash` and `Ord` are derived because the waist groups and orders roots by
+/// contract. That is contract data the plugin spells for grouping, not a
+/// [`NodeId`] — ordering one of those by content is forbidden (ADR-0003
+/// field 3), and this is the distinction.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct ContractId(pub String);
 
 /// Which side of a contract an operation sits on.
@@ -368,15 +391,348 @@ pub struct Root {
     pub binding: RootBinding,
 }
 
+/// One `(contract, version)` pair — ADR-0007's unit of root partitioning.
+///
+/// A named struct rather than plan-01 §6.1's tuple. `reachgraph-fixture`
+/// already made this correction on its own side, for its own reason: "a
+/// positional pair cannot carry `deny_unknown_fields`, and it cannot tell a
+/// `null` version from an omitted one — which is the exact distinction
+/// ADR-0007 turns on". The same argument applies to the type, so the waist
+/// carries one spelling of a version key rather than two.
+///
+/// `None` is a key like any other. It is never merged with, coerced to, or
+/// displayed as `"v1"`.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct VersionKey {
+    /// The contract.
+    pub contract: ContractId,
+    /// Its version. ADR-0007: a missing version is `None`, never `"v1"`.
+    pub version: Option<String>,
+}
+
 /// ADR-0007's binding requirement: the index records what it covered, so a
 /// partial root set cannot make live code read as unreachable.
 #[derive(Clone, Debug)]
 pub struct Coverage {
     /// Every contract this provider looked at.
     pub contracts: Vec<ContractId>,
-    /// Every `(contract, version)` pair it looked at. A `None` version is a
-    /// real entry, not a gap in the list.
-    pub versions: Vec<(ContractId, Option<String>)>,
+    /// Every version key it looked at. A `None` version is a real entry, not a
+    /// gap in the list.
+    pub versions: Vec<VersionKey>,
+}
+
+// ---------------------------------------------------------------------------
+// The built graph — plan-01 §3
+// ---------------------------------------------------------------------------
+
+/// A node in the built graph. Not every edge target was indexed.
+#[derive(Clone, Debug)]
+pub struct Node {
+    /// This node's identity.
+    pub id: NodeId,
+    /// `None` = an edge resolved to this id, but no provider ever emitted a
+    /// symbol for it. Third-party and stdlib targets land here, and so does a
+    /// cross-repository client stub in a repository that was never built.
+    pub symbol: Option<Symbol>,
+    /// `None` = no classifier was registered for this node's plugin, or the
+    /// node was never indexed and therefore has no path to classify.
+    pub category: Option<Category>,
+    /// The unit this node's symbol came from. `None` for an external node — it
+    /// was never indexed, so it belongs to no unit. The outermost grouping
+    /// level.
+    pub unit: Option<UnitId>,
+    /// Breadth-first distance from this view's root. `Some(0)` is the root
+    /// itself.
+    ///
+    /// `None` in the index-wide [`GraphView`], where there is no single root to
+    /// measure from, and `Some(_)` in every shard view. The distinction is in
+    /// the type because a renderer asking "how deep is this node" must get an
+    /// answer that is wrong in neither direction.
+    pub depth: Option<u32>,
+    /// True when this node sits at the view's depth limit and has out-edges
+    /// that were not followed. Frontier, not leaf: a renderer that draws the
+    /// two alike is lying.
+    pub frontier: bool,
+}
+
+/// What a plugin declared about itself, carried into the artifact so a consumer
+/// can interpret offsets and attribute edges without a second lookup.
+#[derive(Clone, Debug)]
+pub struct PluginDescriptor {
+    /// The plugin's identity.
+    pub id: PluginId,
+    /// ADR-0003 field 2, as that plugin declared it. Per plugin, never global.
+    pub position_encoding: PositionEncoding,
+    /// ADR-0003 field 1, as that plugin declared it.
+    pub capabilities: Vec<Capability>,
+}
+
+/// One root whose operation bound to no handler. ADR-0007: a reported gap,
+/// never a dropped row.
+#[derive(Clone, Debug)]
+pub struct UnboundRoot {
+    /// The contract the operation belongs to.
+    pub contract: ContractId,
+    /// ADR-0007: `None` is an assertion, never a default.
+    pub version: Option<String>,
+    /// The service, as the plugin spells it.
+    pub service: String,
+    /// The operation, as the plugin spells it.
+    pub operation: String,
+    /// Served or consumed.
+    pub direction: Direction,
+    /// The provider's own words for why nothing bound.
+    pub reason: String,
+}
+
+/// The aggregate of every [`RootProvider::coverage`] plus what the core itself
+/// observed.
+///
+/// ADR-0007's binding requirement 1: the index records what it covered, in the
+/// artifact rather than in a log line. [`Coverage`] is one provider's claim
+/// about what *it* looked at; this is the union, because a provider cannot know
+/// what the other providers did.
+#[derive(Clone, Debug)]
+pub struct IndexCoverage {
+    /// Every contract any provider looked at.
+    pub contracts: Vec<ContractId>,
+    /// Every version key the index looked at. A `None` version is a real entry.
+    pub versions: Vec<VersionKey>,
+    /// How many roots the index holds, bound and unbound together.
+    pub roots_total: usize,
+    /// How many of them bound to a handler.
+    pub roots_bound: usize,
+    /// The rest, each with the reason its provider gave.
+    pub unbound_roots: Vec<UnboundRoot>,
+    /// Every unit any symbol provider enumerated.
+    pub units_indexed: Vec<UnitId>,
+    /// Every plugin that contributed.
+    pub plugins: Vec<PluginId>,
+    /// Categories at which traversal stopped. A **declared limitation**, in the
+    /// artifact rather than in a release note: code reached only *through* a
+    /// node of one of these categories was not followed, so a consumer can see
+    /// that the complement was computed against a deliberately truncated walk.
+    pub traversal_terminal_categories: Vec<Category>,
+    /// True when any provider failed and the run continued anyway. A consumer
+    /// must weaken every unreachability claim when this is set.
+    pub partial: bool,
+}
+
+/// The lookups [`GraphView`] answers, built once on first use.
+///
+/// Never part of equality, never part of the artifact, and rebuilt rather than
+/// carried: a view that has answered a lookup and one that has not are the same
+/// view.
+#[derive(Clone, Debug, Default)]
+struct ViewIndex {
+    by_id: HashMap<NodeId, usize>,
+    out_edges: HashMap<NodeId, Vec<usize>>,
+    in_edges: HashMap<NodeId, Vec<usize>>,
+    contained: HashMap<NodeId, Vec<usize>>,
+}
+
+/// What a renderer receives.
+///
+/// Construction is the core's. The accessors below are inherent methods on
+/// owned data — lookups, not algorithms — which is what keeps a renderer from
+/// needing `reachgraph-core` as a dependency. A renderer that had to recompute
+/// breadth-first depth to draw a depth slider would need the traversal, and
+/// plan-00 §1's dependency rule would break.
+#[derive(Clone, Debug)]
+pub struct GraphView {
+    /// Every node in this view.
+    pub nodes: Vec<Node>,
+    /// Every edge in this view, unresolved ones included.
+    pub edges: Vec<Edge>,
+    /// The roots this view was computed from. One in a shard; all of them in
+    /// the index-wide view.
+    pub roots: Vec<Root>,
+    /// What each contributing plugin declared about itself.
+    pub plugins: Vec<PluginDescriptor>,
+    /// What the index covered.
+    pub coverage: IndexCoverage,
+    /// Built on first lookup. See [`ViewIndex`].
+    index: OnceLock<ViewIndex>,
+}
+
+impl GraphView {
+    /// Assemble a view from parts the core computed.
+    ///
+    /// The one constructor, because [`GraphView::index`] is private: a view is
+    /// always internally consistent with the nodes and edges it was given.
+    pub fn new(
+        nodes: Vec<Node>,
+        edges: Vec<Edge>,
+        roots: Vec<Root>,
+        plugins: Vec<PluginDescriptor>,
+        coverage: IndexCoverage,
+    ) -> Self {
+        Self {
+            nodes,
+            edges,
+            roots,
+            plugins,
+            coverage,
+            index: OnceLock::new(),
+        }
+    }
+
+    fn view_index(&self) -> &ViewIndex {
+        self.index.get_or_init(|| {
+            let mut index = ViewIndex::default();
+
+            for (position, node) in self.nodes.iter().enumerate() {
+                index.by_id.insert(node.id.clone(), position);
+
+                if let Some(container) = node.symbol.as_ref().and_then(|s| s.container.as_ref()) {
+                    index
+                        .contained
+                        .entry(container.clone())
+                        .or_default()
+                        .push(position);
+                }
+            }
+
+            for (position, edge) in self.edges.iter().enumerate() {
+                index
+                    .out_edges
+                    .entry(edge.from.clone())
+                    .or_default()
+                    .push(position);
+
+                if let EdgeTarget::Resolved(target) = &edge.to {
+                    index
+                        .in_edges
+                        .entry(target.clone())
+                        .or_default()
+                        .push(position);
+                }
+            }
+
+            index
+        })
+    }
+
+    /// One node by identity.
+    pub fn node(&self, id: &NodeId) -> Option<&Node> {
+        self.view_index()
+            .by_id
+            .get(id)
+            .and_then(|position| self.nodes.get(*position))
+    }
+
+    /// Breadth-first distance from this view's root. `None` in the index-wide
+    /// view, and `None` for a node this view does not hold.
+    pub fn depth_of(&self, id: &NodeId) -> Option<u32> {
+        self.node(id).and_then(|node| node.depth)
+    }
+
+    /// The greatest depth present. What a depth slider's maximum is set from.
+    pub fn max_depth(&self) -> Option<u32> {
+        self.nodes.iter().filter_map(|node| node.depth).max()
+    }
+
+    /// Every node at exactly this depth, in view order.
+    pub fn nodes_at_depth(&self, depth: u32) -> Vec<&Node> {
+        self.nodes
+            .iter()
+            .filter(|node| node.depth == Some(depth))
+            .collect()
+    }
+
+    /// The node's enclosing definition, if its plugin declared one and this
+    /// view holds it.
+    ///
+    /// A pure link follow: [`Symbol::container`] resolved by equality. The
+    /// waist does not interpret what the container *means* — the caller reads
+    /// `kind` and `raw_kind` and decides.
+    pub fn container_of(&self, id: &NodeId) -> Option<&Node> {
+        let container = self.node(id)?.symbol.as_ref()?.container.as_ref()?;
+        self.node(container)
+    }
+
+    /// The full chain outward, nearest first, terminating at a node with no
+    /// container or one this view does not hold.
+    ///
+    /// Cycle-guarded: a plugin that emits a containment loop gets a truncated
+    /// chain, never a hang.
+    pub fn container_chain(&self, id: &NodeId) -> Vec<&Node> {
+        let mut chain = Vec::new();
+        let mut seen: Vec<&NodeId> = vec![id];
+        let mut current = id.clone();
+
+        while let Some(next) = self.container_of(&current) {
+            if seen.contains(&&next.id) {
+                break;
+            }
+            chain.push(next);
+            seen.push(&next.id);
+            current = next.id.clone();
+        }
+
+        chain
+    }
+
+    /// Direct containment children — the inverse of [`GraphView::container_of`].
+    pub fn contained_in(&self, id: &NodeId) -> Vec<&Node> {
+        self.view_index()
+            .contained
+            .get(id)
+            .map(|positions| {
+                positions
+                    .iter()
+                    .filter_map(|position| self.nodes.get(*position))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Nodes grouped by unit, the outermost box. Externals are excluded; they
+    /// belong to no unit.
+    pub fn nodes_in_unit(&self, unit: &UnitId) -> Vec<&Node> {
+        self.nodes
+            .iter()
+            .filter(|node| node.unit.as_ref() == Some(unit))
+            .collect()
+    }
+
+    /// Every edge leaving this node, resolved or not.
+    pub fn out_edges(&self, id: &NodeId) -> Vec<&Edge> {
+        self.edges_at(&self.view_index().out_edges, id)
+    }
+
+    /// Every resolved edge arriving at this node. An unresolved edge arrives
+    /// nowhere, by definition.
+    pub fn in_edges(&self, id: &NodeId) -> Vec<&Edge> {
+        self.edges_at(&self.view_index().in_edges, id)
+    }
+
+    fn edges_at<'a>(&'a self, table: &HashMap<NodeId, Vec<usize>>, id: &NodeId) -> Vec<&'a Edge> {
+        table
+            .get(id)
+            .map(|positions| {
+                positions
+                    .iter()
+                    .filter_map(|position| self.edges.get(*position))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+}
+
+/// One root's reachable subgraph. ADR-0006: a shard is the reachable set from
+/// one root.
+#[derive(Clone, Debug)]
+pub struct Shard {
+    /// The root this shard was computed from.
+    pub root: Root,
+    /// The depth the walk stopped at, or `None` for an unlimited walk.
+    pub depth_limit: Option<u32>,
+    /// Nodes at `depth_limit` that have out-edges not included here. They are
+    /// frontier, not leaf.
+    pub frontier: Vec<NodeId>,
+    /// The subgraph.
+    pub view: GraphView,
 }
 
 // ---------------------------------------------------------------------------

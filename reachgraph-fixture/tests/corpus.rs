@@ -427,7 +427,7 @@ fn unversioned_contract_version_is_none_and_never_v1() {
     };
     assert_eq!(coverage.versions.len(), 1);
     assert_eq!(
-        coverage.versions[0].1, None,
+        coverage.versions[0].version, None,
         "a null version is a real coverage entry, not a gap in the list"
     );
 
@@ -468,7 +468,7 @@ fn unbound_root_is_reported_not_dropped() {
     assert!(coverage
         .versions
         .iter()
-        .any(|(contract, version)| contract.0 == "acme.task" && version.as_deref() == Some("v1")));
+        .any(|key| key.contract.0 == "acme.task" && key.version.as_deref() == Some("v1")));
 }
 
 /// ★ `unresolved_edge` — the candidates survive, and no guess is made.
