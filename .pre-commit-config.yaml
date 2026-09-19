@@ -46,16 +46,36 @@ repos:
       # not running, so it needs both `actionlint` and `shellcheck` on PATH.
       - id: actionlint
 
+      # THE RUST HOOKS ARRIVED WITH THE FIRST `Cargo.toml`, which is the
+      # condition the block below used to state as a future one. All four are
+      # `language: system` bare entries — they fail with "command not found"
+      # rather than installing anything — so `rust-toolchain.toml` carries
+      # `rustfmt` and `clippy` as components and `cargo-deny` has to be on PATH.
+      #
+      # `cargo-fmt` and `cargo-clippy` are `pass_filenames: false` and run over
+      # the whole workspace, so a `.rs` file staged anywhere lints every crate.
+      # That is what makes the local hook the same check `ci-pr.yaml` runs.
+      - id: cargo-fmt
+      - id: cargo-clippy
+      # Reads `deny.toml`, which this repository now has. Its allow list is
+      # modelled on yadgarhq/estate's and is a DECIDED set rather than a
+      # description of today's tree — see the file.
+      - id: cargo-deny
+      # Ledger 837, and it arrives with the first test exactly as the note
+      # below promised. It reads what the SOURCE says; `ci-pr.yaml`'s execution
+      # audit reads what RAN. Neither replaces the other, and a repository with
+      # tests but no marker scan gets only half of it.
+      - id: no-test-skips
+
   # WHAT GETS ADDED WHEN src/ LANDS, written down so it is a lookup rather than
-  # a rediscovery. The Rust hooks are omitted today because there is no
-  # Cargo.toml for them to read, and an omitted hook is honest where a hook
-  # that matches nothing is a green tick meaning nothing:
+  # a rediscovery. Kept after the fact rather than deleted: the four hooks above
+  # are the discharge of this note, and a reader who wants to know why they
+  # appeared in one commit needs the condition that was waiting on them.
   #
-  #   cargo-fmt, cargo-clippy   with the first Cargo.toml
+  #   cargo-fmt, cargo-clippy   with the first Cargo.toml       — DONE
   #   cargo-deny                with the first Cargo.toml AND a deny.toml,
-  #                             which the hook reads and this repository has not
-  #                             written yet
-  #   no-test-skips             with the first test
+  #                             which the hook reads             — DONE
+  #   no-test-skips             with the first test              — DONE
   #
   # The service-shaped shared hooks — helm-lint, chart-baseline,
   # chart-network-policy, observe-coverage, run-block-size,

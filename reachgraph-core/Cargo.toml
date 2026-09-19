@@ -1,0 +1,15 @@
+# SKELETON. plan-01 fills it; this PR creates it because
+# `no_plugin_depends_on_core` cannot assert anything about a crate that does
+# not exist — a dependency-direction guard over a graph with no `core` node
+# passes by finding nothing.
+[package]
+name = "reachgraph-core"
+description = "The reachgraph waist: graph assembly, reachability and sharding over the plugin-api schema."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+reachgraph-plugin-api.workspace = true

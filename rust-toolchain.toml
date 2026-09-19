@@ -1,0 +1,18 @@
+# Pinned, not `stable`, and the pin is the same one yadgarhq/estate carries. A
+# floating channel makes the toolchain a property of the day a build ran, so a
+# clippy lint added upstream turns a green branch red without a commit — and
+# `cargo fmt --check` is a pre-commit hook, which makes rustfmt's own churn a
+# failure somebody has to chase.
+#
+# `components`, because both are hooks. `cargo-fmt` and `cargo-clippy` in
+# .pre-commit-config.yaml are `language: system` bare entries: they fail with
+# "command not found" rather than installing anything, so the toolchain has to
+# carry them.
+#
+# NO `targets` LINE. This repository builds for the machine it runs on. The
+# platform wheel matrix is plan-07's problem and it is unmeasured
+# (docs/plans/00-workspace-and-plugin-api.md §7), so nothing is pinned for it
+# here on speculation.
+[toolchain]
+channel = "1.98.0"
+components = ["rustfmt", "clippy"]

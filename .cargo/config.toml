@@ -1,0 +1,6 @@
+# `cargo xtask public-api --bless` is the regeneration command plan-02 §7.2.1
+# names, and it names a DELIBERATE command on purpose: a snapshot that repairs
+# itself when the test fails asserts nothing. The alias is what makes that
+# spelling real rather than aspirational.
+[alias]
+xtask = "run --quiet --package xtask --"

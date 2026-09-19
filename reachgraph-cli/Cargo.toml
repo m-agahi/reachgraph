@@ -1,0 +1,20 @@
+# SKELETON. plan-06 fills it. It exists now for the same reason
+# `reachgraph-core` does, from the other side: it is the one crate
+# `no_plugin_depends_on_core` must EXEMPT, so the exemption is exercised rather
+# than merely written.
+[package]
+name = "reachgraph-cli"
+description = "The reachgraph binary: owns the plugin registry and the feature flags."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "reachgraph"
+path = "src/main.rs"
+
+[dependencies]
+reachgraph-core.workspace = true
+reachgraph-plugin-api.workspace = true

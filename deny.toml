@@ -1,0 +1,54 @@
+# ADR-0001 fixes this project's licence as MIT OR Apache-2.0 and requires a
+# single self-contained binary built from vendored, exactly-pinned
+# dependencies. Both halves make the dependency set a decision rather than a
+# detail, and a decision that lives only in a document depends on somebody
+# remembering it. This file is the same rule enforced by something that runs.
+#
+# Modelled on yadgarhq/estate's deny.toml. Two deliberate differences are noted
+# where they occur.
+
+[licenses]
+# Permissive only. A copyleft dependency is not automatically disqualifying —
+# MPL-2.0 is file-level and unencumbering as an unmodified dependency — but it
+# is a decision, so it belongs in an explicit exception here rather than in a
+# blanket allow.
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "MIT-0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "CC0-1.0",
+]
+confidence-threshold = 0.9
+# The allowlist is a DECIDED set, not a description of today's tree. Entries
+# nothing currently uses are pre-approved judgements, not dead config, so an
+# unmatched allowance is not worth a warning. What must stay loud is a licence
+# NOT on the list — that is the decision point.
+unused-allowed-license = "allow"
+
+[bans]
+multiple-versions = "warn"
+
+[advisories]
+yanked = "deny"
+
+# NO `ignore` LIST. estate's copy says why, and the argument carries: an
+# exemption for an advisory this tree cannot reach is how an exemption list
+# stops meaning anything.
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+
+# NO `[sources.allow-org]`, WHICH IS THE ONE THING NOT COPIED FROM estate.
+# estate allows the `yadgarhq` GitHub organisation because it has a git
+# dependency pinned by revision. This repository has none, and ADR-0001 —
+# "depend, pin exact, `cargo vendor`, build `--locked`, never fork" — is an
+# argument for registry sources rather than git ones. Copying the allowance
+# would start this repository with a standing exemption for something it does
+# not do, which is the same defect as copying an unmatched `ignore` entry.
