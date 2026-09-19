@@ -190,4 +190,62 @@ fn expand_categories_overrides_which_categories_terminate() {
         [CategoryRow::Stdlib],
         "the declared limitation reaches the artifact, not a release note"
     );
+
+    // And the walk actually goes through: the first-party function reached only
+    // *through* a third-party node is in the shard now.
+    let (_, shard) = shards(&sink).remove(0);
+    assert!(
+        shard
+            .nodes
+            .iter()
+            .any(|node| node.id.raw == "fn:behind_third_party"),
+        "expanding through ThirdParty must change the walk, not just the label"
+    );
+    assert!(
+        unreachable(&sink)
+            .nodes
+            .iter()
+            .all(|node| node.id.raw != "fn:behind_third_party"),
+        "and it must leave the complement"
+    );
+}
+
+/// Plan-01 §7.1 and open question 4, made concrete. Terminating at a
+/// third-party node **loses** the first-party code reached only through it:
+/// that function is absent from the shard and present in the complement. The
+/// limitation is declared in `traversal_terminal_categories` rather than left
+/// in a release note, which is the whole of what makes it a caveat a reader can
+/// act on instead of the false positive that permanently destroys trust.
+#[test]
+fn third_party_termination_loses_code_reached_only_through_it() {
+    let sink = emit(&build(&case("foreign_shapes")));
+    let (_, shard) = shards(&sink).remove(0);
+
+    assert!(
+        shard
+            .nodes
+            .iter()
+            .all(|node| node.id.raw != "fn:behind_third_party"),
+        "the walk stopped at the third-party node"
+    );
+    assert!(
+        shard
+            .nodes
+            .iter()
+            .any(|node| node.id.raw == "java:com.acme.Store"),
+        "and the third-party node itself is still there — terminal, not deleted"
+    );
+
+    let document = unreachable(&sink);
+    assert!(
+        document
+            .nodes
+            .iter()
+            .any(|node| node.id.raw == "fn:behind_third_party"),
+        "so the function appears unreachable, which the coverage record is what          lets a reader discount"
+    );
+    assert_eq!(
+        document.coverage.traversal_terminal_categories,
+        [CategoryRow::ThirdParty, CategoryRow::Stdlib]
+    );
 }

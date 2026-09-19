@@ -161,3 +161,83 @@ impl Classifier for SpyClassifier<'_> {
         self.inner.classify(path, unit)
     }
 }
+
+/// A plugin that records the directory the waist preflighted it against, and
+/// reports a finding it must not lose.
+///
+/// No corpus case can express either. `FixturePlugin::preflight` accepts its
+/// argument and ignores it on purpose (plan-02 §3.1), so a case cannot observe
+/// what it was handed; and the fixture format has no `warned` spelling, so a
+/// case cannot return one.
+pub struct PreflightSpy<'a> {
+    inner: &'a FixturePlugin,
+    seen: Mutex<RefCell<Vec<std::path::PathBuf>>>,
+    pub remediation: &'static str,
+}
+
+impl<'a> PreflightSpy<'a> {
+    pub fn new(inner: &'a FixturePlugin) -> Self {
+        Self {
+            inner,
+            seen: Mutex::new(RefCell::new(Vec::new())),
+            remediation: "a finding the plugin reports while still running",
+        }
+    }
+
+    /// Every directory the waist passed, in call order.
+    pub fn roots(&self) -> Vec<std::path::PathBuf> {
+        let guard = self.seen.lock().expect("the spy is not poisoned");
+        let roots = guard.borrow().clone();
+        roots
+    }
+}
+
+impl Plugin for PreflightSpy<'_> {
+    fn id(&self) -> PluginId {
+        self.inner.id()
+    }
+
+    fn provides(&self) -> &[Capability] {
+        self.inner.provides()
+    }
+
+    fn position_encoding(&self) -> PositionEncoding {
+        self.inner.position_encoding()
+    }
+
+    fn detection(&self) -> Detection {
+        self.inner.detection()
+    }
+
+    fn preflight(&self, root: &Path) -> Preflight {
+        {
+            let guard = self.seen.lock().expect("the spy is not poisoned");
+            guard.borrow_mut().push(root.to_path_buf());
+        }
+        Preflight::Warned {
+            remediation: self.remediation.to_owned(),
+        }
+    }
+}
+
+impl LanguagePlugin for PreflightSpy<'_> {
+    fn discover_units(&self, root: &Path) -> Result<Vec<Unit>, PluginError> {
+        self.inner.discover_units(root)
+    }
+}
+
+impl SymbolProvider for PreflightSpy<'_> {
+    fn symbols_in(&self, unit: &Unit) -> Result<Vec<Symbol>, PluginError> {
+        self.inner.symbols_in(unit)
+    }
+}
+
+impl EdgeProvider for PreflightSpy<'_> {
+    fn edges_in(&self, unit: &Unit) -> Result<Vec<Edge>, PluginError> {
+        self.inner.edges_in(unit)
+    }
+
+    fn edges_from(&self, node: &NodeId) -> Result<Vec<Edge>, PluginError> {
+        self.inner.edges_from(node)
+    }
+}

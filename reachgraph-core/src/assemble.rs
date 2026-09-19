@@ -215,7 +215,7 @@ impl Index {
         let mut diagnostics = Vec::new();
         let mut partial = false;
 
-        preflight_all(inputs, &mut diagnostics)?;
+        preflight_all(root, inputs, &mut diagnostics)?;
         check_capabilities(inputs)?;
         check_pairing(inputs)?;
 
@@ -552,6 +552,7 @@ fn descriptors(inputs: &BuildInputs<'_>) -> Vec<PluginDescriptor> {
 }
 
 fn preflight_all(
+    root: &Path,
     inputs: &BuildInputs<'_>,
     diagnostics: &mut Vec<BuildDiagnostic>,
 ) -> Result<(), BuildError> {
@@ -563,9 +564,10 @@ fn preflight_all(
         }
         checked.push(plugin.id());
 
-        // `root` is the plugin's own to interpret; the waist passes it and
-        // checks nothing itself. Never `command -v`.
-        match plugin.preflight(Path::new(".")) {
+        // The repository the caller named, not the process's working
+        // directory. `root` is the plugin's own to interpret; the waist passes
+        // it and checks nothing itself. Never `command -v`.
+        match plugin.preflight(root) {
             Preflight::Ok => {}
             Preflight::Warned { remediation } => {
                 diagnostics.push(BuildDiagnostic::PreflightWarned {

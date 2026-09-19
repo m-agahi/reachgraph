@@ -75,15 +75,18 @@ fn unreachable_lists_every_indexed_unreached_node() {
     let sink = emit(&build(&case("foreign_shapes")));
     let document = unreachable(&sink);
 
-    // Every third-party and standard-library node this case declares is
-    // reached, so what proves the absence of filtering is the presence of the
-    // terminal categories in coverage alongside a complete node list.
     let listed: BTreeSet<&str> = document
         .nodes
         .iter()
         .map(|node| node.id.raw.as_str())
         .collect();
-    assert!(listed.is_empty());
+    assert_eq!(
+        listed,
+        BTreeSet::from(["fn:behind_third_party", "java:com.acme.Unused"]),
+        "a third-party row is a row like any other"
+    );
+    assert_eq!(document.counts_by_category.third_party, 1);
+    assert_eq!(document.counts_by_category.first_party, 1);
 
     let sink = emit(&build(&case("versioned_pair")));
     let document = unreachable(&sink);

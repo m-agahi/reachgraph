@@ -7,7 +7,7 @@ use reachgraph_core::{BuildDiagnostic, BuildError, BuildInputs, BuildOptions, In
 use reachgraph_fixture::format::{FixtureRaw, FixtureRootBinding, FixtureUnitId};
 use reachgraph_plugin_api::{Capability, NodeId, Plugin, PluginId};
 
-use crate::doubles::{doc_of, plugin_from, FailingProvider};
+use crate::doubles::{doc_of, plugin_from, FailingProvider, PreflightSpy};
 use crate::support::{build, case, emit, endpoints, inputs, shards, unreachable};
 
 /// Plan-01 §10.1 step 1. Symbols and edges are collected per unit from a
@@ -299,4 +299,59 @@ fn no_classifier_yields_none_not_error() {
         .diagnostics()
         .iter()
         .any(|diagnostic| matches!(diagnostic, BuildDiagnostic::NoClassifierForPlugin { .. })));
+}
+
+/// ADR-0003 field 5, plan-01 §4.2 step 1. The plugin is preflighted against the
+/// repository the caller named, not against the process's working directory.
+///
+/// Nothing in the corpus can observe this: `FixturePlugin::preflight` accepts
+/// its argument and ignores it, which is exactly the behaviour plan-02 §3.1
+/// requires of it. A plugin whose prerequisites are a property of a directory —
+/// every real one — would silently check the wrong tree.
+#[test]
+fn preflight_receives_the_repository_root() {
+    let plugin = case("minimal");
+    let spy = PreflightSpy::new(&plugin);
+
+    let index = Index::build(
+        plugin.case_dir(),
+        &BuildInputs {
+            symbols: vec![&spy],
+            edges: vec![&spy],
+            roots: Vec::new(),
+            classifiers: Vec::new(),
+        },
+        &BuildOptions::default(),
+    )
+    .expect("a warned plugin runs");
+
+    assert_eq!(spy.roots(), [plugin.case_dir().to_path_buf()]);
+    assert_eq!(index.view().nodes.len(), 2, "a warned plugin runs");
+}
+
+/// ADR-0003 field 5, as amended 2026-09-19. A `Warned` plugin runs, and the
+/// remediation it reported is carried rather than dropped — the honest-absence
+/// rule again: a value that says less than the plugin knows.
+#[test]
+fn preflight_warning_is_recorded_and_the_plugin_still_runs() {
+    let plugin = case("minimal");
+    let spy = PreflightSpy::new(&plugin);
+
+    let index = Index::build(
+        plugin.case_dir(),
+        &BuildInputs {
+            symbols: vec![&spy],
+            edges: vec![&spy],
+            roots: Vec::new(),
+            classifiers: Vec::new(),
+        },
+        &BuildOptions::default(),
+    )
+    .expect("a warned plugin runs");
+
+    assert!(index.diagnostics().iter().any(|diagnostic| matches!(
+        diagnostic,
+        BuildDiagnostic::PreflightWarned { remediation, .. }
+            if remediation == spy.remediation
+    )));
 }
