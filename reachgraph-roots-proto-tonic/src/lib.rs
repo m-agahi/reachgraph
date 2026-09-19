@@ -27,6 +27,8 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+mod plugin;
+
 pub mod bind;
 pub mod contract;
 pub mod direction;
@@ -34,6 +36,8 @@ pub mod keys;
 pub mod names;
 pub mod unbound;
 pub mod version;
+
+pub use plugin::ProtoTonicPlugin;
 
 use reachgraph_plugin_api::PluginId;
 
