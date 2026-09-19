@@ -1,0 +1,454 @@
+/*
+  The artifact's stylesheet, inlined into the page.
+
+  Inlined rather than emitted as `app.css` because `overview.html` has to be
+  one file (plan-05 §6.5) and two code paths producing two stylesheets is how
+  the single-file case drifts from the sharded one.
+
+  COLOUR IS REDUNDANT REINFORCEMENT HERE, NEVER THE SIGNAL. Plan-05 §5: edge
+  strength is carried by dash pattern and weight, node class by border style
+  and a text badge. Artifacts get printed, screenshotted into greyscale pull
+  request comments, and read by people with colour-vision deficiency.
+*/
+
+:root {
+  --rg-ink: #16191d;
+  --rg-muted: #5a6470;
+  --rg-rule: #d5dae0;
+  --rg-paper: #ffffff;
+  --rg-panel: #f6f7f9;
+  --rg-warn-bg: #fff4e5;
+  --rg-warn-edge: #b26a00;
+  --rg-gap-bg: #f2eefc;
+  --rg-gap-edge: #6b4fbb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--rg-ink);
+  background: var(--rg-paper);
+  font:
+    14px/1.5 ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+
+code,
+pre,
+.rg-mono {
+  font:
+    12px/1.45 ui-monospace,
+    "SF Mono",
+    "Cascadia Mono",
+    Menlo,
+    Consolas,
+    monospace;
+  overflow-wrap: anywhere;
+}
+
+h1 {
+  font-size: 18px;
+  margin: 0;
+}
+h2 {
+  font-size: 15px;
+  margin: 0 0 6px;
+}
+h3 {
+  font-size: 13px;
+  margin: 12px 0 4px;
+  color: var(--rg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rg-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--rg-rule);
+}
+.rg-subtitle,
+.rg-hint {
+  margin: 4px 0 0;
+  color: var(--rg-muted);
+  font-size: 12px;
+}
+
+.rg-blocker {
+  margin: 24px auto;
+  max-width: 680px;
+  padding: 16px 20px;
+  border: 2px solid var(--rg-warn-edge);
+  background: var(--rg-warn-bg);
+}
+
+.rg-layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr) 320px;
+  gap: 1px;
+  background: var(--rg-rule);
+  min-height: 70vh;
+}
+.rg-layout > * {
+  background: var(--rg-paper);
+  padding: 12px 14px;
+  overflow: auto;
+  max-height: 82vh;
+}
+
+@media (max-width: 1100px) {
+  .rg-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rg-layout > * {
+    max-height: none;
+  }
+}
+
+/* --- endpoint list --------------------------------------------------- */
+
+.rg-operation {
+  border: 1px solid var(--rg-rule);
+  margin-bottom: 8px;
+}
+.rg-operation-head {
+  padding: 6px 8px;
+  background: var(--rg-panel);
+}
+.rg-operation-name {
+  font-weight: 600;
+}
+.rg-operation-key {
+  display: block;
+  color: var(--rg-muted);
+  margin-top: 2px;
+}
+.rg-version-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-top: 1px solid var(--rg-rule);
+  background: var(--rg-paper);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rg-version-row:hover {
+  background: var(--rg-panel);
+}
+.rg-version-row[aria-pressed="true"] {
+  background: var(--rg-ink);
+  color: var(--rg-paper);
+}
+
+/*
+  Plan-05 §4.3: an unbound version is a REPORTED GAP. Not hidden, and not
+  greyed into invisibility — an unbound root means a real handler may be
+  sitting in the coverage list below, and the reader can only detect that if
+  the gap is on the screen.
+*/
+.rg-version-gap {
+  border-top: 1px solid var(--rg-rule);
+  padding: 6px 8px;
+  background: var(--rg-gap-bg);
+  border-left: 4px solid var(--rg-gap-edge);
+}
+.rg-version-gap .rg-badge {
+  border-color: var(--rg-gap-edge);
+  color: var(--rg-gap-edge);
+}
+.rg-gap-reason {
+  margin: 4px 0 0;
+  color: var(--rg-ink);
+  font-size: 12px;
+}
+
+.rg-badge {
+  display: inline-block;
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.rg-badge-unversioned {
+  font-style: italic;
+}
+
+/* --- controls -------------------------------------------------------- */
+
+.rg-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.rg-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rg-control-label {
+  color: var(--rg-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.rg-segmented button {
+  border: 1px solid var(--rg-rule);
+  background: var(--rg-paper);
+  font: inherit;
+  padding: 3px 9px;
+  cursor: pointer;
+  margin-left: -1px;
+}
+.rg-segmented button[aria-pressed="true"] {
+  background: var(--rg-ink);
+  color: var(--rg-paper);
+}
+.rg-checkboxes label {
+  margin-right: 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rg-caveat {
+  margin: 0 0 8px;
+  color: var(--rg-muted);
+  font-size: 12px;
+  border-left: 3px solid var(--rg-rule);
+  padding-left: 8px;
+}
+
+.rg-shard-note {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  background: var(--rg-panel);
+  border-left: 3px solid var(--rg-warn-edge);
+  font-size: 12px;
+}
+
+.rg-canvas {
+  height: 62vh;
+  min-height: 380px;
+  border: 1px solid var(--rg-rule);
+}
+.rg-empty {
+  padding: 24px;
+  color: var(--rg-muted);
+  text-align: center;
+}
+
+.rg-inspector {
+  position: relative;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--rg-rule);
+  background: var(--rg-panel);
+}
+.rg-inspector button {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  border: 0;
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.rg-inspector dt {
+  color: var(--rg-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 6px;
+}
+.rg-inspector dd {
+  margin: 1px 0 0;
+}
+
+/* --- legend ---------------------------------------------------------- */
+
+.rg-legend-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.rg-legend-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.rg-legend-line {
+  flex: none;
+  margin-top: 4px;
+}
+.rg-swatch {
+  flex: none;
+  width: 26px;
+  height: 16px;
+  border: 2px solid var(--rg-ink);
+  background: var(--rg-paper);
+}
+.rg-swatch-unindexed {
+  border-style: dashed;
+  border-color: var(--rg-muted);
+}
+.rg-swatch-frontier {
+  border-style: double;
+  border-width: 4px;
+  border-color: var(--rg-warn-edge);
+}
+.rg-swatch-trait-declaration {
+  border-color: var(--rg-gap-edge);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--rg-paper) 0 3px,
+    var(--rg-gap-bg) 3px 6px
+  );
+}
+.rg-swatch-implementation {
+  border-color: var(--rg-ink);
+}
+.rg-swatch-first {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--rg-paper) 0 3px,
+    var(--rg-rule) 3px 6px
+  );
+}
+.rg-swatch-second {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--rg-paper) 0 3px,
+    var(--rg-rule) 3px 6px
+  );
+}
+.rg-swatch-both {
+  border-style: double;
+  border-width: 4px;
+}
+
+.rg-licences ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+/* --- coverage -------------------------------------------------------- */
+
+.rg-unreachable,
+.rg-sunset {
+  padding: 14px 16px;
+  border-top: 1px solid var(--rg-rule);
+}
+
+/*
+  Plan-05 §4.5. `partial: true` means a provider failed and the run continued,
+  so every claim below is computed from an incomplete index. A banner above the
+  list, never a footnote, and never inside a disclosure.
+*/
+.rg-partial-banner {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 2px solid var(--rg-warn-edge);
+  background: var(--rg-warn-bg);
+  font-weight: 600;
+}
+
+.rg-coverage {
+  margin: 0 0 4px;
+  color: var(--rg-ink);
+}
+.rg-notes {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  background: var(--rg-panel);
+  border-left: 4px solid var(--rg-muted);
+}
+.rg-notes h3 {
+  margin-top: 0;
+}
+.rg-notes ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.rg-notes li {
+  margin: 3px 0;
+}
+
+.rg-unbound {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  background: var(--rg-gap-bg);
+  border-left: 4px solid var(--rg-gap-edge);
+}
+.rg-unbound h3 {
+  margin-top: 0;
+}
+.rg-unbound ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.rg-unreachable-controls {
+  margin: 12px 0 8px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.rg-unreachable-controls button {
+  font: inherit;
+  padding: 4px 10px;
+  border: 1px solid var(--rg-ink);
+  background: var(--rg-paper);
+  cursor: pointer;
+}
+
+.rg-unreachable-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+.rg-unreachable-table th,
+.rg-unreachable-table td {
+  text-align: left;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--rg-rule);
+  vertical-align: top;
+}
+
+.rg-sunset table {
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.rg-sunset th,
+.rg-sunset td {
+  text-align: left;
+  padding: 3px 10px;
+  border-bottom: 1px solid var(--rg-rule);
+}
+
+.rg-footer {
+  padding: 10px 16px;
+  border-top: 1px solid var(--rg-rule);
+  color: var(--rg-muted);
+  font-size: 12px;
+}
+
+[hidden] {
+  display: none !important;
+}

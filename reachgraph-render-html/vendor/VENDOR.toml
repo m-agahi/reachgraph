@@ -1,0 +1,97 @@
+# The vendored JavaScript, and where each file came from — plan-05 §3.
+#
+# ADR-0001 forbids runtime downloads. A `<script src="https://cdnjs…">` is one:
+# it is performed by the browser rather than by the binary, but it fails in an
+# air-gapped runner, it fails when the host is unreachable, and every viewer of
+# a private-code graph makes a request to a third party. **There is no CDN
+# option, not even behind a flag.** These files are committed, compiled into the
+# binary with `include_str!`, and written to `out/vendor/` at render time.
+#
+# THE OPEN MEASUREMENT PLAN-05 §3 LEFT, ANSWERED — and its premise corrected.
+# Plan-05 §2 says fcose has "a real UMD build published on cdnjs". MEASURED
+# 2026-09-19: `cytoscape-fcose` is NOT a cdnjs library at all
+# (`api.cdnjs.com/libraries/cytoscape-fcose` → 404), and neither is `cose-base`
+# or `layout-base`. Only `cytoscape` itself is there. The three are published on
+# npm and served by jsDelivr, which is where they are fetched from below.
+#
+# That changes nothing about the decision, and the reason is worth stating
+# because it is the whole of plan-05 §3: what the survey bought was the
+# existence of a **pre-built, dependency-free single file** obtainable without
+# npm and without a bundler. jsDelivr serves the same package tarball npm does.
+# The host is where the file is obtained; it is never where the page loads it
+# from.
+#
+# The dependency chain is exactly the four plan-05 §3 predicted, MEASURED from
+# each package's own `package.json`:
+#
+#   cytoscape-fcose 2.2.0  dependencies { cose-base ^2.2.0 }
+#                          peerDependencies { cytoscape ^3.2.0 }
+#   cose-base       2.2.0  dependencies { layout-base ^2.0.0 }
+#   layout-base     2.0.1  dependencies {}
+#
+# Total 759 606 bytes. That is the number plan-07's binary-size budget takes,
+# and plan-05 §6.5's threshold does NOT count it: the inline threshold is over
+# the graph JSON, and `overview.html` is larger than the threshold by these
+# bytes plus the loader, on purpose.
+#
+# No minified build of the three iVis bundles is published — MEASURED by
+# listing each package's files on jsDelivr — so the unminified ones are what
+# ships. Minifying them here is forbidden by plan-05 §3 anyway.
+#
+# `sha256` IS THE HASH OF THE FILE AS UPSTREAM PUBLISHED IT, and the committed
+# file is byte-identical to it. `.pre-commit-config.yaml` excludes this
+# directory from the three whitespace hooks so that stays true; the reason is
+# recorded there. `vendor_bytes_are_unmodified` compares the *emitted*
+# `out/vendor/*.js` against these hashes, which is what makes "byte-identical,
+# banner included" a build failure rather than a sentence.
+#
+# An upstream bump is a deliberate re-vendor with a recorded hash change, never
+# a silent float.
+
+[[bundle]]
+file = "cytoscape.min.js"
+name = "cytoscape"
+version = "3.34.2"
+spdx = "MIT"
+source = "https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.34.2/cytoscape.min.js"
+bytes = 435503
+sha256 = "b85c213252b880cbb2d86c10dc537f673560e82494da4330f1ccc18fbcb5f145"
+# The only one of the four carrying its licence as a `/**` banner in the file.
+notice = "banner"
+
+[[bundle]]
+file = "layout-base.js"
+name = "layout-base"
+version = "2.0.1"
+spdx = "MIT"
+source = "https://cdn.jsdelivr.net/npm/layout-base@2.0.1/layout-base.js"
+bytes = 147958
+sha256 = "ec15ab5df9af3f20708f4faab994accf91cda71848cd5bb10a23432cc50b6745"
+# A webpack UMD bundle with NO licence banner, which plan-05 §8.3's
+# `licence_banner_survives_emission` assumed every bundle had. It does not, so
+# the notice travels in `LICENSES.txt` instead and the test asserts over that.
+notice = "licenses-file"
+
+[[bundle]]
+file = "cose-base.js"
+name = "cose-base"
+version = "2.2.0"
+spdx = "MIT"
+source = "https://cdn.jsdelivr.net/npm/cose-base@2.2.0/cose-base.js"
+bytes = 118906
+sha256 = "7cae9509bd36235a63a85e71c8d9fa2cd0bc1d0c1ecc5b5a737976f39d040ddf"
+notice = "licenses-file"
+
+[[bundle]]
+file = "cytoscape-fcose.js"
+name = "cytoscape-fcose"
+version = "2.2.0"
+spdx = "MIT"
+source = "https://cdn.jsdelivr.net/npm/cytoscape-fcose@2.2.0/cytoscape-fcose.js"
+bytes = 57239
+sha256 = "4b1cab218d74996aa59cd8473f9239cc6398b8c1774d84d7e59ad9a68959cb57"
+notice = "licenses-file"
+
+# Load order matters and is the order above: a UMD bundle registers itself on
+# `window` and the next one reads it. layout-base, then cose-base, then
+# cytoscape-fcose, with cytoscape itself first.

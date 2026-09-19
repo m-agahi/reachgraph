@@ -7,14 +7,36 @@
 # This repository is prose today — `docs/adr/` and `docs/plans/` and nothing
 # else. It carries the baseline plus the three shared hooks that can do real
 # work on prose, workflows and secrets.
+#
+# THE ONE EXCLUSION, and it is narrow on purpose. The three whitespace hooks
+# skip `reachgraph-render-html/vendor/*.js`, which are third-party UMD bundles
+# committed byte for byte (plan-05 §3, §7). MEASURED 2026-09-19 with the hooks
+# unrestricted: `end-of-file-fixer` appended a newline to three of the four,
+# `trailing-whitespace` deleted 35 bytes from cose-base.js and 24 from
+# cytoscape-fcose.js, and `mixed-line-ending` rewrote every CRLF in
+# layout-base.js. That is a repository formatter editing the inside of a
+# minified bundle it cannot reason about, and the edit is invisible in review.
+#
+# It also breaks the guard that matters: `vendor_bytes_are_unmodified` compares
+# the emitted bytes against `VENDOR.toml`'s recorded sha256, which is the hash
+# of what upstream published. A hook that rewrites the file makes that hash a
+# hash of our normalisation instead, and "byte-identical, banner included"
+# stops being checkable. The `.prettierignore` entry for the golden artifacts
+# is the same argument already made once in this repository.
+#
+# Nothing else is excluded. Every file this project authors goes through every
+# hook.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^reachgraph-render-html/vendor/.*\.js$
       - id: end-of-file-fixer
+        exclude: ^reachgraph-render-html/vendor/.*\.js$
       - id: mixed-line-ending
         args: [--fix=lf]
+        exclude: ^reachgraph-render-html/vendor/.*\.js$
       - id: check-merge-conflict
       - id: check-added-large-files
       - id: check-yaml
