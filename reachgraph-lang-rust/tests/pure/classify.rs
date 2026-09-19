@@ -148,8 +148,14 @@ fn classifier_generated_prefix() {
     let not_generated = [
         // Compiled output, not generated source.
         "/repo/target/debug/deps/libа-1234.rlib.rs",
-        // `out` without the `<pkg>-<hash>` component between `build` and it.
+        // `out` with no `<pkg>-<hash>` component between `build` and it, so
+        // the window is one component short.
         "/repo/target/debug/build/out/y.rs",
+        // The window is the right SHAPE and the fourth component carries no
+        // `-`, so it is not a cargo build-output directory. Without this case
+        // the `-` rule is unexercised: MEASURED by mutation, deleting the rule
+        // left the suite green.
+        "/repo/target/debug/build/outdir/out/y.rs",
         // A package that happens to have a directory called `target`.
         "/repo/src/target/debug/y.rs",
     ];

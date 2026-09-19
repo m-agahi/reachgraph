@@ -85,6 +85,11 @@ fn an_undocumented_item_has_no_doc_rather_than_an_empty_one() {
     let undocumented = named(&symbols, "undocumented");
 
     assert_eq!(undocumented.doc, None);
+
+    // And an item whose doc block is present but empty is the same absence.
+    // `Some("")` would be a value claiming the engine found something.
+    let empty = named(&symbols, "empty_doc");
+    assert_eq!(empty.doc, None, "an empty doc block is an absent doc");
 }
 
 /// The `//!` module doc reaches the module symbol.

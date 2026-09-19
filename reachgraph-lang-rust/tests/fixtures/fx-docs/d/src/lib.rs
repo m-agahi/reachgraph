@@ -32,3 +32,13 @@ impl Holder {
 pub fn undocumented() -> u32 {
     3
 }
+
+// An item whose doc block is PRESENT and EMPTY, which is a different case from
+// having none. Written with `//` rather than `///` on purpose: a doc comment
+// here would concatenate with the attribute below and the case would not be
+// empty. Without this item the honest-absence guard is unexercised — MEASURED
+// by mutation, returning `Some(String::new())` left the suite green.
+#[doc = ""]
+pub fn empty_doc() -> u32 {
+    4
+}

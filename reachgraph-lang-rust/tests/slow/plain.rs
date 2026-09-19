@@ -70,6 +70,57 @@ fn a_call_site_is_an_edge_and_two_call_sites_are_two_edges() {
     );
 }
 
+/// A `NodeId` does not depend on which call loaded the workspace.
+///
+/// MEASURED as a defect and then by mutation: with paths anchored to the
+/// directory the caller named, a plugin whose first call was `symbols_in` (load
+/// anchored at `<workspace>/b`) emitted different raws from one whose first
+/// call was `discover_units` (load anchored at `<workspace>`). Plan-03 §6's
+/// whole design rests on a `raw` being a pure function of location.
+///
+/// The two plugins below are separate instances on purpose. Reusing one would
+/// reuse its load and assert nothing.
+#[test]
+fn a_node_id_does_not_depend_on_which_call_loaded_the_workspace() {
+    use reachgraph_plugin_api::{LanguagePlugin, SymbolProvider};
+
+    let (via_discover, units) = load("fx-plain");
+    let unit_b = units
+        .iter()
+        .find(|unit| unit.display_name == "b")
+        .expect("unit b");
+
+    // A fresh plugin, entered through the member unit rather than the
+    // workspace: `symbols_in` loads from `<workspace>/b`.
+    let via_member = reachgraph_lang_rust::RustPlugin::new();
+    let member_symbols = via_member.symbols_in(unit_b).expect("symbols_in loads");
+    let discover_symbols = via_discover.symbols_in(unit_b).expect("symbols_in");
+
+    let member_raws: Vec<&str> = member_symbols
+        .iter()
+        .map(|symbol| symbol.id.raw.as_str())
+        .collect();
+    let discover_raws: Vec<&str> = discover_symbols
+        .iter()
+        .map(|symbol| symbol.id.raw.as_str())
+        .collect();
+
+    assert_eq!(member_raws, discover_raws);
+    // And the emitted path is workspace-relative, not member-relative.
+    let leaf = named(&member_symbols, "leaf");
+    assert!(
+        leaf.id.raw.ends_with("|b/src/lib.rs"),
+        "anchored at the workspace root, saw {:?}",
+        leaf.id.raw
+    );
+    assert_eq!(
+        leaf.range.file,
+        std::path::PathBuf::from("b/src/lib.rs"),
+        "the SourceRange uses the same anchor"
+    );
+    let _ = via_discover.discover_units(&fixture("fx-plain"));
+}
+
 /// Plan-03 §10 rules 3 and 4, against a real workspace.
 #[test]
 fn a_units_own_source_is_first_party_and_a_siblings_is_not() {
