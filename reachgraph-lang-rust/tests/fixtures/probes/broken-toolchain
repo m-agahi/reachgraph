@@ -1,0 +1,5 @@
+#!/bin/sh
+# A program that resolves, runs and FAILS. The probe reports its exit status
+# and what it said, rather than guessing at a cause.
+echo 'error: no toolchain installed for this directory' >&2
+exit 3

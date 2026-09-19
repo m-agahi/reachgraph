@@ -8,48 +8,48 @@
 //! A test that supplied `CargoProbe::DidNotRespond` as data would assert the
 //! message and not the mechanism: rewriting the probe into a PATH lookup would
 //! leave such a test green. So these cases reproduce the proxy loop instead of
-//! describing it, with a program that **resolves, runs, exits 0 and proves
-//! nothing**.
+//! describing it, with programs that **resolve, run and prove nothing**.
 //!
-//! In the slow suite rather than the pure one because it writes and executes a
-//! file; plan-03 §13 Tier A is defined as touching no filesystem.
+//! # Why the shims are checked in rather than written here
+//!
+//! MEASURED as a flake before it was fixed: creating an executable inside a
+//! multithreaded test binary that also spawns cargo races with every other
+//! thread's fork. The child inherits the open write descriptor for the window
+//! between fork and exec, and the later `execve` fails with
+//! `ETXTBSY`/"Text file busy". Retrying would have hidden a real race rather
+//! than removing it. A file already on disk before the process starts cannot
+//! lose that race, so `tests/fixtures/probes/` holds them with their mode bits
+//! in git.
+//!
+//! In the slow suite rather than the pure one because it executes a file;
+//! plan-03 §13 Tier A is defined as touching no filesystem.
 
-use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use reachgraph_lang_rust::preflight::CargoProbe;
 use reachgraph_lang_rust::probe_program;
 
-/// An executable that resolves and says something useless.
-fn shim(name: &str, body: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("reachgraph-probe-{name}-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("the shim directory is creatable");
-    let path = dir.join(name);
-    let mut file = std::fs::File::create(&path).expect("the shim is creatable");
-    writeln!(file, "#!/bin/sh").expect("write");
-    write!(file, "{body}").expect("write");
-    drop(file);
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut permissions = std::fs::metadata(&path)
-            .expect("the shim exists")
-            .permissions();
-        permissions.set_mode(0o755);
-        std::fs::set_permissions(&path, permissions).expect("the shim is executable");
-    }
-
+/// One of the checked-in shims, by name.
+fn shim(name: &str) -> PathBuf {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/probes")
+        .join(name);
+    assert!(path.exists(), "{} is checked in", path.display());
     path
+}
+
+/// Run the probe against a shim, asserting only that it is a path this test
+/// controls — never a name resolved from `PATH`.
+fn probe_shim(name: &str) -> CargoProbe {
+    let path = shim(name);
+    probe_program(path.to_str().expect("a UTF-8 repository path"))
 }
 
 /// The rustup proxy loop, reproduced: it resolves, it runs, it exits 0, and it
 /// is not the toolchain.
 #[test]
 fn a_program_that_resolves_and_proves_nothing_did_not_respond() {
-    let path = shim("proxy", "echo 'info: syncing channel updates'\nexit 0\n");
-
-    let probe = probe_program(path.to_str().expect("a UTF-8 temp path"));
+    let probe = probe_shim("proxy-loop");
 
     let CargoProbe::DidNotRespond { detail } = &probe else {
         panic!("a name resolving is not a capability, got {probe:?}");
@@ -58,21 +58,23 @@ fn a_program_that_resolves_and_proves_nothing_did_not_respond() {
         detail.contains("not a version line"),
         "the probe read the output rather than the name: {detail:?}"
     );
+    assert!(
+        detail.contains("syncing channel updates"),
+        "and it reports what the program actually said: {detail:?}"
+    );
 }
 
 /// A program that resolves and fails is also not a toolchain, and the reason
-/// carries its exit status rather than a guess.
+/// carries its exit status and its own words rather than a guess.
 #[test]
 fn a_program_that_resolves_and_fails_did_not_respond() {
-    let path = shim("broken", "echo 'no toolchain' >&2\nexit 3\n");
-
-    let probe = probe_program(path.to_str().expect("a UTF-8 temp path"));
+    let probe = probe_shim("broken-toolchain");
 
     let CargoProbe::DidNotRespond { detail } = &probe else {
         panic!("a failing program did not respond, got {probe:?}");
     };
     assert!(detail.contains("exited with"), "{detail:?}");
-    assert!(detail.contains("no toolchain"), "{detail:?}");
+    assert!(detail.contains("no toolchain installed"), "{detail:?}");
 }
 
 /// A name that resolves to nothing at all.
@@ -88,8 +90,8 @@ fn a_program_that_does_not_exist_did_not_respond() {
 /// And the real toolchain responds, so the probe is not hard-wired to refuse.
 ///
 /// ADR-0001's carve-out makes `cargo` a precondition of a Rust repository being
-/// analysable at all, so its absence here would mean the suite could not have
-/// built in the first place.
+/// analysable at all, so its absence here would mean this suite could not have
+/// been built in the first place.
 #[test]
 fn the_real_toolchain_responds_with_a_version_line() {
     let probe = probe_program("cargo");

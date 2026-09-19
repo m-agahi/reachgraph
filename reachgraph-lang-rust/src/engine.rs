@@ -208,7 +208,7 @@ pub(crate) fn load(root: &Path) -> Result<Loaded, PluginError> {
         .rust_lib_src_root()
         .map(|it| PathBuf::from(it.as_str()));
 
-    let (workspace_root, units, member_coverage) = enumerate_units(root, &workspace)?;
+    let enumerated = enumerate_units(root, &workspace)?;
 
     let load_config = LoadCargoConfig {
         load_out_dirs_from_check: false,
@@ -223,13 +223,13 @@ pub(crate) fn load(root: &Path) -> Result<Loaded, PluginError> {
             .map_err(|error| engine_error(format!("could not load {root:?}: {error}")))?;
 
     Ok(Loaded {
-        root: workspace_root,
+        root: enumerated.root,
         host: AnalysisHost::with_database(db),
         vfs,
         sysroot_src: sysroot_src.clone(),
-        units,
+        units: enumerated.units,
         coverage: RustCoverage {
-            members: member_coverage,
+            members: enumerated.coverage,
             rust_src_available: sysroot_src.is_some(),
             proc_macro_expansion: ProcMacroExpansion::Disabled,
             out_dir_mechanism: OutDirMechanism::Unloaded,
@@ -237,13 +237,29 @@ pub(crate) fn load(root: &Path) -> Result<Loaded, PluginError> {
     })
 }
 
+/// What [`enumerate_units`] found, with each fact named.
+///
+/// A struct rather than a three-element tuple, and the reason is not style.
+/// The three values are unrelated to each other — a directory, a list of
+/// analysis units and a list of coverage rows — so a tuple makes the caller
+/// remember an order that nothing checks, and `.0` says nothing at the use
+/// site. Field names are the documentation the tuple could not carry.
+struct EnumeratedUnits {
+    /// The **workspace** root, which is not the directory the caller named.
+    /// `Loaded::root` records why that distinction is load-bearing.
+    root: PathBuf,
+    /// One per workspace member target.
+    units: Vec<UnitFacts>,
+    /// One per workspace member package.
+    coverage: Vec<MemberCoverage>,
+}
+
 /// Plan-03 §7 — one `Unit` per workspace member target, and one coverage row
 /// per workspace member package.
-#[allow(clippy::type_complexity)]
 fn enumerate_units(
     root: &Path,
     workspace: &ProjectWorkspace,
-) -> Result<(PathBuf, Vec<UnitFacts>, Vec<MemberCoverage>), PluginError> {
+) -> Result<EnumeratedUnits, PluginError> {
     let ProjectWorkspaceKind::Cargo { cargo, .. } = &workspace.kind else {
         return Err(engine_error(
             "this workspace is not a Cargo workspace; reachgraph indexes Rust through cargo",
@@ -318,11 +334,11 @@ fn enumerate_units(
 
     units.sort_by(|a, b| a.unit.id.0.cmp(&b.unit.id.0));
     members.sort_by(|a, b| a.package.cmp(&b.package));
-    Ok((
-        PathBuf::from(cargo.workspace_root().as_str()),
+    Ok(EnumeratedUnits {
+        root: PathBuf::from(cargo.workspace_root().as_str()),
         units,
-        members,
-    ))
+        coverage: members,
+    })
 }
 
 /// The display qualifier plan-03 §7 asks for, so two units never display
