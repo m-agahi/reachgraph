@@ -389,16 +389,19 @@ h3 {
   margin: 3px 0;
 }
 
-.rg-unbound {
+.rg-unbound,
+.rg-unexamined {
   margin: 10px 0 0;
   padding: 8px 10px;
   background: var(--rg-gap-bg);
   border-left: 4px solid var(--rg-gap-edge);
 }
-.rg-unbound h3 {
+.rg-unbound h3,
+.rg-unexamined h3 {
   margin-top: 0;
 }
-.rg-unbound ul {
+.rg-unbound ul,
+.rg-unexamined ul {
   margin: 0;
   padding-left: 18px;
 }
