@@ -89,6 +89,13 @@ workflow is written to take them rather than to assume them:
 | **2 — best effort**  | `aarch64-unknown-linux-gnu`, `x86_64-apple-darwin`, `x86_64-pc-windows-msvc` | failure documented, release proceeds  |
 | **3 — not built**    | musllinux, 32-bit anything, `aarch64-pc-windows-msvc`                        | source build from the sdist           |
 
+**The tier column is documentation, not enforcement, and the difference matters.** `gate`
+fails when ANY wheel job fails, tier-2 included. "Failure documented, release proceeds" is
+therefore a human reading which target failed, recording it, and re-running `gate` — not
+something the workflow decides. It is written this way on purpose: `continue-on-error`
+would mark a failed tier-2 job green, and a required check that cannot tell "built" from
+"failed quietly" is the vacuous-green shape this repository's guards exist to refuse.
+
 ### sdist — plan-07 §4.1's decision gate, resolved
 
 **Wheels plus a vendored sdist.** The gate was "if the vendor tree leaves the compressed
