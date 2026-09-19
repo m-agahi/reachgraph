@@ -887,7 +887,7 @@ impl Loaded {
                 // `Symbol` is emitted for it and no edge can name it.
                 continue;
             };
-            let target_unit = self.unit_of(&target_path);
+            let target_unit = self.unit_of_target(item.target.file_id, &target_path);
             let offset = item
                 .target
                 .focus_range
@@ -936,12 +936,51 @@ impl Loaded {
         }
     }
 
-    /// Which unit a path belongs to, for a node id minted mid-traversal.
+    /// The unit half of a call target's id — plan-03 §6's consistency rule.
     ///
-    /// A call target outside every enumerated unit — a dependency's library
-    /// source, the sysroot — still needs a stable identity (plan-03 §6, §9).
-    /// The unit half of its raw is the unit whose root directory contains it,
-    /// longest match first, and a synthesized `external` id when none does.
+    /// # Why the crate graph answers this and a directory cannot
+    ///
+    /// MEASURED 2026-09-19 on `/home/max/git/yadgarhq/task`: every Cargo target
+    /// of one package shares one manifest directory, so containment cannot tell
+    /// the library apart from an integration test — it answered with whichever
+    /// unit sorted first. The symbol walk meanwhile minted ids under the unit
+    /// whose crate it was walking, so a callee's id and the same definition's
+    /// emitted id differed in their unit half and matched nothing. Six shards
+    /// stopped at depth 1 and 221 of 227 symbols were reported as not reachable
+    /// from any endpoint.
+    ///
+    /// A file belongs to a crate, the crate graph knows which, and a unit is
+    /// joined to a crate by its target root file — the same join `crate_for`
+    /// makes from the other side. That is one answer rather than an ordering
+    /// accident.
+    ///
+    /// The directory rule remains as the fallback, and only there is it right:
+    /// a file in **no** crate — a dependency's extracted source, the sysroot, a
+    /// generated file nothing loaded — still needs a stable identity (plan-03
+    /// §9), and there is no crate to ask.
+    fn unit_of_target(&self, file_id: ra_ap_vfs::FileId, path: &Path) -> UnitId {
+        self.unit_of_crate(file_id)
+            .unwrap_or_else(|| self.unit_of(path))
+    }
+
+    /// The unit whose crate owns this file, when one does.
+    fn unit_of_crate(&self, file_id: ra_ap_vfs::FileId) -> Option<UnitId> {
+        let db = self.host.raw_database();
+        let sema = ra_ap_hir::Semantics::new(db);
+        let module = sema.file_to_module_def(file_id)?;
+        let root_file = module.krate(db).root_file(db);
+
+        self.units
+            .iter()
+            .find(|facts| self.file_id(&facts.root_file) == Some(root_file))
+            .map(|facts| facts.unit.id.clone())
+    }
+
+    /// Which unit a path belongs to when no crate holds it.
+    ///
+    /// The unit whose root directory contains it, longest match first, and a
+    /// synthesized `external` id when none does. Reached only through
+    /// [`Loaded::unit_of_target`]'s fallback.
     fn unit_of(&self, path: &Path) -> UnitId {
         let mut best: Option<&UnitFacts> = None;
         for facts in &self.units {

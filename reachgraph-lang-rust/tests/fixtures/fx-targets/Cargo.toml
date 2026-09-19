@@ -1,0 +1,11 @@
+# fx-targets — plan-03 §6's consistency rule, against a package with more than
+# one Cargo target.
+#
+# One package, three targets: the library, an integration test and a binary.
+# Every target of a package shares one manifest directory, which is what makes
+# "which unit is this file in" ambiguous when it is answered by directory
+# containment. The library's own files belong to the library crate and to no
+# other, and the crate graph says so — see `tests/slow/units.rs`.
+[workspace]
+resolver = "2"
+members = ["t"]
