@@ -165,18 +165,24 @@ impl std::error::Error for RenderError {
 pub fn render(target: &SnapshotTarget) -> Result<String, RenderError> {
     let module = target.crate_name.replace('-', "_");
     let mut entries = Vec::new();
-    walk_file(&target.lib_rs, &module, &mut entries)?;
+    let mut private_types = Vec::new();
+    walk_file(&target.lib_rs, &module, &mut entries, &mut private_types)?;
 
     // Two passes. An `impl` block carries no visibility of its own, so whether
     // it is public is a property of the type it is on — which is only known
     // once every item has been seen.
-    let public_types: Vec<String> = entries
-        .iter()
-        .filter(|entry| entry.kind == Kind::Type)
-        .map(|entry| entry.name.clone())
-        .collect();
+    //
+    // THE TEST IS "IS THIS TYPE PRIVATE AND LOCAL", NOT "IS IT PUBLIC AND
+    // LOCAL", and the difference is the whole correctness of this filter. The
+    // first version asked the second question and so dropped
+    // `impl LocalTrait for String` — public surface, because a consumer gets a
+    // new method on a foreign type — along with every blanket
+    // `impl<T: Bound> Trait for T`, whose self type is a generic parameter and
+    // is local to nothing. Silently. Defaulting to KEEP means an exotic shape
+    // over-reports and shows up in the diff, which somebody reads; defaulting
+    // to drop means it disappears, which nobody can.
     entries.retain(|entry| match &entry.on_type {
-        Some(on_type) => public_types.contains(on_type),
+        Some(on_type) => !private_types.contains(on_type),
         None => true,
     });
 
@@ -269,7 +275,12 @@ fn is_public(vis: &Visibility) -> bool {
     matches!(vis, Visibility::Public(_))
 }
 
-fn walk_file(path: &Path, module: &str, out: &mut Vec<Entry>) -> Result<(), RenderError> {
+fn walk_file(
+    path: &Path,
+    module: &str,
+    out: &mut Vec<Entry>,
+    private_types: &mut Vec<String>,
+) -> Result<(), RenderError> {
     let source = fs::read_to_string(path).map_err(|source| RenderError::Io {
         path: path.to_path_buf(),
         source,
@@ -279,7 +290,14 @@ fn walk_file(path: &Path, module: &str, out: &mut Vec<Entry>) -> Result<(), Rend
         source,
     })?;
 
-    walk_items(parsed.items, path, &module_dir(path), module, out)
+    walk_items(
+        parsed.items,
+        path,
+        &module_dir(path),
+        module,
+        out,
+        private_types,
+    )
 }
 
 /// Where a file's child modules live: `src/lib.rs` and `src/foo/mod.rs` own
@@ -301,13 +319,17 @@ fn walk_items(
     dir: &Path,
     module: &str,
     out: &mut Vec<Entry>,
+    private_types: &mut Vec<String>,
 ) -> Result<(), RenderError> {
     for item in items {
         match item {
-            Item::Mod(item_mod) => walk_mod(item_mod, path, dir, module, out)?,
+            Item::Mod(item_mod) => walk_mod(item_mod, path, dir, module, out, private_types)?,
             // Never public, and never part of a surface.
             Item::ExternCrate(_) | Item::ForeignMod(_) => {}
             other => {
+                if let Some(name) = private_type_name(&other) {
+                    private_types.push(name);
+                }
                 if let Some(entry) = entry_for(other, path, dir, module)? {
                     out.push(entry);
                 }
@@ -323,6 +345,7 @@ fn walk_mod(
     dir: &Path,
     module: &str,
     out: &mut Vec<Entry>,
+    private_types: &mut Vec<String>,
 ) -> Result<(), RenderError> {
     // A private module's contents are not reachable from outside the crate, so
     // the whole subtree is skipped rather than walked and filtered.
@@ -332,14 +355,14 @@ fn walk_mod(
 
     let child = format!("{module}::{}", item_mod.ident);
     match item_mod.content {
-        Some((_, items)) => walk_items(items, path, dir, &child, out),
+        Some((_, items)) => walk_items(items, path, dir, &child, out, private_types),
         None => {
             let candidates = [
                 dir.join(format!("{}.rs", item_mod.ident)),
                 dir.join(item_mod.ident.to_string()).join("mod.rs"),
             ];
             match candidates.iter().find(|candidate| candidate.is_file()) {
-                Some(file) => walk_file(file, &child, out),
+                Some(file) => walk_file(file, &child, out, private_types),
                 None => Err(RenderError::MissingModule {
                     declared_in: path.to_path_buf(),
                     module: item_mod.ident.to_string(),
@@ -348,6 +371,22 @@ fn walk_mod(
             }
         }
     }
+}
+
+/// The name of a type this crate declares and does NOT export.
+///
+/// An `impl` on one of these is not reachable from outside, so it is the only
+/// case the `impl` filter drops. Collected during the walk because a private
+/// item is otherwise discarded before anything can ask about it.
+fn private_type_name(item: &Item) -> Option<String> {
+    let (vis, ident) = match item {
+        Item::Struct(it) => (&it.vis, &it.ident),
+        Item::Enum(it) => (&it.vis, &it.ident),
+        Item::Union(it) => (&it.vis, &it.ident),
+        Item::Type(it) => (&it.vis, &it.ident),
+        _ => return None,
+    };
+    (!is_public(vis)).then(|| ident.to_string())
 }
 
 fn entry_for(

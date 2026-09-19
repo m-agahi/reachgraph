@@ -262,3 +262,50 @@ fn the_rendering_ends_with_exactly_one_newline() {
     assert!(rendered.ends_with('\n'), "{rendered:?}");
     assert!(!rendered.ends_with("\n\n"), "{rendered:?}");
 }
+
+/// An `impl` whose self type is not a public type OF THIS CRATE must still be
+/// rendered.
+///
+/// `impl LocalTrait for String` is public surface: a consumer gets a new method
+/// on a foreign type. The first version of this renderer kept an `impl` only
+/// when its self type was a local public type, which dropped this case and
+/// every blanket `impl<T: Bound>` without saying so. Silently emitting a
+/// smaller surface than the crate has is the one failure this artifact cannot
+/// afford, and it is the failure the renderer refuses by erroring on an item
+/// kind it does not know.
+#[test]
+fn an_impl_on_a_foreign_type_is_rendered() {
+    let rendered = ScratchCrate::new(
+        "foreign-impl",
+        &[(
+            "lib.rs",
+            "pub trait Extra {\n    fn extra(&self) -> usize;\n}\nimpl Extra for String {\n    fn extra(&self) -> usize { self.len() }\n}\n",
+        )],
+    )
+    .render();
+
+    assert!(
+        rendered.contains("impl Extra for String"),
+        "an impl on a foreign type vanished: {rendered}"
+    );
+}
+
+/// The case the type filter exists for, kept alongside the one above so the
+/// two cannot be confused: an `impl` on a PRIVATE local type is not surface.
+#[test]
+fn an_impl_on_a_private_local_type_is_absent() {
+    let rendered = ScratchCrate::new(
+        "private-impl",
+        &[(
+            "lib.rs",
+            "struct Hidden;\nimpl Hidden {\n    pub fn method_on_private(&self) -> u32 { 0 }\n}\npub struct Shown;\nimpl Shown {\n    pub fn method_on_public(&self) -> u32 { 0 }\n}\n",
+        )],
+    )
+    .render();
+
+    assert!(rendered.contains("method_on_public"), "{rendered}");
+    assert!(
+        !rendered.contains("method_on_private"),
+        "an impl on a private type reached the snapshot: {rendered}"
+    );
+}

@@ -31,7 +31,7 @@ pub enum Category {
     Stdlib,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ContractId(pub String);
 
 #[derive(Clone, Debug)]
@@ -181,7 +181,7 @@ pub struct Unit {
     pub root: PathBuf,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UnitId(pub String);
 
 pub trait Classifier: Plugin {
@@ -227,16 +227,11 @@ pub trait SymbolProvider: LanguagePlugin {
 impl Registry {
     pub fn new() -> Self {}
     pub fn register(&mut self, plugin: Box<dyn Plugin>) {}
-    pub fn plugins(&self) -> impl Iterator<Item = &dyn Plugin> {}
     pub fn detect(&self, root: &Path) -> Vec<&dyn Plugin> {}
     pub fn select(&self, id: PluginId) -> Option<&dyn Plugin> {}
 }
 
 impl fmt::Display for PluginError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {}
-}
-
-impl fmt::Display for PluginId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {}
 }
 

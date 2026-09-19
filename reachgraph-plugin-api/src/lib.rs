@@ -43,12 +43,6 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct PluginId(pub &'static str);
 
-impl fmt::Display for PluginId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.0)
-    }
-}
-
 /// ADR-0003 field 3. The core MUST NEVER parse `raw`.
 ///
 /// Plugins choose their own encoding: a SCIP symbol, a path plus an offset,
@@ -198,7 +192,7 @@ pub struct Symbol {
 // ---------------------------------------------------------------------------
 
 /// ADR-0008 leak 4. "What is the unit of analysis" is per-language.
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UnitId(pub String);
 
 /// One unit of analysis: a Rust crate, a Go package, a Python source root.
@@ -303,7 +297,7 @@ pub enum Category {
 // ---------------------------------------------------------------------------
 
 /// ADR-0007. The contract an operation belongs to.
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ContractId(pub String);
 
 /// Which side of a contract an operation sits on.
@@ -525,24 +519,24 @@ impl fmt::Display for PluginError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             PluginError::Io { plugin, path, .. } => {
-                write!(f, "{plugin}: cannot read {}", path.display())
+                write!(f, "{}: cannot read {}", plugin.0, path.display())
             }
             PluginError::Parse {
                 plugin,
                 path,
                 detail,
-            } => write!(f, "{plugin}: cannot parse {}: {detail}", path.display()),
+            } => write!(f, "{}: cannot parse {}: {detail}", plugin.0, path.display()),
             PluginError::UnknownUnit { plugin, unit } => {
-                write!(f, "{plugin}: unknown unit {}", unit.0)
+                write!(f, "{}: unknown unit {}", plugin.0, unit.0)
             }
             PluginError::UnknownNode { plugin, node } => {
-                write!(f, "{plugin}: unknown node {}", node.raw)
+                write!(f, "{}: unknown node {}", plugin.0, node.raw)
             }
             PluginError::Engine {
                 plugin,
                 engine,
                 detail,
-            } => write!(f, "{plugin}: {engine} failed: {detail}"),
+            } => write!(f, "{}: {engine} failed: {detail}", plugin.0),
         }
     }
 }
@@ -685,6 +679,12 @@ pub trait Classifier: Plugin {
 /// ADR-0008: in v0.1 this holds exactly one real plugin, plus the fixture in
 /// test builds. A registry with one entry costs nothing; a hardcoded language
 /// branch costs a core change per language.
+///
+/// `Default` is not in plan-00 §5 and is here for a mechanical reason rather
+/// than a design one: clippy's `new_without_default` refuses a public
+/// argument-less `new` without it, and `-D warnings` makes that a build
+/// failure. It is the one addition to §5's surface, and it is in the snapshot
+/// so it stays visible.
 #[derive(Default)]
 pub struct Registry {
     plugins: Vec<Box<dyn Plugin>>,
@@ -702,7 +702,13 @@ impl Registry {
     }
 
     /// Every registered plugin, in registration order.
-    pub fn plugins(&self) -> impl Iterator<Item = &dyn Plugin> {
+    ///
+    /// PRIVATE, because plan-00 §5 gives `Registry` two methods and this is not
+    /// one of them. Plan-06 §3.1 wants to print what each registered plugin
+    /// looks for when detection finds nothing, which needs it public — and
+    /// that is plan-06's reviewed diff to make, not a surface this plan adds
+    /// on its behalf.
+    fn plugins(&self) -> impl Iterator<Item = &dyn Plugin> {
         self.plugins.iter().map(AsRef::as_ref)
     }
 
