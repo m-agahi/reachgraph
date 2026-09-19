@@ -174,8 +174,9 @@ fn there_is_no_outbound_http_client() {
     }
 }
 
-/// Plan-06 §7.4 lists `serve_rejects_symlink_escape`, and **MEASURED
-/// 2026-09-19 the library does not reject it**: `ServeDir` resolves through a
+/// Plan-06 §7.4, AMENDED 2026-09-19: the table asked for
+/// `serve_rejects_symlink_escape`, and **MEASURED the library does not reject
+/// it**: `ServeDir` resolves through a
 /// symlink inside the served directory and serves the target, so a link in
 /// `out/` pointing at `/etc/passwd` is served with a 200.
 ///
@@ -187,7 +188,7 @@ fn there_is_no_outbound_http_client() {
 /// owns. It is recorded here so the choice is visible, and so a later switch to
 /// a resolver of our own has a stated behaviour to change.
 #[test]
-fn a_symlink_out_of_the_directory_is_followed_by_servedir() {
+fn serve_follows_a_symlink_out() {
     let temp = artifact();
     let outside = temp.join("outside.json");
     fs::write(&outside, b"{\"secret\":true}").expect("writable");
