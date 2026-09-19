@@ -30,7 +30,7 @@ Two jobs, in priority order:
    timing variance, no requirement that a repository has been built.
 
 What it is explicitly **not**: it does not count toward ADR-0002's n=3. It is a synthetic
-consumer. It exercises the *shape* of an interface, never the awkwardness of a real
+consumer. It exercises the _shape_ of an interface, never the awkwardness of a real
 language's semantics. §5 is an honest accounting of where that boundary falls.
 
 Feature-gated per plan-00 §1: enabled in `dev-dependencies` and tests, never in a release
@@ -48,17 +48,17 @@ exactly like a repository looks.
 
 These are the point of the format, not its packaging.
 
-| rule | why |
-|---|---|
-| `#[serde(deny_unknown_fields)]` on every struct | a typo'd key is a parse error, not a silently ignored field |
-| **no `#[serde(default)]` anywhere, on any field** | every default is a place the harness could invent data the plugin never asserted |
-| `version` must be present, as a string or `null` | ADR-0007: a missing version is `None`, and `None` must be an *assertion*, not an absence. A missing key is a parse error. |
-| `container`, `is_test`, `doc`, `doc_format` all required | a plugin author cannot forget `container` (plan-00 §8 question 3) |
-| `provenance` and `inference_mode` required on every edge | ADR-0003 field 4 |
-| **no span, offset, line, column or position field exists** | §4, §5. A symbol's `file` IS case data; the plugin emits `span: None` regardless (§3.1) |
-| **no `confidence` field exists, anywhere** | plan-00 §8 question 5 |
-| `join_key` required on every root | ADR-0007's cross-repo key, spelled by the plugin and opaque to the core (plan-00 §2) |
-| no file-content field | the fixture cannot be re-parsed, so nothing downstream may assume source text is available |
+| rule                                                       | why                                                                                                                       |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `#[serde(deny_unknown_fields)]` on every struct            | a typo'd key is a parse error, not a silently ignored field                                                               |
+| **no `#[serde(default)]` anywhere, on any field**          | every default is a place the harness could invent data the plugin never asserted                                          |
+| `version` must be present, as a string or `null`           | ADR-0007: a missing version is `None`, and `None` must be an _assertion_, not an absence. A missing key is a parse error. |
+| `container`, `is_test`, `doc`, `doc_format` all required   | a plugin author cannot forget `container` (plan-00 §8 question 3)                                                         |
+| `provenance` and `inference_mode` required on every edge   | ADR-0003 field 4                                                                                                          |
+| **no span, offset, line, column or position field exists** | §4, §5. A symbol's `file` IS case data; the plugin emits `span: None` regardless (§3.1)                                   |
+| **no `confidence` field exists, anywhere**                 | plan-00 §8 question 5                                                                                                     |
+| `join_key` required on every root                          | ADR-0007's cross-repo key, spelled by the plugin and opaque to the core (plan-00 §2)                                      |
+| no file-content field                                      | the fixture cannot be re-parsed, so nothing downstream may assume source text is available                                |
 
 The no-defaults rule is the one to enforce in review. MEASURED, design.md §5, is what it
 guards against at the other end of the pipeline: code_graph's `Function.docstring` keeps
@@ -167,92 +167,174 @@ The case ADR-0007 is about: one operation, two versions, routing to different co
   "preflight": "ok",
   "engine": "reachgraph-fixture 0.1.0",
 
-  "units": [ { "id": "unit:app", "display_name": "app", "root": "src" } ],
+  "units": [{ "id": "unit:app", "display_name": "app", "root": "src" }],
 
   "symbols": {
     "unit:app": [
-      { "raw": "impl:TaskService_for_TaskServer", "name": "TaskServer", "kind": "type",
-        "raw_kind": "impl TaskService for TaskServer", "file": "src/service/mod.rs",
-        "doc": null, "doc_format": "plain", "is_test": false, "container": null },
+      {
+        "raw": "impl:TaskService_for_TaskServer",
+        "name": "TaskServer",
+        "kind": "type",
+        "raw_kind": "impl TaskService for TaskServer",
+        "file": "src/service/mod.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
 
-      { "raw": "fn:v1/create_task", "name": "create_task", "kind": "method",
-        "raw_kind": "fn", "file": "src/service/handlers_v1.rs",
-        "doc": "Create a task. v1.", "doc_format": "markdown", "is_test": false,
-        "container": "impl:TaskService_for_TaskServer" },
+      {
+        "raw": "fn:v1/create_task",
+        "name": "create_task",
+        "kind": "method",
+        "raw_kind": "fn",
+        "file": "src/service/handlers_v1.rs",
+        "doc": "Create a task. v1.",
+        "doc_format": "markdown",
+        "is_test": false,
+        "container": "impl:TaskService_for_TaskServer"
+      },
 
-      { "raw": "fn:v2/create_task", "name": "create_task", "kind": "method",
-        "raw_kind": "fn", "file": "src/service/handlers_v2.rs",
-        "doc": "Create a task. v2, validating.", "doc_format": "markdown", "is_test": false,
-        "container": "impl:TaskService_for_TaskServer" },
+      {
+        "raw": "fn:v2/create_task",
+        "name": "create_task",
+        "kind": "method",
+        "raw_kind": "fn",
+        "file": "src/service/handlers_v2.rs",
+        "doc": "Create a task. v2, validating.",
+        "doc_format": "markdown",
+        "is_test": false,
+        "container": "impl:TaskService_for_TaskServer"
+      },
 
-      { "raw": "fn:shared/persist", "name": "persist", "kind": "function",
-        "raw_kind": "fn", "file": "src/db/persist.rs",
-        "doc": null, "doc_format": "plain", "is_test": false, "container": null },
+      {
+        "raw": "fn:shared/persist",
+        "name": "persist",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/db/persist.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
 
-      { "raw": "fn:v1only/legacy_audit", "name": "legacy_audit", "kind": "function",
-        "raw_kind": "fn", "file": "src/audit/legacy.rs",
-        "doc": "Audit hook retired in v2.", "doc_format": "markdown", "is_test": false,
-        "container": null },
+      {
+        "raw": "fn:v1only/legacy_audit",
+        "name": "legacy_audit",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/audit/legacy.rs",
+        "doc": "Audit hook retired in v2.",
+        "doc_format": "markdown",
+        "is_test": false,
+        "container": null
+      },
 
-      { "raw": "fn:v2only/validate", "name": "validate", "kind": "function",
-        "raw_kind": "fn", "file": "src/validate.rs",
-        "doc": null, "doc_format": "plain", "is_test": false, "container": null },
+      {
+        "raw": "fn:v2only/validate",
+        "name": "validate",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/validate.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
 
-      { "raw": "fn:orphan/unused_helper", "name": "unused_helper", "kind": "function",
-        "raw_kind": "fn", "file": "src/util.rs",
-        "doc": null, "doc_format": "plain", "is_test": false, "container": null }
+      {
+        "raw": "fn:orphan/unused_helper",
+        "name": "unused_helper",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/util.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      }
     ]
   },
 
   "edges": {
     "unit:app": [
-      { "from": "fn:v1/create_task", "to": { "resolved": "fn:shared/persist" },
-        "provenance_plugin": "fixture", "engine": "reachgraph-fixture 0.1.0",
-        "inference_mode": "resolved" },
-      { "from": "fn:v1/create_task", "to": { "resolved": "fn:v1only/legacy_audit" },
-        "provenance_plugin": "fixture", "engine": "reachgraph-fixture 0.1.0",
-        "inference_mode": "resolved" },
-      { "from": "fn:v2/create_task", "to": { "resolved": "fn:shared/persist" },
-        "provenance_plugin": "fixture", "engine": "reachgraph-fixture 0.1.0",
-        "inference_mode": "resolved" },
-      { "from": "fn:v2/create_task", "to": { "resolved": "fn:v2only/validate" },
-        "provenance_plugin": "fixture", "engine": "reachgraph-fixture 0.1.0",
-        "inference_mode": "type_inferred" }
+      {
+        "from": "fn:v1/create_task",
+        "to": { "resolved": "fn:shared/persist" },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      },
+      {
+        "from": "fn:v1/create_task",
+        "to": { "resolved": "fn:v1only/legacy_audit" },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      },
+      {
+        "from": "fn:v2/create_task",
+        "to": { "resolved": "fn:shared/persist" },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      },
+      {
+        "from": "fn:v2/create_task",
+        "to": { "resolved": "fn:v2only/validate" },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "type_inferred"
+      }
     ]
   },
 
   "roots": [
-    { "contract": "acme.task", "version": "v1", "service": "TaskService",
-      "operation": "CreateTask", "direction": "served",
+    {
+      "contract": "acme.task",
+      "version": "v1",
+      "service": "TaskService",
+      "operation": "CreateTask",
+      "direction": "served",
       "join_key": "acme.task.v1.TaskService/CreateTask",
-      "binding": { "bound": "fn:v1/create_task" } },
-    { "contract": "acme.task", "version": "v2", "service": "TaskService",
-      "operation": "CreateTask", "direction": "served",
+      "binding": { "bound": "fn:v1/create_task" }
+    },
+    {
+      "contract": "acme.task",
+      "version": "v2",
+      "service": "TaskService",
+      "operation": "CreateTask",
+      "direction": "served",
       "join_key": "acme.task.v2.TaskService/CreateTask",
-      "binding": { "bound": "fn:v2/create_task" } }
+      "binding": { "bound": "fn:v2/create_task" }
+    }
   ],
 
   "coverage": {
     "contracts": ["acme.task"],
-    "versions": [["acme.task", "v1"], ["acme.task", "v2"]]
+    "versions": [
+      ["acme.task", "v1"],
+      ["acme.task", "v2"]
+    ]
   },
 
-  "classify": [ { "prefix": "src/", "category": "first_party" } ],
+  "classify": [{ "prefix": "src/", "category": "first_party" }],
   "classify_fallback": "third_party"
 }
 ```
 
 Expected waist output, and the reason the case exists:
 
-| node | reached by | class |
-|---|---|---|
-| `fn:v1/create_task` | v1 | `v1_only` |
-| `fn:v2/create_task` | v2 | `v2_only` |
-| `fn:v1only/legacy_audit` | v1 | `v1_only` — **dies when v1 is sunset** |
-| `fn:v2only/validate` | v2 | `v2_only` |
-| `fn:shared/persist` | v1, v2 | `both` — survives the sunset |
-| `fn:orphan/unused_helper` | — | unreachable |
-| `impl:TaskService_for_TaskServer` | — | unreachable (a container is not a call target) |
+| node                              | reached by | class                                          |
+| --------------------------------- | ---------- | ---------------------------------------------- |
+| `fn:v1/create_task`               | v1         | `v1_only`                                      |
+| `fn:v2/create_task`               | v2         | `v2_only`                                      |
+| `fn:v1only/legacy_audit`          | v1         | `v1_only` — **dies when v1 is sunset**         |
+| `fn:v2only/validate`              | v2         | `v2_only`                                      |
+| `fn:shared/persist`               | v1, v2     | `both` — survives the sunset                   |
+| `fn:orphan/unused_helper`         | —          | unreachable                                    |
+| `impl:TaskService_for_TaskServer` | —          | unreachable (a container is not a call target) |
 
 Two shards, never one. If the waist merged `v1` and `v2`, `legacy_audit` would read as
 `both` and the sunset answer would be wrong — the exact corruption ADR-0007 exists to
@@ -277,20 +359,20 @@ pub struct FixturePlugin {
 }
 ```
 
-| trait (plan-00) | implementation | note |
-|---|---|---|
-| `Plugin::id` | `PluginId(doc.plugin_id)` | a case may declare a non-`"fixture"` id |
-| `Plugin::provides` | `doc.capabilities` | a case may declare a subset, which is how plan-01's unpaired-provider error gets tested |
-| `Plugin::position_encoding` | `doc.position_encoding` | the only second encoding that exists at n=1 — §5, leak 3 |
-| `Plugin::detection` | `doc.detection`, always empty | matches nothing, by construction — §3.2 |
-| `Plugin::preflight` | `doc.preflight`, or `Failed` when the file is missing or will not parse | the parse error is the `reason`; the `remediation` names the path |
-| `LanguagePlugin::discover_units` | `doc.units` | no manifest, no `Cargo.toml`, no build state — ADR-0008 leak 4 |
-| `SymbolProvider::symbols_in` | `doc.symbols[unit.id]`, each row lifted to `Symbol` | `range.file` from the case, `range.span: None` always — §3.1 |
-| `EdgeProvider::edges_in` | `doc.edges[unit.id]` | `call_site: None`, always |
-| `EdgeProvider::edges_from` | linear scan of every unit's edges for `from == node` | §5: this is the method the fixture makes look easy |
-| `RootProvider::roots` | `doc.roots`; the `&dyn SymbolIndex` argument is **accepted and ignored** | see below |
-| `RootProvider::coverage` | `doc.coverage` | |
-| `Classifier::classify` | longest-matching prefix from `doc.classify`, else `classify_fallback` | prefixes are per-case data, never compiled in — ADR-0008 leak 8 |
+| trait (plan-00)                  | implementation                                                           | note                                                                                    |
+| -------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| `Plugin::id`                     | `PluginId(doc.plugin_id)`                                                | a case may declare a non-`"fixture"` id                                                 |
+| `Plugin::provides`               | `doc.capabilities`                                                       | a case may declare a subset, which is how plan-01's unpaired-provider error gets tested |
+| `Plugin::position_encoding`      | `doc.position_encoding`                                                  | the only second encoding that exists at n=1 — §5, leak 3                                |
+| `Plugin::detection`              | `doc.detection`, always empty                                            | matches nothing, by construction — §3.2                                                 |
+| `Plugin::preflight`              | `doc.preflight`, or `Failed` when the file is missing or will not parse  | the parse error is the `reason`; the `remediation` names the path                       |
+| `LanguagePlugin::discover_units` | `doc.units`                                                              | no manifest, no `Cargo.toml`, no build state — ADR-0008 leak 4                          |
+| `SymbolProvider::symbols_in`     | `doc.symbols[unit.id]`, each row lifted to `Symbol`                      | `range.file` from the case, `range.span: None` always — §3.1                            |
+| `EdgeProvider::edges_in`         | `doc.edges[unit.id]`                                                     | `call_site: None`, always                                                               |
+| `EdgeProvider::edges_from`       | linear scan of every unit's edges for `from == node`                     | §5: this is the method the fixture makes look easy                                      |
+| `RootProvider::roots`            | `doc.roots`; the `&dyn SymbolIndex` argument is **accepted and ignored** | see below                                                                               |
+| `RootProvider::coverage`         | `doc.coverage`                                                           |                                                                                         |
+| `Classifier::classify`           | longest-matching prefix from `doc.classify`, else `classify_fallback`    | prefixes are per-case data, never compiled in — ADR-0008 leak 8                         |
 
 There is no `Renderer` row: a renderer is not a `Plugin` (plan-00 §3.6), and the fixture
 implements no renderer. `Capability::Render` no longer exists, so no case can declare it.
@@ -316,7 +398,7 @@ directly; it has no handler-binding logic to perform. That is itself a neutralit
 if the trait ever required something only a real index can answer — a lookup whose result
 changes the shape of the returned `Root` — the fixture would have to fake it, and faking it
 is the moment to stop and ask whether the requirement belongs in the trait. The fixture
-still *takes* the argument, so the signature stays honest.
+still _takes_ the argument, so the signature stays honest.
 
 ### 3.1 A file, and no offset — said out loud
 
@@ -332,11 +414,11 @@ call_site: None,                                             // every fixture ed
 This is the shape the crate argued for and got. Two earlier shapes were both wrong in the
 same direction:
 
-| shape | what the fixture had to do | why it was wrong |
-|---|---|---|
-| `range: SourceRange { file, span: Span }` | emit `Span { 0, 0 }` | a sentinel indistinguishable from a real offset 0 — lying quietly, in the one crate that exists to make lying about the contract mechanically impossible |
-| `range: Option<SourceRange>` | emit `None`, discarding the file | honest about the offset by throwing away a fact it knew; cost plan-01 classification its file granularity |
-| **`span: Option<Span>`** | emit the file, omit the span | says exactly what is known and exactly what is not |
+| shape                                     | what the fixture had to do       | why it was wrong                                                                                                                                         |
+| ----------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `range: SourceRange { file, span: Span }` | emit `Span { 0, 0 }`             | a sentinel indistinguishable from a real offset 0 — lying quietly, in the one crate that exists to make lying about the contract mechanically impossible |
+| `range: Option<SourceRange>`              | emit `None`, discarding the file | honest about the offset by throwing away a fact it knew; cost plan-01 classification its file granularity                                                |
+| **`span: Option<Span>`**                  | emit the file, omit the span     | says exactly what is known and exactly what is not                                                                                                       |
 
 `fixture_symbols_have_no_span` asserts `range.span.is_none()` over the whole corpus. It
 replaces `fixture_symbols_have_no_range`, which replaced `fixture_spans_are_sentinel`. The
@@ -358,18 +440,18 @@ leak 4 exists to keep out (`§4`), one directory deeper.
 This is the crate's reason for existing, so it is stated as a list of absences rather than
 a list of features.
 
-| the fixture cannot say | consequence for the contract |
-|---|---|
-| a byte offset, a line, a column, a cursor, a `FilePosition` | a query keyed on a position has nothing to key on — and since plan-00's amendment the fixture *says* it has no offset (`span: None`) rather than emitting a zero, while still reporting the file it does know |
-| the contents of a source file | nothing downstream may assume the text can be re-read or re-parsed |
-| a manifest, a workspace, a build directory, "the repo was built" | ADR-0008 leak 4; and design.md §8's MEASURED second hard prerequisite cannot leak into a trait |
-| a database, a snapshot, an engine handle, a salsa `FileId` | ADR-0008 leaks 2 and 5 |
-| a `Documentation` type — only a `String` and a `DocFormat` | ADR-0008 leak 7 |
-| a confidence float on a root | plan-00 §8 question 5 |
-| a root with a missing `version` key | ADR-0007 — `null` is sayable, absence is not |
-| a "best guess" target on an unresolved edge | plan-00's `EdgeTarget`; design.md §8's binding rule |
-| an edge without `provenance` or `inference_mode` | ADR-0003 field 4 |
-| a hardcoded path prefix | ADR-0008 leak 8 — prefixes are case data |
+| the fixture cannot say                                           | consequence for the contract                                                                                                                                                                                  |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a byte offset, a line, a column, a cursor, a `FilePosition`      | a query keyed on a position has nothing to key on — and since plan-00's amendment the fixture _says_ it has no offset (`span: None`) rather than emitting a zero, while still reporting the file it does know |
+| the contents of a source file                                    | nothing downstream may assume the text can be re-read or re-parsed                                                                                                                                            |
+| a manifest, a workspace, a build directory, "the repo was built" | ADR-0008 leak 4; and design.md §8's MEASURED second hard prerequisite cannot leak into a trait                                                                                                                |
+| a database, a snapshot, an engine handle, a salsa `FileId`       | ADR-0008 leaks 2 and 5                                                                                                                                                                                        |
+| a `Documentation` type — only a `String` and a `DocFormat`       | ADR-0008 leak 7                                                                                                                                                                                               |
+| a confidence float on a root                                     | plan-00 §8 question 5                                                                                                                                                                                         |
+| a root with a missing `version` key                              | ADR-0007 — `null` is sayable, absence is not                                                                                                                                                                  |
+| a "best guess" target on an unresolved edge                      | plan-00's `EdgeTarget`; design.md §8's binding rule                                                                                                                                                           |
+| an edge without `provenance` or `inference_mode`                 | ADR-0003 field 4                                                                                                                                                                                              |
+| a hardcoded path prefix                                          | ADR-0008 leak 8 — prefixes are case data                                                                                                                                                                      |
 
 ---
 
@@ -382,7 +464,7 @@ The honest accounting. Three mechanisms are available, and they are not equally 
   crate could not name the type even if it wanted to.
 - **(B) Compile error, fixture-dependent.** The fixture cannot produce a value of the
   required type, so `impl` fails.
-- **(C) Test failure or reviewed diff.** The fixture *could* stub the method; the guard is
+- **(C) Test failure or reviewed diff.** The fixture _could_ stub the method; the guard is
   a test that says the stub is wrong, or the public-API snapshot (§7.2) turning the change
   into a diff someone must approve.
 
@@ -391,16 +473,16 @@ difference is worth naming rather than rounding off. It is materially stronger t
 before the snapshot replaced the grep: a grep catches one leak by one spelling, a snapshot
 catches every signature change in the contract.
 
-| # | leak | caught? | by what |
-|---|---|---|---|
-| 1 | position-based queries | **partially, better than before** | (A) for the `ra_ap` spelling: `FilePosition` cannot appear in `plugin-api` at all. **(C)** for a structurally position-shaped signature written in waist-owned types — `edges_at(&SourceRange)` or `edges_at(file, u32)` still compiles against the fixture, which would return `vec![]`. Two guards, both improved: `public_api_snapshot_matches` makes the added method a reviewed diff rather than a string match, and `fixture_symbols_have_no_span` now asserts the fixture *declares* it has no offsets instead of asserting it fakes them consistently. A position-shaped query against a corpus that reports `span: None` everywhere returns nothing for every node, which is a visibly broken result rather than a plausible one. |
-| 2 | `FileId` | **yes** (A) | an interned salsa integer is an `ra_ap` type. A waist-owned `FileId(u32)` would *not* be caught — ADR-0008 explicitly permits the waist its own interning, so this is a leak against `ra_ap`'s interning, not against interning. |
-| 3 | `TextSize` / encoding | **partially, and uniquely** | The fixture is the only thing at n=1 that declares a second `PositionEncoding`. The `utf16_plugin` case (§6), loaded alongside a `utf8_bytes` case, drives `position_encoding_is_per_plugin_not_global` (plan-01 §10.2): the shard `plugins` table must carry two different encodings, each matching its declaring plugin. That is the whole claim — the core cannot collapse encoding to one global value. It does **not** prove offset conversion is correct, because the fixture has no real offsets. That correctness is untested until a second real language exists, and the fixture reports `span: None` rather than a zero, so it cannot even stand in for an offset. |
-| 4 | Cargo workspace assumption | **yes** (C, strongly) | a fixture case is a directory with one JSON file. Any `Cargo.toml` requirement in `discover_units` or `preflight` fails every case at once. |
-| 5 | salsa snapshot lifecycle | **partially** | (A) for a lifetime-carrying `Snapshot<'db>` or any `ra_ap` handle in a signature. **Not caught** is an *implicit ordering* requirement — a core that only works if `symbols_in` runs before `edges_from` passes silently, because the fixture answers in any order. `edges_from_works_before_symbols_in` exists for exactly that, and it is (C). |
-| 6 | `SymbolKind` | **yes** (C) | the `foreign_shapes` case emits `raw_kind` values no Rust plugin produces — `go_receiver`, `java_class`, `py_class` — with `kind: "other"`. Any core that matches on `raw_kind` gets a wrong answer on that case. |
-| 7 | `Documentation` type | **yes** (A) | `ra_ap`'s type cannot appear in `plugin-api`. |
-| 8 | classifier prefixes | **yes** (C, strongly) | the fixture's prefixes are case data (`vendor/`, `node_modules/`, `/usr/lib/go/`). Plan-01's `core_contains_no_path_prefix` is the paired source assertion. |
+| #   | leak                       | caught?                           | by what                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --- | -------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | position-based queries     | **partially, better than before** | (A) for the `ra_ap` spelling: `FilePosition` cannot appear in `plugin-api` at all. **(C)** for a structurally position-shaped signature written in waist-owned types — `edges_at(&SourceRange)` or `edges_at(file, u32)` still compiles against the fixture, which would return `vec![]`. Two guards, both improved: `public_api_snapshot_matches` makes the added method a reviewed diff rather than a string match, and `fixture_symbols_have_no_span` now asserts the fixture _declares_ it has no offsets instead of asserting it fakes them consistently. A position-shaped query against a corpus that reports `span: None` everywhere returns nothing for every node, which is a visibly broken result rather than a plausible one. |
+| 2   | `FileId`                   | **yes** (A)                       | an interned salsa integer is an `ra_ap` type. A waist-owned `FileId(u32)` would _not_ be caught — ADR-0008 explicitly permits the waist its own interning, so this is a leak against `ra_ap`'s interning, not against interning.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 3   | `TextSize` / encoding      | **partially, and uniquely**       | The fixture is the only thing at n=1 that declares a second `PositionEncoding`. The `utf16_plugin` case (§6), loaded alongside a `utf8_bytes` case, drives `position_encoding_is_per_plugin_not_global` (plan-01 §10.2): the shard `plugins` table must carry two different encodings, each matching its declaring plugin. That is the whole claim — the core cannot collapse encoding to one global value. It does **not** prove offset conversion is correct, because the fixture has no real offsets. That correctness is untested until a second real language exists, and the fixture reports `span: None` rather than a zero, so it cannot even stand in for an offset.                                                              |
+| 4   | Cargo workspace assumption | **yes** (C, strongly)             | a fixture case is a directory with one JSON file. Any `Cargo.toml` requirement in `discover_units` or `preflight` fails every case at once.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 5   | salsa snapshot lifecycle   | **partially**                     | (A) for a lifetime-carrying `Snapshot<'db>` or any `ra_ap` handle in a signature. **Not caught** is an _implicit ordering_ requirement — a core that only works if `symbols_in` runs before `edges_from` passes silently, because the fixture answers in any order. `edges_from_works_before_symbols_in` exists for exactly that, and it is (C).                                                                                                                                                                                                                                                                                                                                                                                           |
+| 6   | `SymbolKind`               | **yes** (C)                       | the `foreign_shapes` case emits `raw_kind` values no Rust plugin produces — `go_receiver`, `java_class`, `py_class` — with `kind: "other"`. Any core that matches on `raw_kind` gets a wrong answer on that case.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 7   | `Documentation` type       | **yes** (A)                       | `ra_ap`'s type cannot appear in `plugin-api`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 8   | classifier prefixes        | **yes** (C, strongly)             | the fixture's prefixes are case data (`vendor/`, `node_modules/`, `/usr/lib/go/`). Plan-01's `core_contains_no_path_prefix` is the paired source assertion.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 ### 5.1 What the fixture does not catch, at all
 
@@ -424,7 +506,7 @@ Stated plainly, because ADR-0008 warns that the fixture's value will be overstat
    The point survives the correction intact, and is arguably sharper for it. The fixture
    makes `edges_from` look cheap, and nobody knows what it actually costs — so plan-00
    open question 1 — whether `edges_from(&NodeId)` maps onto `ra_ap`
-   without a live salsa snapshot per call — is *hidden* by the fixture, not resolved by it.
+   without a live salsa snapshot per call — is _hidden_ by the fixture, not resolved by it.
    Plan-01 open question 1 compounds it: v0.1's batch build may never call `edges_from` at
    all, which would make it the only trait method shipping with no real implementation
    behind it.
@@ -437,8 +519,8 @@ Stated plainly, because ADR-0008 warns that the fixture's value will be overstat
 
 5. **Error and partiality behaviour of a real engine.** A fixture fails by declaring
    `preflight: failed` or by being malformed. rust-analyzer's actual failure modes — open
-   issue #19358, calls missed through generics (design.md §8) — produce *plausible
-   incomplete output*, which is a category the fixture cannot imitate because it has no
+   issue #19358, calls missed through generics (design.md §8) — produce _plausible
+   incomplete output_, which is a category the fixture cannot imitate because it has no
    analysis to be incomplete.
 
 6. **Whether doc comments are good enough to label a box with.** design.md §9 Q1, still the
@@ -451,29 +533,29 @@ Stated plainly, because ADR-0008 warns that the fixture's value will be overstat
 Each case is a directory under `reachgraph-fixture/fixtures/`. The task's five required
 cases are marked ★.
 
-| case | contents | what it drives |
-|---|---|---|
-| `minimal` | 1 unit, 2 symbols, 1 edge, 1 bound root | plan-01's first three tests; the unblocking deliverable |
-| ★ `versioned_pair` | §2.3 | `v1_and_v2_are_separate_roots`, three-way classification, sunset answer |
-| ★ `unversioned_contract` | one root, `"version": null` | `missing_version_stays_none`, `version_key_none_is_not_serialized_as_v1` |
-| ★ `unbound_root` | one bound root, one `unbound` with a reason | `unbound_root_is_reported_not_dropped`, coverage recording |
-| ★ `unresolved_edge` | one edge, `unresolved`, two candidates, one candidate otherwise unreached | `unresolved_edge_does_not_propagate_reachability`, `possibly_reachable_annotation_does_not_filter_list` |
-| ★ `test_symbol_collision` | two symbols named `create_task`: one `is_test: false`, `container: "impl:TaskService_for_TaskServer"`; one `is_test: true`, `container: "impl:MockDb"` | design.md §4's MEASURED collision; `container_is_copied_not_interpreted`; plan-04's binder acceptance case |
-| `three_versions` | v1, v2, v3 of one operation | `three_versions_emit_reached_by_not_class` |
-| `utf16_plugin` | `"position_encoding": "utf16_code_units"`, `plugin_id: "fixture16"`; loaded together with a `utf8_bytes` case | §5 leak 3; `position_encoding_is_per_plugin_not_global` |
-| `foreign_shapes` | `raw_kind` of `go_receiver`, `java_class`, `py_class`; `kind: "other"`; prefixes `vendor/`, `node_modules/`, `/usr/lib/go/`, **all three in one unit** — which is what proves classification is per file, not per unit | §5 leaks 6 and 8; plan-01's `classification_is_per_file_within_one_unit` |
-| `nested_containers` | a three-level chain: function → `impl` block → module, each a symbol, each linked by `container`; two units | plan-01 §3.1 and §10.2 — `container_chain_nests_and_terminates`, compound boxes for plan-05 |
-| `container_cycle` | two symbols whose `container` fields point at each other | `container_chain_survives_a_containment_cycle` |
-| `cycle_and_diamond` | A→B→C→A, plus one node reached from two roots | `cycle_terminates`, `two_roots_sharing_a_node_both_include_it` |
-| `deep_chain` | a 6-deep chain from one root | `depth_limit_marks_frontier_not_leaf`, `unreachable_uses_unlimited_depth` |
-| `external_target` | an edge resolving to a `raw` no symbol declares | `external_target_is_leaf_and_never_unreachable` |
-| `dangling_container` | `container` naming an unindexed `raw` | `dangling_container_is_not_an_error` |
-| `structured_raw_ids` | `raw` strings containing `::`, `/`, `#`, `{`, and a whole JSON document | `node_id_with_structured_looking_raw_is_not_parsed` |
-| `no_classifier` | `capabilities` omits `classify` | `no_classifier_yields_none_not_error`, `unclassified_nodes_are_counted_not_dropped` |
-| `symbols_only` | `capabilities: ["symbols"]` | `unpaired_symbol_provider_is_a_build_error` |
-| `two_plugins` | two documents, two `plugin_id`s, the same `raw` string in both | `same_raw_different_plugin_does_not_collide` |
-| `preflight_fails` | `"preflight": { "failed": { … } }` | `preflight_failure_aborts_with_remediation` |
-| `version_key_missing` | invalid on purpose: the `version` key is absent | `missing_version_key_is_a_parse_error` |
+| case                      | contents                                                                                                                                                                                                               | what it drives                                                                                             |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `minimal`                 | 1 unit, 2 symbols, 1 edge, 1 bound root                                                                                                                                                                                | plan-01's first three tests; the unblocking deliverable                                                    |
+| ★ `versioned_pair`        | §2.3                                                                                                                                                                                                                   | `v1_and_v2_are_separate_roots`, three-way classification, sunset answer                                    |
+| ★ `unversioned_contract`  | one root, `"version": null`                                                                                                                                                                                            | `missing_version_stays_none`, `version_key_none_is_not_serialized_as_v1`                                   |
+| ★ `unbound_root`          | one bound root, one `unbound` with a reason                                                                                                                                                                            | `unbound_root_is_reported_not_dropped`, coverage recording                                                 |
+| ★ `unresolved_edge`       | one edge, `unresolved`, two candidates, one candidate otherwise unreached                                                                                                                                              | `unresolved_edge_does_not_propagate_reachability`, `possibly_reachable_annotation_does_not_filter_list`    |
+| ★ `test_symbol_collision` | two symbols named `create_task`: one `is_test: false`, `container: "impl:TaskService_for_TaskServer"`; one `is_test: true`, `container: "impl:MockDb"`                                                                 | design.md §4's MEASURED collision; `container_is_copied_not_interpreted`; plan-04's binder acceptance case |
+| `three_versions`          | v1, v2, v3 of one operation                                                                                                                                                                                            | `three_versions_emit_reached_by_not_class`                                                                 |
+| `utf16_plugin`            | `"position_encoding": "utf16_code_units"`, `plugin_id: "fixture16"`; loaded together with a `utf8_bytes` case                                                                                                          | §5 leak 3; `position_encoding_is_per_plugin_not_global`                                                    |
+| `foreign_shapes`          | `raw_kind` of `go_receiver`, `java_class`, `py_class`; `kind: "other"`; prefixes `vendor/`, `node_modules/`, `/usr/lib/go/`, **all three in one unit** — which is what proves classification is per file, not per unit | §5 leaks 6 and 8; plan-01's `classification_is_per_file_within_one_unit`                                   |
+| `nested_containers`       | a three-level chain: function → `impl` block → module, each a symbol, each linked by `container`; two units                                                                                                            | plan-01 §3.1 and §10.2 — `container_chain_nests_and_terminates`, compound boxes for plan-05                |
+| `container_cycle`         | two symbols whose `container` fields point at each other                                                                                                                                                               | `container_chain_survives_a_containment_cycle`                                                             |
+| `cycle_and_diamond`       | A→B→C→A, plus one node reached from two roots                                                                                                                                                                          | `cycle_terminates`, `two_roots_sharing_a_node_both_include_it`                                             |
+| `deep_chain`              | a 6-deep chain from one root                                                                                                                                                                                           | `depth_limit_marks_frontier_not_leaf`, `unreachable_uses_unlimited_depth`                                  |
+| `external_target`         | an edge resolving to a `raw` no symbol declares                                                                                                                                                                        | `external_target_is_leaf_and_never_unreachable`                                                            |
+| `dangling_container`      | `container` naming an unindexed `raw`                                                                                                                                                                                  | `dangling_container_is_not_an_error`                                                                       |
+| `structured_raw_ids`      | `raw` strings containing `::`, `/`, `#`, `{`, and a whole JSON document                                                                                                                                                | `node_id_with_structured_looking_raw_is_not_parsed`                                                        |
+| `no_classifier`           | `capabilities` omits `classify`                                                                                                                                                                                        | `no_classifier_yields_none_not_error`, `unclassified_nodes_are_counted_not_dropped`                        |
+| `symbols_only`            | `capabilities: ["symbols"]`                                                                                                                                                                                            | `unpaired_symbol_provider_is_a_build_error`                                                                |
+| `two_plugins`             | two documents, two `plugin_id`s, the same `raw` string in both                                                                                                                                                         | `same_raw_different_plugin_does_not_collide`                                                               |
+| `preflight_fails`         | `"preflight": { "failed": { … } }`                                                                                                                                                                                     | `preflight_failure_aborts_with_remediation`                                                                |
+| `version_key_missing`     | invalid on purpose: the `version` key is absent                                                                                                                                                                        | `missing_version_key_is_a_parse_error`                                                                     |
 
 Twenty-one cases. Whether that is already too many to maintain is open question 4 (§8).
 
@@ -485,16 +567,16 @@ Test-driven, red first.
 
 ### 7.1 Build order
 
-| # | red test | red state | green when |
-|---|---|---|---|
-| 1 | `fixture_doc_parses` | no format type | `FixtureDoc` deserialises `minimal` |
-| 2 | `fixture_implements_every_trait` | `FixturePlugin` does not exist | every trait `impl` compiles |
-| 3 | `minimal_case_round_trips` | providers return nothing | `discover_units` / `symbols_in` / `edges_in` return the document's contents |
-| 4 | `plugin_api_has_no_ra_ap_dependency` | no metadata test | `cargo metadata` assertion in place |
-| 5 | `no_plugin_depends_on_core` | no metadata test | same file, second assertion |
-| 6 | `public_api_snapshot_matches` | no snapshot checked in | `plugin-api`'s public surface captured and asserted |
-| 7 | `fixture_symbols_have_no_span` | invariant not enforced | `range.span: None` asserted over the whole corpus |
-| 8 | `missing_version_key_is_a_parse_error` | absent key deserialises to `None` | no `#[serde(default)]`; `version_key_missing` fails to parse |
+| #   | red test                               | red state                         | green when                                                                  |
+| --- | -------------------------------------- | --------------------------------- | --------------------------------------------------------------------------- |
+| 1   | `fixture_doc_parses`                   | no format type                    | `FixtureDoc` deserialises `minimal`                                         |
+| 2   | `fixture_implements_every_trait`       | `FixturePlugin` does not exist    | every trait `impl` compiles                                                 |
+| 3   | `minimal_case_round_trips`             | providers return nothing          | `discover_units` / `symbols_in` / `edges_in` return the document's contents |
+| 4   | `plugin_api_has_no_ra_ap_dependency`   | no metadata test                  | `cargo metadata` assertion in place                                         |
+| 5   | `no_plugin_depends_on_core`            | no metadata test                  | same file, second assertion                                                 |
+| 6   | `public_api_snapshot_matches`          | no snapshot checked in            | `plugin-api`'s public surface captured and asserted                         |
+| 7   | `fixture_symbols_have_no_span`         | invariant not enforced            | `range.span: None` asserted over the whole corpus                           |
+| 8   | `missing_version_key_is_a_parse_error` | absent key deserialises to `None` | no `#[serde(default)]`; `version_key_missing` fails to parse                |
 
 Test 2 is the gate. It is ADR-0008's mechanism made executable, and nothing downstream —
 plan-01's entire suite included — can run before it is green.
@@ -514,12 +596,12 @@ green as cases arrive. That is their job: they constrain every case added later.
 
 ### 7.2 The four neutrality guards (plan-00 §6.1)
 
-| test | mechanism | strength |
-|---|---|---|
-| `fixture_implements_every_trait` | `static_assertions::assert_impl_all!(FixturePlugin: Plugin, LanguagePlugin, SymbolProvider, EdgeProvider, RootProvider, Classifier)` | compile-level. The strongest guard in the project. |
-| `no_plugin_depends_on_core` | `cargo metadata`: assert `reachgraph-core` is absent from the dependency graph of every `reachgraph-*` crate except `core` and `cli` | strong; transitive |
-| `plugin_api_has_no_ra_ap_dependency` | `cargo metadata`: no `ra_ap_*` in `plugin-api`'s graph | strong; transitive. This is what makes §5 mechanism (A) work for leaks 1, 2, 5 and 7. |
-| `public_api_snapshot_matches` | `cargo public-api` (or equivalent) renders `plugin-api`'s complete public surface; the rendering is checked in as `plugin-api/public-api.txt` and asserted byte-equal in CI | **structural.** Covers all eight leaks at once, not one by string match. |
+| test                                 | mechanism                                                                                                                                                                   | strength                                                                              |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `fixture_implements_every_trait`     | `static_assertions::assert_impl_all!(FixturePlugin: Plugin, LanguagePlugin, SymbolProvider, EdgeProvider, RootProvider, Classifier)`                                        | compile-level. The strongest guard in the project.                                    |
+| `no_plugin_depends_on_core`          | `cargo metadata`: assert `reachgraph-core` is absent from the dependency graph of every `reachgraph-*` crate except `core` and `cli`                                        | strong; transitive                                                                    |
+| `plugin_api_has_no_ra_ap_dependency` | `cargo metadata`: no `ra_ap_*` in `plugin-api`'s graph                                                                                                                      | strong; transitive. This is what makes §5 mechanism (A) work for leaks 1, 2, 5 and 7. |
+| `public_api_snapshot_matches`        | `cargo public-api` (or equivalent) renders `plugin-api`'s complete public surface; the rendering is checked in as `plugin-api/public-api.txt` and asserted byte-equal in CI | **structural.** Covers all eight leaks at once, not one by string match.              |
 
 The last three shell out to `cargo`. ADR-0001 forbids subprocesses in the **shipped
 binary**; a dev-dependency test harness is not the shipped binary. Stated explicitly so it
@@ -532,22 +614,22 @@ signatures for `position`, `offset` and `cursor`.
 
 Why the replacement is not merely tidier:
 
-| | grep | snapshot |
-|---|---|---|
-| scope | one trait, one leak | every type, field and signature in `plugin-api` |
-| evasion | rename the parameter to `at` | none; the rendering is the whole surface |
-| failure mode | silent pass on a spelling it did not anticipate | a diff, which somebody must approve |
-| covers a *new* leak nobody predicted | no | yes — an unforeseen addition still shows up as a diff |
+|                                      | grep                                            | snapshot                                              |
+| ------------------------------------ | ----------------------------------------------- | ----------------------------------------------------- |
+| scope                                | one trait, one leak                             | every type, field and signature in `plugin-api`       |
+| evasion                              | rename the parameter to `at`                    | none; the rendering is the whole surface              |
+| failure mode                         | silent pass on a spelling it did not anticipate | a diff, which somebody must approve                   |
+| covers a _new_ leak nobody predicted | no                                              | yes — an unforeseen addition still shows up as a diff |
 
 ADR-0008 calls leak 1 the highest risk of the eight and the anti-leak test it prescribes —
-*could `ra_ap`'s return value be substituted verbatim here?* — is a question about the
+_could `ra_ap`'s return value be substituted verbatim here?_ — is a question about the
 whole surface, not about one parameter name. A snapshot is that question made into a
 reviewable artifact.
 
 Mechanics, and the honest caveat: the assertion is only as good as the review of the diff.
 A reviewer who regenerates the snapshot without reading it has defeated it exactly as a
 rubber-stamped lockfile update defeats a dependency review. The snapshot makes the change
-*visible*; it cannot make anyone look. That is still strictly better than a grep, which
+_visible_; it cannot make anyone look. That is still strictly better than a grep, which
 made nothing visible.
 
 Regeneration must be a deliberate command (`cargo xtask public-api --bless`), never an
@@ -558,32 +640,32 @@ automatic fixup on test failure. A test that repairs itself asserts nothing.
 Cases in `tests/ui/` that must **fail** to compile. These convert three conventions into
 build failures:
 
-| case | must fail because |
-|---|---|
-| `plugin_uses_core_internals.rs` | `use reachgraph_core::…` from a plugin crate — plan-00 §1's dependency rule |
+| case                                  | must fail because                                                              |
+| ------------------------------------- | ------------------------------------------------------------------------------ |
+| `plugin_uses_core_internals.rs`       | `use reachgraph_core::…` from a plugin crate — plan-00 §1's dependency rule    |
 | `symbol_literal_without_container.rs` | a `Symbol` struct literal omitting `container` — the field cannot be forgotten |
-| `root_literal_with_confidence.rs` | a `Root` literal setting `confidence` — the field is gone, not deprecated |
-| `root_literal_without_binding.rs` | a `Root` literal omitting `binding` |
+| `root_literal_with_confidence.rs`     | a `Root` literal setting `confidence` — the field is gone, not deprecated      |
+| `root_literal_without_binding.rs`     | a `Root` literal omitting `binding`                                            |
 
 These are cheap and they are precise: each asserts one field's existence or absence, which
 a prose rule cannot.
 
 ### 7.4 Format-rule tests
 
-| test | asserts |
-|---|---|
-| `unknown_field_is_a_parse_error` | `deny_unknown_fields` on every struct |
-| `missing_version_key_is_a_parse_error` | ADR-0007; §2.1 |
-| `null_version_parses_to_none` | and never to `"v1"` |
-| `missing_container_key_is_a_parse_error` | the field cannot be forgotten |
-| `missing_inference_mode_is_a_parse_error` | ADR-0003 field 4 |
-| `missing_join_key_is_a_parse_error` | plan-00 §2 — the cross-repo key cannot be forgotten |
-| `join_key_is_never_parsed_by_the_fixture` | the fixture emits it verbatim; it does not derive the version from it either |
-| `no_serde_default_in_fixture_format` | source assertion over the format module: the string `serde(default` does not appear |
-| `format_has_no_span_field` | source assertion: no offset/line/column field in the format types. `file` is present and is not one. |
-| `format_has_no_confidence_field` | source assertion: `confidence` does not appear |
-| `fixture_file_is_never_checked_against_disk` | §3.1 — no test asserts a fixture path exists, is absolute, or resolves under the case directory; `preflight` does not stat it |
-| `fixture_detection_is_always_empty` | every case *declares* empty `marker_files` and `extensions` (§3.2). Not a duplicate of plan-01's `fixture_is_never_detected`, which asserts what `Registry::detect` *does* with that declaration — declaration here, behaviour there, and either could regress without the other. |
+| test                                         | asserts                                                                                                                                                                                                                                                                           |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unknown_field_is_a_parse_error`             | `deny_unknown_fields` on every struct                                                                                                                                                                                                                                             |
+| `missing_version_key_is_a_parse_error`       | ADR-0007; §2.1                                                                                                                                                                                                                                                                    |
+| `null_version_parses_to_none`                | and never to `"v1"`                                                                                                                                                                                                                                                               |
+| `missing_container_key_is_a_parse_error`     | the field cannot be forgotten                                                                                                                                                                                                                                                     |
+| `missing_inference_mode_is_a_parse_error`    | ADR-0003 field 4                                                                                                                                                                                                                                                                  |
+| `missing_join_key_is_a_parse_error`          | plan-00 §2 — the cross-repo key cannot be forgotten                                                                                                                                                                                                                               |
+| `join_key_is_never_parsed_by_the_fixture`    | the fixture emits it verbatim; it does not derive the version from it either                                                                                                                                                                                                      |
+| `no_serde_default_in_fixture_format`         | source assertion over the format module: the string `serde(default` does not appear                                                                                                                                                                                               |
+| `format_has_no_span_field`                   | source assertion: no offset/line/column field in the format types. `file` is present and is not one.                                                                                                                                                                              |
+| `format_has_no_confidence_field`             | source assertion: `confidence` does not appear                                                                                                                                                                                                                                    |
+| `fixture_file_is_never_checked_against_disk` | §3.1 — no test asserts a fixture path exists, is absolute, or resolves under the case directory; `preflight` does not stat it                                                                                                                                                     |
+| `fixture_detection_is_always_empty`          | every case _declares_ empty `marker_files` and `extensions` (§3.2). Not a duplicate of plan-01's `fixture_is_never_detected`, which asserts what `Registry::detect` _does_ with that declaration — declaration here, behaviour there, and either could regress without the other. |
 
 The three source assertions are (C)-strength and are there because the corresponding
 positive test cannot exist — you cannot write a test that a field is absent from a format
@@ -591,11 +673,11 @@ except by reading the format.
 
 ### 7.5 Lifecycle and ordering
 
-| test | asserts |
-|---|---|
-| `edges_from_works_before_symbols_in` | no implicit ordering requirement leaked into the core (§5, leak 5) |
-| `edges_from_agrees_with_edges_in` | for every node, `edges_from(n)` equals the `edges_in` edges whose `from` is `n` |
-| `discover_units_is_idempotent` | called twice, same result; no hidden state |
+| test                                 | asserts                                                                         |
+| ------------------------------------ | ------------------------------------------------------------------------------- |
+| `edges_from_works_before_symbols_in` | no implicit ordering requirement leaked into the core (§5, leak 5)              |
+| `edges_from_agrees_with_edges_in`    | for every node, `edges_from(n)` equals the `edges_in` edges whose `from` is `n` |
+| `discover_units_is_idempotent`       | called twice, same result; no hidden state                                      |
 
 `edges_from_agrees_with_edges_in` is worth having even though it is trivially true for the
 fixture: when `lang-rust` lands, the same test against a real engine is the one that
@@ -631,7 +713,7 @@ too. They are the regression net for plan-05's renderer.
    nobody predicted, which is the category a targeted grep can never cover.
 
    The residual weakness is named rather than hidden: a snapshot asserts that a change was
-   *seen*, not that it was *understood*. A reviewer who blesses the diff unread has
+   _seen_, not that it was _understood_. A reviewer who blesses the diff unread has
    defeated it. Strictly better than a grep, which made nothing visible at all.
 
 3. ~~**Should `Symbol::range` be `Option<SourceRange>`?**~~
@@ -646,7 +728,7 @@ too. They are the regression net for plan-05's renderer.
 
    The first prescription overshot. Left as a record of the overshoot rather than
    rewritten, because the failure mode is instructive: fixing "this cannot express an
-   absence" by wrapping the *enclosing* type makes a second, known fact inexpressible
+   absence" by wrapping the _enclosing_ type makes a second, known fact inexpressible
    too. Question 6 is what caught it.
 
 4. **How many cases before the corpus is its own maintenance burden?** Twenty-one at the
@@ -664,17 +746,17 @@ too. They are the regression net for plan-05's renderer.
    **RESOLVED 2026-09-17 — adopt `SourceRange { file: PathBuf, span: Option<Span> }`.**
    Plan-00 §2 amended (c); plan-01 §7 rewritten; §3.1 above is the fixture's side.
 
-   `range` is required again and the `Option` sits on the *offset*, which is the only
+   `range` is required again and the `Option` sits on the _offset_, which is the only
    fact a plugin may not have. A plugin that names a symbol can place it in a file; where
    in the file is a separate claim of lower certainty, and the type now says so.
 
    What this bought, concretely:
 
-   | before (`Option<SourceRange>`) | after (`span: Option<Span>`) |
-   |---|---|
-   | fixture discards the file it knows | fixture reports the file, omits the span |
-   | plan-01 falls back to `unit.root`, with a `ClassifiedByUnitRoot` diagnostic | fallback and diagnostic **deleted**; every indexed node has a real path |
-   | `src/` and `vendor/` in one unit classify identically | they classify differently — plan-01's `classification_is_per_file_within_one_unit` |
+   | before (`Option<SourceRange>`)                                              | after (`span: Option<Span>`)                                                       |
+   | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+   | fixture discards the file it knows                                          | fixture reports the file, omits the span                                           |
+   | plan-01 falls back to `unit.root`, with a `ClassifiedByUnitRoot` diagnostic | fallback and diagnostic **deleted**; every indexed node has a real path            |
+   | `src/` and `vendor/` in one unit classify identically                       | they classify differently — plan-01's `classification_is_per_file_within_one_unit` |
 
    The rejected alternative was `Symbol { file: Option<PathBuf>, range: Option<SourceRange> }`
    — two fields and two ways to state one file, the redundancy the contract avoids
@@ -693,7 +775,5 @@ too. They are the regression net for plan-05's renderer.
    locate precisely — but `lang-rust` via `ra_ap` always has offsets, so at n=1 the
    variant is exercised only by the fixture. That is the normal condition for the
    ADR-0003 fields (fields 1, 2 and 4 are all in the same position), and it is recorded
-   here so nobody later removes it as unused. It is not unused; it is un-*reached*, which
+   here so nobody later removes it as unused. It is not unused; it is un-_reached_, which
    is different, and ADR-0003's Consequences warn about exactly that confusion.
-
-

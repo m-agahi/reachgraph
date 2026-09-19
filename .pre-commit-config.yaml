@@ -1,0 +1,65 @@
+# Pre-commit is the local half of the same definition CI runs. The shared
+# `ci-pr.yaml` runs `pre-commit/action` with NO SKIP LIST, so every hook declared
+# here also runs on every pull request — a hook skipped locally fails there
+# instead. Hook failure is signal, not obstacle: fix the cause and re-stage.
+# Never --no-verify.
+#
+# This repository is prose today — `docs/adr/` and `docs/plans/` and nothing
+# else. It carries the baseline plus the three shared hooks that can do real
+# work on prose, workflows and secrets.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+
+  # Shared, from yadgarhq/actions — the same definition every consumer
+  # references instead of redefining a near-identical local block.
+  #
+  # IMMUTABLE rev HERE, unlike the moving `@main` the workflow caller pins, and
+  # the two rules are opposite deliberately. pre-commit caches a rev at first
+  # install and never re-resolves it — "mutable references are never updated
+  # after first install and are not supported" — so a moving tag here would
+  # silently freeze each machine at whatever that tag meant the day it first
+  # ran, and two developers would sit on different hook versions with
+  # byte-identical config. GitHub Actions re-resolves `@main` every run;
+  # pre-commit does not. Bump with `pre-commit autoupdate`.
+  - repo: https://github.com/yadgarhq/actions
+    rev: v1.23.0
+    hooks:
+      - id: gitleaks
+      # Markdown, JSON and YAML. `proseWrap: preserve` lives in this
+      # repository's .prettierrc and is load-bearing: without it prettier
+      # reflows the hand-wrapped ADRs and plans, and every future diff to them
+      # becomes unreadable.
+      - id: prettier
+      # This repository carries a workflow, and nothing else lints it. The hook
+      # REFUSES rather than passes when actionlint's shellcheck rule class is
+      # not running, so it needs both `actionlint` and `shellcheck` on PATH.
+      - id: actionlint
+
+  # WHAT GETS ADDED WHEN src/ LANDS, written down so it is a lookup rather than
+  # a rediscovery. The Rust hooks are omitted today because there is no
+  # Cargo.toml for them to read, and an omitted hook is honest where a hook
+  # that matches nothing is a green tick meaning nothing:
+  #
+  #   cargo-fmt, cargo-clippy   with the first Cargo.toml
+  #   cargo-deny                with the first Cargo.toml AND a deny.toml,
+  #                             which the hook reads and this repository has not
+  #                             written yet
+  #   no-test-skips             with the first test
+  #
+  # The service-shaped shared hooks — helm-lint, chart-baseline,
+  # chart-network-policy, observe-coverage, run-block-size,
+  # no-compiled-in-defaults, certificate-usages, boot-reads-watched — are about
+  # Helm charts and long-running Rust services. This repository publishes a
+  # Python wheel through maturin (docs/plans/07-packaging-pypi.md) and ships no
+  # chart, so none of them ever applies.

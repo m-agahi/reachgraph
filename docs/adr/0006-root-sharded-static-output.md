@@ -11,7 +11,7 @@ Three questions are easily conflated when deciding how the tool delivers its res
 2. **Delivery** — `file://`, a local server, or hosting?
 3. **Interaction** — is all data present at load, or fetched on demand?
 
-GitHub Pages is not an alternative to a web server; it is *hosting* for a static artifact.
+GitHub Pages is not an alternative to a web server; it is _hosting_ for a static artifact.
 The real axis is **build-time artifact versus runtime service**.
 
 `docs/design.md` §7 chose one self-contained HTML file with the graph JSON inlined, and no
@@ -20,8 +20,8 @@ multi-repository scale the project targets: INFERRED, ~100k nodes at ~300 bytes 
 edges gives roughly 35–55 MB inlined. That loads, slowly, and is unpleasant to attach
 anywhere.
 
-But the full graph is never needed at once. The tool's core operation is *the reachable
-set from one endpoint, depth-limited* — a small subgraph.
+But the full graph is never needed at once. The tool's core operation is _the reachable
+set from one endpoint, depth-limited_ — a small subgraph.
 
 ### The graph cannot be computed at request time
 
@@ -110,7 +110,7 @@ Consequences, binding:
 - **Cross-reference, load-bearing:** `unreachable.json` must carry the set of roots the
   index actually covered, because a partial root set makes reachable code appear
   unreachable. See ADR-0007, which extends the §8 wording rule to
-  *"not reachable from any endpoint version in this index"*.
+  _"not reachable from any endpoint version in this index"_.
 
 ## Rejected alternatives
 

@@ -5,7 +5,7 @@
 
 ## Context
 
-ADR-0002 makes nearly everything a plugin. Taken literally — *everything* is a plugin —
+ADR-0002 makes nearly everything a plugin. Taken literally — _everything_ is a plugin —
 the system has no fixed point, and therefore no contract to version, no schema to
 validate against, and nothing that stays still while the parts around it change.
 
@@ -13,8 +13,8 @@ There is a second, subtler hazard. Every plugin interface will be designed while
 one language exists (Rust). An interface shaped against n=1 encodes that language's
 accidents as if they were universal, and every later language then fights it.
 
-ADR-0002 defuses the *cost* of that mistake — with no third-party ecosystem, changing an
-interface is a refactor rather than a breaking release. It does not defuse the *mistake*.
+ADR-0002 defuses the _cost_ of that mistake — with no third-party ecosystem, changing an
+interface is a refactor rather than a breaking release. It does not defuse the _mistake_.
 Some fields are free to add now and structurally impossible to retrofit later, because
 their absence means the information was never collected.
 
@@ -31,14 +31,14 @@ system with a versioned, stable definition.
 Each is free today and impossible to retrofit. Rust needs none of them, which is precisely
 why each would otherwise be forgotten.
 
-| # | field | the Rust accident it absorbs |
-|---|---|---|
-| 1 | `provides: [symbols, edges, roots, classify]` — capability declaration per plugin | Rust may supply symbols and edges from one engine, or from two separate sources. Other languages will differ. Splitting plugins by *capability* rather than by *source* lets one crate declare several kinds and be invoked once, instead of re-indexing a repository twice. |
-| 2 | `position_encoding` declared per plugin | LSP uses UTF-16 code units. SCIP uses UTF-8 bytes. tree-sitter uses bytes. Pick one silently and every plugin is off-by-N in files containing non-ASCII text. ASCII-only Rust test fixtures hide this indefinitely. |
-| 3 | `node_id: (plugin_id, String)`, opaque — **the core must never parse it** | If the waist required SCIP symbol strings, it would have mandated SCIP, which ADR-0004 rejects on availability. An engine-backed plugin has no SCIP symbol; it has a file, a range and a name. Keeping the string opaque means the core never has to care. Cross-repo identity does not need it either — the join key is the contract operation FQN (ADR-0007). |
-| 4 | `provenance` + `inference_mode` on every edge | Rust's edges come from one high-quality engine. Hand-written resolvers (ADR-0004) will produce weaker, differently-shaped edges. A directly-resolved edge and an inferred edge are different-strength claims and must not render identically. Add the field before the second source exists. |
-| 5 | `preflight() -> Result<Ok, Failure { reason, remediation }>` per plugin | "The repository must be built at least once" is a Rust and TypeScript accident, not a universal. Each plugin self-checks its own prerequisites and returns structured guidance. **Never `command -v`** — MEASURED in `docs/design.md` §10, `rust-analyzer` resolves on PATH on the author's machine but is a `rustup` proxy that loops and is not installed. A name resolving proves nothing. |
-| 6 | roots returned language-neutrally: `(contract_id, version, service, operation, direction, node_id, confidence)` | `impl XServer for T` with CamelCase-to-snake_case binding is 100% tonic-specific. Nothing trait-shaped or impl-shaped may reach the waist. See ADR-0007 for why `version` is in this tuple. |
+| #   | field                                                                                                           | the Rust accident it absorbs                                                                                                                                                                                                                                                                                                                                                                  |
+| --- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `provides: [symbols, edges, roots, classify]` — capability declaration per plugin                               | Rust may supply symbols and edges from one engine, or from two separate sources. Other languages will differ. Splitting plugins by _capability_ rather than by _source_ lets one crate declare several kinds and be invoked once, instead of re-indexing a repository twice.                                                                                                                  |
+| 2   | `position_encoding` declared per plugin                                                                         | LSP uses UTF-16 code units. SCIP uses UTF-8 bytes. tree-sitter uses bytes. Pick one silently and every plugin is off-by-N in files containing non-ASCII text. ASCII-only Rust test fixtures hide this indefinitely.                                                                                                                                                                           |
+| 3   | `node_id: (plugin_id, String)`, opaque — **the core must never parse it**                                       | If the waist required SCIP symbol strings, it would have mandated SCIP, which ADR-0004 rejects on availability. An engine-backed plugin has no SCIP symbol; it has a file, a range and a name. Keeping the string opaque means the core never has to care. Cross-repo identity does not need it either — the join key is the contract operation FQN (ADR-0007).                               |
+| 4   | `provenance` + `inference_mode` on every edge                                                                   | Rust's edges come from one high-quality engine. Hand-written resolvers (ADR-0004) will produce weaker, differently-shaped edges. A directly-resolved edge and an inferred edge are different-strength claims and must not render identically. Add the field before the second source exists.                                                                                                  |
+| 5   | `preflight() -> Result<Ok, Failure { reason, remediation }>` per plugin                                         | "The repository must be built at least once" is a Rust and TypeScript accident, not a universal. Each plugin self-checks its own prerequisites and returns structured guidance. **Never `command -v`** — MEASURED in `docs/design.md` §10, `rust-analyzer` resolves on PATH on the author's machine but is a `rustup` proxy that loops and is not installed. A name resolving proves nothing. |
+| 6   | roots returned language-neutrally: `(contract_id, version, service, operation, direction, node_id, confidence)` | `impl XServer for T` with CamelCase-to-snake_case binding is 100% tonic-specific. Nothing trait-shaped or impl-shaped may reach the waist. See ADR-0007 for why `version` is in this tuple.                                                                                                                                                                                                   |
 
 Field 3 is the load-bearing one. It is what allows the waist to stay uncommitted on which
 analysis technology any given language uses.
@@ -54,14 +54,14 @@ rather than scattered across plans.
 
 The four instances, which are the argument:
 
-| # | field | defect | fix |
-|---|---|---|---|
-| 1 | `confidence: f32` on `Root` | A bare float invites the failure `docs/design.md` §5 indicts — MEASURED, `code_graph` produced 59 `CALLS` edges at confidence 0.55 with two or three candidate targets. A number in place of a reason. | `RootBinding::{ Bound, Unbound { reason } }` |
-| 2 | sentinel `Span { 0, 0 }` on `Symbol` | Indistinguishable from a real offset 0. A plugin that did not know was lying in a way nothing downstream could detect. | absence must be sayable |
-| 3 | defaulted `PositionEncoding` on a renderer | Proposed as a provided-method default and refused. A default *is* a value, and a meaningless value is indistinguishable downstream from a meant one. | `Renderer` does not extend `Plugin` |
-| 4 | `Option<SourceRange>` | The correction to (2), wrong in the opposite direction: it discarded the **file**, which a plugin always knows, along with the **span**, which it may not. | `SourceRange { file, span: Option<Span> }` |
+| #   | field                                      | defect                                                                                                                                                                                                 | fix                                          |
+| --- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| 1   | `confidence: f32` on `Root`                | A bare float invites the failure `docs/design.md` §5 indicts — MEASURED, `code_graph` produced 59 `CALLS` edges at confidence 0.55 with two or three candidate targets. A number in place of a reason. | `RootBinding::{ Bound, Unbound { reason } }` |
+| 2   | sentinel `Span { 0, 0 }` on `Symbol`       | Indistinguishable from a real offset 0. A plugin that did not know was lying in a way nothing downstream could detect.                                                                                 | absence must be sayable                      |
+| 3   | defaulted `PositionEncoding` on a renderer | Proposed as a provided-method default and refused. A default _is_ a value, and a meaningless value is indistinguishable downstream from a meant one.                                                   | `Renderer` does not extend `Plugin`          |
+| 4   | `Option<SourceRange>`                      | The correction to (2), wrong in the opposite direction: it discarded the **file**, which a plugin always knows, along with the **span**, which it may not.                                             | `SourceRange { file, span: Option<Span> }`   |
 
-**Instance 4 carries the non-obvious half, because it is the failure mode of *fixing* the
+**Instance 4 carries the non-obvious half, because it is the failure mode of _fixing_ the
 first three.** Widening optionality destroys information as surely as a sentinel invents
 it. A type that cannot express a fact the plugin holds is exactly as dishonest as one that
 fabricates a fact the plugin lacks. Both yield an artifact that misrepresents what was

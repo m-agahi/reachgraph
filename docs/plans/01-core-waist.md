@@ -201,7 +201,7 @@ pub struct UnboundRoot {
 }
 ```
 
-`Coverage` (plan-00 §2) stays as it is: it is one provider's claim about what *it* looked
+`Coverage` (plan-00 §2) stays as it is: it is one provider's claim about what _it_ looked
 at. `IndexCoverage` is the aggregate. Two types, because a provider cannot know what the
 other providers did, and the artifact needs the union.
 
@@ -211,9 +211,9 @@ Plan-05 §9.2 needs module parent links for Cytoscape's compound nodes — the n
 most of why ADR-0006 chose that renderer. The links come from two fields that already
 exist, and **no `Symbol::module` field is added**:
 
-| level | source | Rust | Go | Java |
-|---|---|---|---|---|
-| outer box | `Node::unit` | crate | package | source root |
+| level       | source                   | Rust                                       | Go            | Java                    |
+| ----------- | ------------------------ | ------------------------------------------ | ------------- | ----------------------- |
+| outer box   | `Node::unit`             | crate                                      | package       | source root             |
 | inner boxes | the `container_of` chain | `impl` block, then module, then crate root | receiver type | class, then inner class |
 
 `Symbol::container` is "the enclosing definition", and a module is an enclosing
@@ -224,7 +224,7 @@ Two consequences, both worth stating because they are easy to get wrong later:
 
 - **The waist still never interprets `container`.** `container_of` follows a `NodeId`
   by equality, which is a lookup, not a reading. Deciding that an ancestor is a module
-  rather than a class is done by the *renderer*, from `kind` and `raw_kind` — and a
+  rather than a class is done by the _renderer_, from `kind` and `raw_kind` — and a
   renderer is a plugin, so plugin-side interpretation is exactly where that belongs
   (plan-00 §2, §8 question 3).
 - **It is an obligation on the language plugins.** `lang-rust` must emit
@@ -282,7 +282,7 @@ without collision, because `plugin` is half the key.
 The opacity rule is testable, not merely stated. See `node_id_opacity_bijective_rename`
 (§10): apply any bijection to every `raw` string in a fixture and the built graph must be
 isomorphic, with identical reachable sets, identical classification and identical shard
-*contents*. Only the shard *filenames* may differ, and §8.1 explains why they must not.
+_contents_. Only the shard _filenames_ may differ, and §8.1 explains why they must not.
 
 `NodeIdx` never crosses the crate boundary and is never serialized. Indices are assignment
 order, which is provider iteration order, which is not stable across runs — serializing
@@ -305,7 +305,7 @@ impl Index {
 Order:
 
 1. **Preflight.** Call `preflight(root)` on every detected plugin. Any `Failed { reason,
-   remediation }` aborts with both strings surfaced. ADR-0003 field 5 — never
+remediation }` aborts with both strings surfaced. ADR-0003 field 5 — never
    `command -v`; MEASURED, design.md §10, a name resolving on PATH proves nothing.
 2. **Partition by capability.** From `provides()`: symbol providers, edge providers, root
    providers, classifiers.
@@ -319,10 +319,10 @@ Order:
 
 **An unpaired provider is a hard error, not a warning.**
 
-| case | result |
-|---|---|
+| case                                   | result                               |
+| -------------------------------------- | ------------------------------------ |
 | declares `Symbols`, no `Edges` partner | `BuildError::UnpairedSymbolProvider` |
-| declares `Edges`, no `Symbols` partner | `BuildError::UnpairedEdgeProvider` |
+| declares `Edges`, no `Symbols` partner | `BuildError::UnpairedEdgeProvider`   |
 
 The first is the load-bearing one. A symbol provider with no edges yields a graph of
 isolated nodes, so **every symbol is unreachable** — and the tool then reports an entire
@@ -393,10 +393,10 @@ fixture corpus contains one (plan-02).
 
 Two different depths, and conflating them is a correctness bug:
 
-| computation | depth |
-|---|---|
-| shard contents | `opts.depth`, default 3 (design.md §7) |
-| the unreachable complement | **always unlimited** |
+| computation                | depth                                  |
+| -------------------------- | -------------------------------------- |
+| shard contents             | `opts.depth`, default 3 (design.md §7) |
+| the unreachable complement | **always unlimited**                   |
 
 A depth-limited complement reports everything past depth 3 as unreachable. That is a
 guaranteed false positive on every deep call chain, and it is the one failure design.md §8
@@ -422,7 +422,7 @@ that by guessing. It annotates:
 
 - Every unresolved edge is carried into the shard of the root that reaches its source,
   with its `candidates` list intact.
-- Any node appearing as a `candidate` of an unresolved edge whose *source* is reachable is
+- Any node appearing as a `candidate` of an unresolved edge whose _source_ is reachable is
   marked `possibly_reachable_via_unresolved: true` in `unreachable.json`.
 
 **That annotation must never remove a node from the list.** It is a caveat attached to a
@@ -440,7 +440,7 @@ claim that code it never indexed is unreachable — it has no evidence either wa
 
 **No category filtering happens here.** Every indexed node that is not reached is listed,
 with its `category` attached, plus `counts_by_category` for a consumer that wants a
-summary. Filtering stdlib or third-party out of the list is a *view* decision and belongs
+summary. Filtering stdlib or third-party out of the list is a _view_ decision and belongs
 to the renderer. The waist reports; it does not suppress. This also keeps
 `category: None` nodes — those whose plugin registered no classifier — from vanishing
 without trace.
@@ -475,12 +475,12 @@ pub struct VersionReach {
 
 ADR-0007's three-way table is the two-key instance of this:
 
-| bits set | class | ADR-0007 meaning |
-|---|---|---|
-| `{v1}` | `v1_only` | dies when `v1` is sunset |
-| `{v2}` | `v2_only` | new path |
-| `{v1, v2}` | `both` | shared; survives the sunset |
-| `{}` | not reached | belongs to the unreachable complement |
+| bits set   | class       | ADR-0007 meaning                      |
+| ---------- | ----------- | ------------------------------------- |
+| `{v1}`     | `v1_only`   | dies when `v1` is sunset              |
+| `{v2}`     | `v2_only`   | new path                              |
+| `{v1, v2}` | `both`      | shared; survives the sunset           |
+| `{}`       | not reached | belongs to the unreachable complement |
 
 `class` is emitted only when the contract has exactly two version keys. With three or
 more, `reached_by` is the truth and a two-valued label would be a lie. This generalises
@@ -491,11 +491,11 @@ table is the presentation.
 
 ADR-0007's binding requirements, mapped to files:
 
-| requirement | where |
-|---|---|
-| the index records which contracts and versions it covered | `IndexCoverage`, in `unreachable.json` and `endpoints.json` |
-| the wording rule | `unreachable.json.claim`, verbatim, as data |
-| `unreachable.json` carries the covered-root set | `IndexCoverage::{versions, roots_total, roots_bound, unbound_roots}` |
+| requirement                                               | where                                                                |
+| --------------------------------------------------------- | -------------------------------------------------------------------- |
+| the index records which contracts and versions it covered | `IndexCoverage`, in `unreachable.json` and `endpoints.json`          |
+| the wording rule                                          | `unreachable.json.claim`, verbatim, as data                          |
+| `unreachable.json` carries the covered-root set           | `IndexCoverage::{versions, roots_total, roots_bound, unbound_roots}` |
 
 ### 6.4 The wording rule is data, not prose
 
@@ -525,7 +525,7 @@ The core holds `&dyn Classifier` and calls `classify(path, unit)`. It never call
 language crate function, never matches on `PluginId` to pick behaviour, and never contains
 a path prefix. Prefixes — `src/`, `target/*/out/`, `/nix/store/…rust-lib-src/`, the cargo
 registry path — live in the plugin, because design.md §8 MEASURED that they are
-Rust-specific *and* machine-specific.
+Rust-specific _and_ machine-specific.
 
 Selection: the classifier with the same `PluginId` as the node's plugin. No classifier for
 that plugin → `category: None`, plus `BuildDiagnostic::NoClassifierForPlugin`. Not an
@@ -536,10 +536,10 @@ provide it.
 (plan-00 §2), so **every indexed node has a real path** and classification is always at
 file granularity. `SourceRange::span` may be `None`; classification never reads the span.
 
-| node | path |
-|---|---|
-| indexed | `symbol.range.file` — always present |
-| external (`symbol: None`) | none; `category: None` |
+| node                      | path                                 |
+| ------------------------- | ------------------------------------ |
+| indexed                   | `symbol.range.file` — always present |
+| external (`symbol: None`) | none; `category: None`               |
 
 The `unit.root` fallback and its `BuildDiagnostic::ClassifiedByUnitRoot` are **gone**.
 They existed only while `Symbol::range` was `Option<SourceRange>`, which forced a plugin
@@ -590,7 +590,7 @@ The core's response is **terminal, not deleted**:
 
 **This terminates the walk in v0.1, and the limitation is declared in the artifact.**
 `IndexCoverage::traversal_terminal_categories` records which categories stopped the walk
-(§3). A consumer can therefore see that a first-party function reached only *through* a
+(§3). A consumer can therefore see that a first-party function reached only _through_ a
 third-party combinator — passed as a callback and invoked from inside it — was not
 followed, and may appear in the unreachable set for that reason alone.
 
@@ -659,8 +659,11 @@ distinguishing the entries.
   "schema_version": 1,
   "generated_by": { "tool": "reachgraph", "version": "0.1.0" },
   "plugins": [
-    { "id": "fixture", "position_encoding": "utf8_bytes",
-      "capabilities": ["symbols", "edges", "roots", "classify"] }
+    {
+      "id": "fixture",
+      "position_encoding": "utf8_bytes",
+      "capabilities": ["symbols", "edges", "roots", "classify"]
+    }
   ],
   "operations": [
     {
@@ -672,8 +675,10 @@ distinguishing the entries.
         {
           "version": "v1",
           "join_key": "acme.task.v1.TaskService/CreateTask",
-          "binding": { "state": "bound",
-                       "node": { "plugin": "fixture", "raw": "fn:handlers_v1/create_task" } },
+          "binding": {
+            "state": "bound",
+            "node": { "plugin": "fixture", "raw": "fn:handlers_v1/create_task" }
+          },
           "shard": "graph/acme.task__v1__TaskService__CreateTask__served__1f0c3a9b2d4e5f60.json",
           "node_count": 12,
           "frontier_count": 2
@@ -681,8 +686,10 @@ distinguishing the entries.
         {
           "version": "v2",
           "join_key": "acme.task.v2.TaskService/CreateTask",
-          "binding": { "state": "bound",
-                       "node": { "plugin": "fixture", "raw": "fn:handlers_v2/create_task" } },
+          "binding": {
+            "state": "bound",
+            "node": { "plugin": "fixture", "raw": "fn:handlers_v2/create_task" }
+          },
           "shard": "graph/acme.task__v2__TaskService__CreateTask__served__7b81ee40c1a25d33.json",
           "node_count": 9,
           "frontier_count": 0
@@ -698,8 +705,10 @@ distinguishing the entries.
         {
           "version": null,
           "join_key": "acme.legacy.LegacyService/Ping",
-          "binding": { "state": "unbound",
-                       "reason": "no symbol named `ping` with a container implementing LegacyService" },
+          "binding": {
+            "state": "unbound",
+            "reason": "no symbol named `ping` with a container implementing LegacyService"
+          },
           "shard": null,
           "node_count": 0,
           "frontier_count": 0
@@ -727,13 +736,18 @@ not an absence.
     "operation": "CreateTask",
     "direction": "served",
     "join_key": "acme.task.v1.TaskService/CreateTask",
-    "binding": { "state": "bound",
-                 "node": { "plugin": "fixture", "raw": "fn:handlers_v1/create_task" } }
+    "binding": {
+      "state": "bound",
+      "node": { "plugin": "fixture", "raw": "fn:handlers_v1/create_task" }
+    }
   },
   "depth_limit": 3,
   "plugins": [
-    { "id": "fixture", "position_encoding": "utf8_bytes",
-      "capabilities": ["symbols", "edges", "roots", "classify"] }
+    {
+      "id": "fixture",
+      "position_encoding": "utf8_bytes",
+      "capabilities": ["symbols", "edges", "roots", "classify"]
+    }
   ],
   "nodes": [
     {
@@ -742,11 +756,17 @@ not an absence.
       "name": "create_task",
       "kind": "method",
       "raw_kind": "fn",
-      "range": { "file": "src/service/handlers_v1.rs", "span": { "start": 412, "end": 933 } },
+      "range": {
+        "file": "src/service/handlers_v1.rs",
+        "span": { "start": 412, "end": 933 }
+      },
       "doc": "Create a task.",
       "doc_format": "markdown",
       "is_test": false,
-      "container": { "plugin": "fixture", "raw": "impl:TaskService_for_TaskServer" },
+      "container": {
+        "plugin": "fixture",
+        "raw": "impl:TaskService_for_TaskServer"
+      },
       "unit": "unit:app",
       "category": "first_party",
       "depth": 0,
@@ -769,13 +789,18 @@ not an absence.
       "frontier": true
     },
     {
-      "id": { "plugin": "fixture", "raw": "reg:tonic-0.12/Status::invalid_argument" },
+      "id": {
+        "plugin": "fixture",
+        "raw": "reg:tonic-0.12/Status::invalid_argument"
+      },
       "indexed": true,
       "name": "invalid_argument",
       "kind": "method",
       "raw_kind": "fn",
-      "range": { "file": "/home/u/.cargo/registry/src/…/tonic-0.12/src/status.rs",
-                 "span": null },
+      "range": {
+        "file": "/home/u/.cargo/registry/src/…/tonic-0.12/src/status.rs",
+        "span": null
+      },
       "doc": null,
       "doc_format": "plain",
       "is_test": false,
@@ -797,25 +822,39 @@ not an absence.
   "edges": [
     {
       "from": { "plugin": "fixture", "raw": "fn:handlers_v1/create_task" },
-      "to": { "state": "resolved",
-              "node": { "plugin": "fixture", "raw": "fn:db/insert_task" } },
-      "call_site": { "file": "src/service/handlers_v1.rs", "span": { "start": 604, "end": 631 } },
-      "provenance": { "plugin": "fixture", "engine": "reachgraph-fixture 0.1.0" },
+      "to": {
+        "state": "resolved",
+        "node": { "plugin": "fixture", "raw": "fn:db/insert_task" }
+      },
+      "call_site": {
+        "file": "src/service/handlers_v1.rs",
+        "span": { "start": 604, "end": 631 }
+      },
+      "provenance": {
+        "plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0"
+      },
       "inference_mode": "resolved"
     },
     {
       "from": { "plugin": "fixture", "raw": "fn:db/insert_task" },
-      "to": { "state": "unresolved", "name": "execute",
-              "candidates": [
-                { "plugin": "fixture", "raw": "fn:db/execute_pg" },
-                { "plugin": "fixture", "raw": "fn:db/execute_sqlite" }
-              ] },
+      "to": {
+        "state": "unresolved",
+        "name": "execute",
+        "candidates": [
+          { "plugin": "fixture", "raw": "fn:db/execute_pg" },
+          { "plugin": "fixture", "raw": "fn:db/execute_sqlite" }
+        ]
+      },
       "call_site": null,
-      "provenance": { "plugin": "fixture", "engine": "reachgraph-fixture 0.1.0" },
+      "provenance": {
+        "plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0"
+      },
       "inference_mode": "lexical"
     }
   ],
-  "frontier": [ { "plugin": "fixture", "raw": "fn:db/insert_task" } ],
+  "frontier": [{ "plugin": "fixture", "raw": "fn:db/insert_task" }],
   "stats": { "node_count": 12, "edge_count": 15, "unresolved_edge_count": 1 }
 }
 ```
@@ -830,7 +869,7 @@ Notes on the schema, each load-bearing:
   `category: null` — unclassifiable, because classification needs a path (§7.0). The
   third node above is one, and it is meant to look rare.
 - The second and third nodes are different things and the schema keeps them apart: the
-  second is a third-party symbol the provider *located* (it has a file, so it classifies
+  second is a third-party symbol the provider _located_ (it has a file, so it classifies
   and terminates traversal per §7.1); the third is a target nothing could locate at all.
 - `range.file` is always present on an indexed node. `range.span` is nullable, and `null`
   is a plugin saying it has no offset for this symbol (plan-00 §2). It is not the same as
@@ -852,13 +891,22 @@ Notes on the schema, each load-bearing:
   "claim": "not reachable from any endpoint version in this index",
   "coverage": {
     "contracts": ["acme.task", "acme.legacy"],
-    "versions": [["acme.task", "v1"], ["acme.task", "v2"], ["acme.legacy", null]],
+    "versions": [
+      ["acme.task", "v1"],
+      ["acme.task", "v2"],
+      ["acme.legacy", null]
+    ],
     "roots_total": 7,
     "roots_bound": 6,
     "unbound_roots": [
-      { "contract": "acme.legacy", "version": null, "service": "LegacyService",
-        "operation": "Ping", "direction": "served",
-        "reason": "no symbol named `ping` with a container implementing LegacyService" }
+      {
+        "contract": "acme.legacy",
+        "version": null,
+        "service": "LegacyService",
+        "operation": "Ping",
+        "direction": "served",
+        "reason": "no symbol named `ping` with a container implementing LegacyService"
+      }
     ],
     "units_indexed": ["unit:app", "unit:db"],
     "plugins": ["fixture"],
@@ -876,8 +924,12 @@ Notes on the schema, each load-bearing:
     }
   ],
   "counts_by_category": {
-    "first_party": 3, "generated": 1, "workspace_sibling": 0,
-    "third_party": 0, "stdlib": 0, "unclassified": 2
+    "first_party": 3,
+    "generated": 1,
+    "workspace_sibling": 0,
+    "third_party": 0,
+    "stdlib": 0,
+    "unclassified": 2
   },
   "unresolved_edge_count": 1
 }
@@ -891,12 +943,22 @@ node from `nodes` (§5.3). `unclassified` counts `category: None`.
 ```json
 {
   "schema_version": 1,
-  "version_keys": [["acme.task", "v1"], ["acme.task", "v2"], ["acme.legacy", null]],
+  "version_keys": [
+    ["acme.task", "v1"],
+    ["acme.task", "v2"],
+    ["acme.legacy", null]
+  ],
   "nodes": [
-    { "id": { "plugin": "fixture", "raw": "fn:handlers_v1/create_task" },
-      "reached_by": [0], "class": null },
-    { "id": { "plugin": "fixture", "raw": "fn:db/insert_task" },
-      "reached_by": [0, 1], "class": "both" }
+    {
+      "id": { "plugin": "fixture", "raw": "fn:handlers_v1/create_task" },
+      "reached_by": [0],
+      "class": null
+    },
+    {
+      "id": { "plugin": "fixture", "raw": "fn:db/insert_task" },
+      "reached_by": [0, 1],
+      "class": "both"
+    }
   ],
   "summary_by_contract": {
     "acme.task": { "v1_only": 4, "v2_only": 6, "both": 9 }
@@ -928,7 +990,7 @@ same way. What would settle it: time `Index::build` over one real repository wit
 
 Nothing in this plan rests on it. The batch-build shape (§4.2) follows from ADR-0006's
 artifact decision, not from a walk cost, and §7.1's traversal-termination choice is
-explicitly made *because* the cost is unmeasured rather than because it is known to be
+explicitly made _because_ the cost is unmeasured rather than because it is known to be
 high.
 
 **ADR-0006's conclusion is unaffected.** The static-artifact decision stands on three
@@ -936,7 +998,7 @@ independent grounds it states separately: the output is a CI-generated artefact,
 stateful server would hold no state worth holding because the graph is regenerated per
 run, and a call graph of private source is a disclosure that must not acquire a hosted
 delivery path. A faster walk changes none of those. It would only reopen the question of
-whether an *interactive* mode is possible later — a different question, and not one this
+whether an _interactive_ mode is possible later — a different question, and not one this
 plan answers.
 
 ---
@@ -945,13 +1007,13 @@ plan answers.
 
 ADR-0003 field 4, traced through every stage:
 
-| stage | what must survive |
-|---|---|
-| `EdgeProvider::edges_in` | `provenance`, `inference_mode` as given |
-| graph assembly | both copied onto `EdgeRecord`; neither defaulted, neither normalised |
-| traversal | traversal reads `from`/`to` only; it never filters on `inference_mode` |
-| shard extraction | both copied onto the emitted `Edge` |
-| JSON | both required fields |
+| stage                    | what must survive                                                      |
+| ------------------------ | ---------------------------------------------------------------------- |
+| `EdgeProvider::edges_in` | `provenance`, `inference_mode` as given                                |
+| graph assembly           | both copied onto `EdgeRecord`; neither defaulted, neither normalised   |
+| traversal                | traversal reads `from`/`to` only; it never filters on `inference_mode` |
+| shard extraction         | both copied onto the emitted `Edge`                                    |
+| JSON                     | both required fields                                                   |
 
 Traversal deliberately does **not** filter on `inference_mode`. A `Lexical` or
 `TypeInferred` edge is a weaker claim, not a false one, and dropping it from reachability
@@ -972,18 +1034,18 @@ goes red, what the red state is, and what turns it green.
 
 ### 10.1 Build order
 
-| # | red test | red state | green when |
-|---|---|---|---|
-| 1 | `pairing_by_plugin_id` | `Index::build` does not exist | symbols + edges collected per unit from a paired fixture plugin |
-| 2 | `unpaired_symbol_provider_is_a_build_error` | build returns `Ok` | `BuildError::UnpairedSymbolProvider` |
-| 3 | `reachable_set_from_single_root` | no traversal | BFS over the interned graph |
-| 4 | `cycle_terminates` | hangs or overflows | visited set checked before enqueue |
-| 5 | `depth_limit_marks_frontier_not_leaf` | `frontier` empty | depth-limited BFS records the frontier |
-| 6 | `unreachable_is_complement_over_all_roots` | no complement | union over bound roots, subtracted |
-| 7 | `unreachable_uses_unlimited_depth` | deep nodes listed as unreachable | complement computed with `depth: None` |
-| 8 | `v1_and_v2_are_separate_roots` | one merged root set | roots partitioned by version key |
-| 9 | `shard_round_trip_serde` | no shard type | `Shard` serialises and deserialises identically |
-| 10 | `unreachable_claim_string_is_verbatim` | no claim field | the sentence emitted as data |
+| #   | red test                                    | red state                        | green when                                                      |
+| --- | ------------------------------------------- | -------------------------------- | --------------------------------------------------------------- |
+| 1   | `pairing_by_plugin_id`                      | `Index::build` does not exist    | symbols + edges collected per unit from a paired fixture plugin |
+| 2   | `unpaired_symbol_provider_is_a_build_error` | build returns `Ok`               | `BuildError::UnpairedSymbolProvider`                            |
+| 3   | `reachable_set_from_single_root`            | no traversal                     | BFS over the interned graph                                     |
+| 4   | `cycle_terminates`                          | hangs or overflows               | visited set checked before enqueue                              |
+| 5   | `depth_limit_marks_frontier_not_leaf`       | `frontier` empty                 | depth-limited BFS records the frontier                          |
+| 6   | `unreachable_is_complement_over_all_roots`  | no complement                    | union over bound roots, subtracted                              |
+| 7   | `unreachable_uses_unlimited_depth`          | deep nodes listed as unreachable | complement computed with `depth: None`                          |
+| 8   | `v1_and_v2_are_separate_roots`              | one merged root set              | roots partitioned by version key                                |
+| 9   | `shard_round_trip_serde`                    | no shard type                    | `Shard` serialises and deserialises identically                 |
+| 10  | `unreachable_claim_string_is_verbatim`      | no claim field                   | the sentence emitted as data                                    |
 
 Steps 1–3 are the spine. Everything in §10.2 hangs off a graph that builds and a BFS that
 runs, so nothing else can go red usefully before step 3 is green.
@@ -992,120 +1054,120 @@ runs, so nothing else can go red usefully before step 3 is green.
 
 **Provider pairing and assembly**
 
-| test | discharges |
-|---|---|
-| `unpaired_edge_provider_is_a_build_error` | §4.2 |
-| `preflight_failure_aborts_with_remediation` | ADR-0003 field 5 |
-| `duplicate_symbol_takes_first_and_diagnoses` | §4.3 |
-| `provider_error_aborts_unless_allow_partial` | §4.2, open Q3 |
-| `allow_partial_sets_coverage_partial_flag` | ADR-0007 |
+| test                                         | discharges       |
+| -------------------------------------------- | ---------------- |
+| `unpaired_edge_provider_is_a_build_error`    | §4.2             |
+| `preflight_failure_aborts_with_remediation`  | ADR-0003 field 5 |
+| `duplicate_symbol_takes_first_and_diagnoses` | §4.3             |
+| `provider_error_aborts_unless_allow_partial` | §4.2, open Q3    |
+| `allow_partial_sets_coverage_partial_flag`   | ADR-0007         |
 
 **`NodeId` opacity (ADR-0003 field 3)**
 
-| test | discharges |
-|---|---|
-| `node_id_opacity_bijective_rename` | rename every `raw` by a bijection; graph isomorphic, reachable sets and categories identical. Property test over a generated corpus, `proptest`. |
-| `node_id_with_structured_looking_raw_is_not_parsed` | raw strings containing `::`, `/`, `#`, `{`, and a JSON document, all treated as bytes |
-| `same_raw_different_plugin_does_not_collide` | `PluginId` is half the key |
+| test                                                | discharges                                                                                                                                       |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `node_id_opacity_bijective_rename`                  | rename every `raw` by a bijection; graph isomorphic, reachable sets and categories identical. Property test over a generated corpus, `proptest`. |
+| `node_id_with_structured_looking_raw_is_not_parsed` | raw strings containing `::`, `/`, `#`, `{`, and a JSON document, all treated as bytes                                                            |
+| `same_raw_different_plugin_does_not_collide`        | `PluginId` is half the key                                                                                                                       |
 
 **`Symbol::container` (plan-00 §8 question 3)**
 
-| test | discharges |
-|---|---|
-| `container_is_copied_not_interpreted` | round-trips verbatim into shard JSON |
-| `container_does_not_create_edge` | edge count unchanged by adding containers |
-| `container_does_not_affect_reachability` | reachable set identical with and without |
-| `dangling_container_is_not_an_error` | container names an unindexed id; build succeeds |
+| test                                     | discharges                                      |
+| ---------------------------------------- | ----------------------------------------------- |
+| `container_is_copied_not_interpreted`    | round-trips verbatim into shard JSON            |
+| `container_does_not_create_edge`         | edge count unchanged by adding containers       |
+| `container_does_not_affect_reachability` | reachable set identical with and without        |
+| `dangling_container_is_not_an_error`     | container names an unindexed id; build succeeds |
 
 **Roots and binding (ADR-0007, plan-00 §8 question 5)**
 
-| test | discharges |
-|---|---|
-| `unbound_root_is_reported_not_dropped` | plan-00 §6.2 |
-| `unbound_root_has_no_shard_but_is_in_endpoints` | §4.4 |
-| `unbound_root_recorded_in_coverage` | `IndexCoverage::unbound_roots` |
-| `root_bound_to_unindexed_node_is_diagnosed_not_dropped` | §4.4 |
-| `root_has_no_confidence_field` | schema assertion: no float anywhere in `Root` |
-| `join_key_is_stored_never_parsed` | a `join_key` containing `/`, `.`, `v9` and a whole URL round-trips byte-identically; no version, service or operation is recovered from it |
-| `join_key_does_not_affect_root_identity` | two roots differing only in `join_key` remain two roots; identity is the tuple (ADR-0007) |
+| test                                                    | discharges                                                                                                                                 |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unbound_root_is_reported_not_dropped`                  | plan-00 §6.2                                                                                                                               |
+| `unbound_root_has_no_shard_but_is_in_endpoints`         | §4.4                                                                                                                                       |
+| `unbound_root_recorded_in_coverage`                     | `IndexCoverage::unbound_roots`                                                                                                             |
+| `root_bound_to_unindexed_node_is_diagnosed_not_dropped` | §4.4                                                                                                                                       |
+| `root_has_no_confidence_field`                          | schema assertion: no float anywhere in `Root`                                                                                              |
+| `join_key_is_stored_never_parsed`                       | a `join_key` containing `/`, `.`, `v9` and a whole URL round-trips byte-identically; no version, service or operation is recovered from it |
+| `join_key_does_not_affect_root_identity`                | two roots differing only in `join_key` remain two roots; identity is the tuple (ADR-0007)                                                  |
 
 **Versions (ADR-0007)**
 
-| test | discharges |
-|---|---|
-| `missing_version_stays_none` | plan-00 §6.2 |
-| `unversioned_and_versioned_roots_do_not_merge` | §6.1 |
-| `v1_only_v2_only_both_classification` | ADR-0007's three-way table |
-| `three_versions_emit_reached_by_not_class` | §6.2 |
-| `version_key_none_is_not_serialized_as_v1` | round-trip `null` |
-| `missing_version_key_is_a_parse_error` | §3 serde rules — a *missing* key, not `null` |
-| `unreachable_records_root_coverage` | plan-00 §6.2 |
-| `coverage_lists_every_version_key_including_none` | ADR-0007 requirement 1 |
+| test                                              | discharges                                   |
+| ------------------------------------------------- | -------------------------------------------- |
+| `missing_version_stays_none`                      | plan-00 §6.2                                 |
+| `unversioned_and_versioned_roots_do_not_merge`    | §6.1                                         |
+| `v1_only_v2_only_both_classification`             | ADR-0007's three-way table                   |
+| `three_versions_emit_reached_by_not_class`        | §6.2                                         |
+| `version_key_none_is_not_serialized_as_v1`        | round-trip `null`                            |
+| `missing_version_key_is_a_parse_error`            | §3 serde rules — a _missing_ key, not `null` |
+| `unreachable_records_root_coverage`               | plan-00 §6.2                                 |
+| `coverage_lists_every_version_key_including_none` | ADR-0007 requirement 1                       |
 
 **Unresolved edges (design.md §8)**
 
-| test | discharges |
-|---|---|
-| `unresolved_edge_is_not_silently_resolved` | plan-00 §6.2 |
-| `unresolved_edge_does_not_propagate_reachability` | §5.3 |
-| `unresolved_candidate_flagged_possibly_reachable` | §5.3 |
+| test                                                 | discharges                   |
+| ---------------------------------------------------- | ---------------------------- |
+| `unresolved_edge_is_not_silently_resolved`           | plan-00 §6.2                 |
+| `unresolved_edge_does_not_propagate_reachability`    | §5.3                         |
+| `unresolved_candidate_flagged_possibly_reachable`    | §5.3                         |
 | `possibly_reachable_annotation_does_not_filter_list` | §5.3 — the node stays listed |
 
 **Provenance (ADR-0003 field 4)**
 
-| test | discharges |
-|---|---|
-| `edge_provenance_survives_graph_build` | plan-00 §6.2 |
-| `edge_inference_mode_survives_shard_emit` | §9 |
-| `traversal_does_not_filter_on_inference_mode` | §9 |
+| test                                          | discharges   |
+| --------------------------------------------- | ------------ |
+| `edge_provenance_survives_graph_build`        | plan-00 §6.2 |
+| `edge_inference_mode_survives_shard_emit`     | §9           |
+| `traversal_does_not_filter_on_inference_mode` | §9           |
 
 **Classification (ADR-0002, ADR-0008 leak 8)**
 
-| test | discharges |
-|---|---|
-| `classifier_invoked_through_trait_object` | spy classifier records every call; plan-00 §3.5 |
-| `no_classifier_yields_none_not_error` | §7 |
-| `classification_is_per_file_within_one_unit` | §7 — `src/` and `vendor/` in **one** unit classify differently. This is the test that would have failed under the removed `unit.root` fallback. |
-| `spanless_symbol_still_classifies` | §7 — `span: None` changes nothing; classification reads `range.file` only |
-| `external_node_is_unclassified` | §7.0 — `category: None`, and it terminates nothing |
-| `core_contains_no_path_prefix` | source assertion: no `src/`, `target/`, `/nix/store`, `node_modules`, `vendor/` literal in the crate |
-| `third_party_node_is_terminal_not_deleted` | §7.1 |
-| `terminal_categories_recorded_in_coverage` | §7.1 — the declared limitation reaches `unreachable.json`, not a release note |
+| test                                         | discharges                                                                                                                                             |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `classifier_invoked_through_trait_object`    | spy classifier records every call; plan-00 §3.5                                                                                                        |
+| `no_classifier_yields_none_not_error`        | §7                                                                                                                                                     |
+| `classification_is_per_file_within_one_unit` | §7 — `src/` and `vendor/` in **one** unit classify differently. This is the test that would have failed under the removed `unit.root` fallback.        |
+| `spanless_symbol_still_classifies`           | §7 — `span: None` changes nothing; classification reads `range.file` only                                                                              |
+| `external_node_is_unclassified`              | §7.0 — `category: None`, and it terminates nothing                                                                                                     |
+| `core_contains_no_path_prefix`               | source assertion: no `src/`, `target/`, `/nix/store`, `node_modules`, `vendor/` literal in the crate                                                   |
+| `third_party_node_is_terminal_not_deleted`   | §7.1                                                                                                                                                   |
+| `terminal_categories_recorded_in_coverage`   | §7.1 — the declared limitation reaches `unreachable.json`, not a release note                                                                          |
 | `position_encoding_is_per_plugin_not_global` | ADR-0003 field 2 / ADR-0008 leak 3 — a two-plugin build emits two different encodings in the shard `plugins` table, each matching its declaring plugin |
 
 **Sharding and the artifact (ADR-0006)**
 
-| test | discharges |
-|---|---|
-| `one_shard_per_bound_root` | ADR-0006 |
-| `shard_slug_collision_free_none_vs_none_string` | §8.1 |
-| `shard_slug_is_not_derived_from_node_id` | §8.1 / ADR-0003 field 3 |
-| `two_roots_sharing_a_node_both_include_it` | shards overlap; neither is authoritative |
-| `external_target_is_leaf_and_never_unreachable` | §4.3, §5.4 |
-| `unreachable_lists_every_indexed_unreached_node` | §5.4 — no category suppression |
-| `unclassified_nodes_are_counted_not_dropped` | §5.4 |
-| `word_dead_appears_nowhere_in_crate` | §6.4 — grep over `reachgraph-core/src` |
-| `artifact_is_deterministic_across_runs` | sort orders fixed; ADR-0006 regenerates rather than mutates |
+| test                                             | discharges                                                  |
+| ------------------------------------------------ | ----------------------------------------------------------- |
+| `one_shard_per_bound_root`                       | ADR-0006                                                    |
+| `shard_slug_collision_free_none_vs_none_string`  | §8.1                                                        |
+| `shard_slug_is_not_derived_from_node_id`         | §8.1 / ADR-0003 field 3                                     |
+| `two_roots_sharing_a_node_both_include_it`       | shards overlap; neither is authoritative                    |
+| `external_target_is_leaf_and_never_unreachable`  | §4.3, §5.4                                                  |
+| `unreachable_lists_every_indexed_unreached_node` | §5.4 — no category suppression                              |
+| `unclassified_nodes_are_counted_not_dropped`     | §5.4                                                        |
+| `word_dead_appears_nowhere_in_crate`             | §6.4 — grep over `reachgraph-core/src`                      |
+| `artifact_is_deterministic_across_runs`          | sort orders fixed; ADR-0006 regenerates rather than mutates |
 
 **`GraphView` accessors (§3, §3.1 — plan-05 §9.2 is the consumer)**
 
-| test | discharges |
-|---|---|
-| `depth_of_matches_bfs_distance` | the depth slider's input is correct at every node |
-| `index_wide_view_has_null_depth` | `depth: None` outside a shard; no fake zero |
-| `container_chain_nests_and_terminates` | nesting for compound boxes |
-| `container_chain_survives_a_containment_cycle` | a plugin-emitted loop truncates, never hangs |
-| `container_of_unindexed_container_is_none` | §4.3's dangling case, through the accessor |
-| `nodes_in_unit_excludes_externals` | an external node belongs to no unit |
-| `view_index_rebuilds_after_deserialization` | a shard read from disk behaves like one just built |
-| `span_none_is_not_offset_zero` | plan-00 §2 — `null` and `{0,0}` stay distinguishable in the type and the artifact, and `range.file` survives in both |
+| test                                           | discharges                                                                                                           |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `depth_of_matches_bfs_distance`                | the depth slider's input is correct at every node                                                                    |
+| `index_wide_view_has_null_depth`               | `depth: None` outside a shard; no fake zero                                                                          |
+| `container_chain_nests_and_terminates`         | nesting for compound boxes                                                                                           |
+| `container_chain_survives_a_containment_cycle` | a plugin-emitted loop truncates, never hangs                                                                         |
+| `container_of_unindexed_container_is_none`     | §4.3's dangling case, through the accessor                                                                           |
+| `nodes_in_unit_excludes_externals`             | an external node belongs to no unit                                                                                  |
+| `view_index_rebuilds_after_deserialization`    | a shard read from disk behaves like one just built                                                                   |
+| `span_none_is_not_offset_zero`                 | plan-00 §2 — `null` and `{0,0}` stay distinguishable in the type and the artifact, and `range.file` survives in both |
 
 **Registry and detection (plan-00 §5)**
 
-| test | discharges |
-|---|---|
+| test                                 | discharges                                                   |
+| ------------------------------------ | ------------------------------------------------------------ |
 | `empty_marker_files_matches_nothing` | plan-00 §2 — a plugin declaring no markers is never detected |
-| `fixture_is_never_detected` | plan-00 §5 — only `select` or an explicit slice returns it |
+| `fixture_is_never_detected`          | plan-00 §5 — only `select` or an explicit slice returns it   |
 
 **Golden artifacts**
 
@@ -1160,7 +1222,7 @@ the resolution recorded in place rather than deleted.
    apply to an in-process engine.
 
    So the choice is a known limitation against an unmeasured risk, and the known one wins
-   *provided it is visible*. `IndexCoverage::traversal_terminal_categories` puts it in
+   _provided it is visible_. `IndexCoverage::traversal_terminal_categories` puts it in
    `unreachable.json`. MEASURED, design.md §8: the noise argument for terminating is
    strong on its own — `pin`, `map`, `trim`, `Ok`, `Err`, `Some` among 20 edges from one
    handler.
@@ -1204,7 +1266,7 @@ the resolution recorded in place rather than deleted.
    outside the units enumerated, so that stdlib and third-party targets are classifiable
    and therefore traversal-terminal (§7.1). MEASURED, design.md §8, the paths were all
    present in the probe output — `/nix/store/…rust-lib-src/`, the cargo registry, the
-   generated `out/` directory. What is *not* measured is what it costs `ra_ap` to supply
+   generated `out/` directory. What is _not_ measured is what it costs `ra_ap` to supply
    them in bulk, or whether a symbol outside the loaded workspace is reliably locatable at
    all. If it is not, `ThirdParty` termination silently stops working and the edge-noise
    problem design.md §8 MEASURED returns. **Belongs to plan-03**, and it is a correctness

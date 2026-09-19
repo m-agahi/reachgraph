@@ -19,16 +19,16 @@ This document is kept as a **dated research record (2026-09-17)**. It is not mai
 the current design. Its evidence appendix and prior-art survey remain the provenance trail
 for claims the ADRs now assert, which is why nothing below has been deleted or rewritten.
 
-| section | status |
-|---|---|
-| §1 thesis, §2 outputs, §3 architecture | stand |
-| §4 contract join | join key superseded by ADR-0007 — the key is the **fully-qualified** operation name, not the bare RPC name |
-| §5 data sources | superseded by ADR-0004 and ADR-0005 |
-| §6 prior art | stands — research record |
-| §7 v0.1 scope | superseded by ADR-0006 and ADR-0008 |
-| §8 failure modes | the two hard prerequisites superseded by ADR-0001; the wording rule extended by ADR-0007 |
-| §9 open questions | largely answered — see [`docs/adr/README.md`](adr/README.md) |
-| §10 evidence appendix | stands — provenance |
+| section                                | status                                                                                                     |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| §1 thesis, §2 outputs, §3 architecture | stand                                                                                                      |
+| §4 contract join                       | join key superseded by ADR-0007 — the key is the **fully-qualified** operation name, not the bare RPC name |
+| §5 data sources                        | superseded by ADR-0004 and ADR-0005                                                                        |
+| §6 prior art                           | stands — research record                                                                                   |
+| §7 v0.1 scope                          | superseded by ADR-0006 and ADR-0008                                                                        |
+| §8 failure modes                       | the two hard prerequisites superseded by ADR-0001; the wording rule extended by ADR-0007                   |
+| §9 open questions                      | largely answered — see [`docs/adr/README.md`](adr/README.md)                                               |
+| §10 evidence appendix                  | stands — provenance                                                                                        |
 
 ---
 
@@ -40,8 +40,8 @@ for claims the ADRs now assert, which is why nothing below has been deleted or r
 That second half is the novel part. A language server can follow calls until the process
 edge and then stops — it has no idea what is on the other side of a socket. But a gRPC
 client stub carries an **RPC name that is written down in a `.proto` file**, and the
-service that answers it carries the same name. So crossing the boundary is a *join on a
-declared contract*, not a heuristic, not a guess, and not an inference.
+service that answers it carries the same name. So crossing the boundary is a _join on a
+declared contract_, not a heuristic, not a guess, and not an inference.
 
 Same shape generalises: OpenAPI `operationId`, GraphQL field names, message topic names.
 Anywhere two services agree on a schema, the schema **is** the edge.
@@ -51,12 +51,12 @@ Anywhere two services agree on a schema, the schema **is** the edge.
 Four outputs, all off **one graph plus one root set**. That is the economy of the design:
 nothing below needs a second analysis.
 
-| output | derivation |
-|---|---|
-| request flow | reachable set from one endpoint, depth-limited |
-| cross-repo links | client-stub leaves joined to served handlers by RPC name |
-| unreachable code | complement of the reachable set over all endpoints |
-| refactoring signals | per-symbol metrics attached to nodes |
+| output              | derivation                                               |
+| ------------------- | -------------------------------------------------------- |
+| request flow        | reachable set from one endpoint, depth-limited           |
+| cross-repo links    | client-stub leaves joined to served handlers by RPC name |
+| unreachable code    | complement of the reachable set over all endpoints       |
+| refactoring signals | per-symbol metrics attached to nodes                     |
 
 ## 3. Architecture
 
@@ -97,7 +97,7 @@ The mechanism, concretely, for gRPC:
 2. For a **served** RPC: tonic generates a trait per service, and the `impl XServer for T`
    block's method names bind 1:1 to RPC names under CamelCase→snake_case. Those methods
    are the **roots**.
-3. For a **consumed** RPC: the chain terminates in a generated *client stub*. That stub's
+3. For a **consumed** RPC: the chain terminates in a generated _client stub_. That stub's
    RPC name is the **join key** to the other repo's served root.
 4. Stitch per-repo graphs by matching join keys. No multi-repo index, no `CROSS_*` edge
    type, no shared symbol space required.
@@ -106,7 +106,7 @@ The mechanism, concretely, for gRPC:
 six handlers in `task/src/service/handlers.rs`.
 
 **MEASURED**: `callHierarchy/outgoingCalls` from `handlers.rs::create_task` resolved
-through `#[tonic::async_trait]` (a proc macro) *and* a nested `async move` closure, and
+through `#[tonic::async_trait]` (a proc macro) _and_ a nested `async move` closure, and
 returned the client-stub leaf with its full signature:
 
 ```
@@ -123,25 +123,25 @@ That single line is the whole cross-repo mechanism working.
 `src/service/handlers.rs` and a `MockDb` in `tests/service.rs`. Disambiguate on the
 enclosing `impl` block's trait, or on `is_test`. Never on the name.
 
-**Direction matters.** `task` *serves* `taskapi.proto` and *consumes* `task.proto`. The
+**Direction matters.** `task` _serves_ `taskapi.proto` and _consumes_ `task.proto`. The
 five `TaskDbService` RPCs join onto nothing in `task/src/` — correctly, because `task` is
 that service's client. A join without direction silently produces phantom roots.
 
 ## 5. Data sources — what supplies what
 
-| need | source | status |
-|---|---|---|
-| symbols, ranges, qualified names | SCIP (`rust-analyzer scip`) | **MEASURED** available; the `scip` subcommand exists |
-| **doc comments, full text** | SCIP `SymbolInformation.documentation` | INFERRED complete; rust-analyzer passes `ide::Documentation` through unmodified. **Not yet verified on this estate — see §9.** |
-| call edges | LSP `callHierarchy/outgoingCalls` | **MEASURED** working, including through proc macros |
-| endpoints | contract files (`.proto` today) | new work, small |
-| **metrics (complexity, cognitive, loop depth)** | neither SCIP nor LSP carries these | **GAP — needs a third ingestion.** See §9. |
+| need                                            | source                                 | status                                                                                                                         |
+| ----------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| symbols, ranges, qualified names                | SCIP (`rust-analyzer scip`)            | **MEASURED** available; the `scip` subcommand exists                                                                           |
+| **doc comments, full text**                     | SCIP `SymbolInformation.documentation` | INFERRED complete; rust-analyzer passes `ide::Documentation` through unmodified. **Not yet verified on this estate — see §9.** |
+| call edges                                      | LSP `callHierarchy/outgoingCalls`      | **MEASURED** working, including through proc macros                                                                            |
+| endpoints                                       | contract files (`.proto` today)        | new work, small                                                                                                                |
+| **metrics (complexity, cognitive, loop depth)** | neither SCIP nor LSP carries these     | **GAP — needs a third ingestion.** See §9.                                                                                     |
 
 ### Why not the obvious alternatives
 
 **SCIP alone cannot give call edges.** MEASURED from its schema: `Relationship` carries
 only `is_reference`, `is_implementation`, `is_type_definition`, `is_definition`. A call
-graph from SCIP must be *inferred* by finding a reference occurrence and asking which
+graph from SCIP must be _inferred_ by finding a reference occurrence and asking which
 definition's range encloses it. `Beneficial-AI-Foundation/scip-callgraph` already
 implements exactly that inference — read it rather than rewriting it. But prefer
 `callHierarchy` where a language server is available, because it answers the question
@@ -164,19 +164,19 @@ produces, and it is not good enough to label a box with.
 
 ## 6. Prior art
 
-| tool | state | why it doesn't do this |
-|---|---|---|
-| **crabviz** | MEASURED alive — 1414 stars, AGPL-3.0, pushed 2026-09-01 | Closest by far. LSP-based, real call edges, collapse-by-file, saves HTML/SVG. But `add_file(path, symbols: Vec<DocumentSymbol>)` is its ingestion unit, and **LSP's `DocumentSymbol` has no documentation field** — only `detail`, the signature. No endpoint concept anywhere in `GraphGenerator`. VS Code only (`editors/` contains one directory, `code`). Single workspace. |
-| Sourcetrail | archived 2021-12-13 | never supported Rust; died of per-language indexer maintenance |
-| CodeSee | dead, acquired 2024 | — |
-| Structure101 | absorbed into Sonar | no Rust |
-| Sourcegraph | enterprise-only | renders no diagram at all |
-| CodeQL | Rust GA Oct 2025 | free licence forbids private repos and CI |
-| Understand | alive | Rust is syntax highlighting only, not analysis |
-| CodeScene | alive, real Rust support | draws hotspots and change coupling, no call graph |
-| Nx / Turborepo | alive | stop at the package node |
-| Jaeger / Tempo service graphs | alive | service-to-service only; no function-level aggregation exists in any OTel UI |
-| Swimm, CodeBoarding, GitDiagram | alive | descriptions are LLM-authored by vendor documentation |
+| tool                            | state                                                    | why it doesn't do this                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **crabviz**                     | MEASURED alive — 1414 stars, AGPL-3.0, pushed 2026-09-01 | Closest by far. LSP-based, real call edges, collapse-by-file, saves HTML/SVG. But `add_file(path, symbols: Vec<DocumentSymbol>)` is its ingestion unit, and **LSP's `DocumentSymbol` has no documentation field** — only `detail`, the signature. No endpoint concept anywhere in `GraphGenerator`. VS Code only (`editors/` contains one directory, `code`). Single workspace. |
+| Sourcetrail                     | archived 2021-12-13                                      | never supported Rust; died of per-language indexer maintenance                                                                                                                                                                                                                                                                                                                  |
+| CodeSee                         | dead, acquired 2024                                      | —                                                                                                                                                                                                                                                                                                                                                                               |
+| Structure101                    | absorbed into Sonar                                      | no Rust                                                                                                                                                                                                                                                                                                                                                                         |
+| Sourcegraph                     | enterprise-only                                          | renders no diagram at all                                                                                                                                                                                                                                                                                                                                                       |
+| CodeQL                          | Rust GA Oct 2025                                         | free licence forbids private repos and CI                                                                                                                                                                                                                                                                                                                                       |
+| Understand                      | alive                                                    | Rust is syntax highlighting only, not analysis                                                                                                                                                                                                                                                                                                                                  |
+| CodeScene                       | alive, real Rust support                                 | draws hotspots and change coupling, no call graph                                                                                                                                                                                                                                                                                                                               |
+| Nx / Turborepo                  | alive                                                    | stop at the package node                                                                                                                                                                                                                                                                                                                                                        |
+| Jaeger / Tempo service graphs   | alive                                                    | service-to-service only; no function-level aggregation exists in any OTel UI                                                                                                                                                                                                                                                                                                    |
+| Swimm, CodeBoarding, GitDiagram | alive                                                    | descriptions are LLM-authored by vendor documentation                                                                                                                                                                                                                                                                                                                           |
 
 **crabviz is ~60–70% of this.** Its architecture is sound and worth copying. Its licence is
 AGPL-3.0, so deriving from the code makes this AGPL too; and its README states it "is
@@ -193,6 +193,7 @@ One command. One repo. One HTML file. No server, no account, no config file, no 
 ```
 
 Ships:
+
 - Rust only.
 - Roots from `.proto` served RPCs, joined to the tonic trait impl.
 - Nodes = functions and methods, labelled with **name + first line of doc comment**.
@@ -201,6 +202,7 @@ Ships:
 - An "unreachable from any endpoint" list, as **text**, with the §8 wording rule.
 
 Explicitly **not** in v0.1:
+
 - The multi-language SCIP abstraction. One language first.
 - Cross-repo stitching. The mechanism is proven; shipping it is v0.2.
 - Metrics. Unsourced as of §5 — do not ship a number whose provenance is unsettled.
@@ -222,7 +224,7 @@ adapter for layout. AntV G6 is the strongest alternative and has better native n
 (Combos with built-in expand/collapse). Sigma.js is out — no compound-node support.
 Mermaid is out on the one hard number in the survey: default `maxEdges` is **500**.
 
-Scale, reframed: ~4000 symbols estate-wide is the *index* size, but drill-down means a few
+Scale, reframed: ~4000 symbols estate-wide is the _index_ size, but drill-down means a few
 hundred on screen. So choose the renderer on compound-node support and zero-build
 bundling, not on raw throughput.
 
@@ -232,7 +234,7 @@ bundling, not on raw throughput.
 calls through generics. The probe crossed the boundaries in one handler; expect gaps
 elsewhere. Show a missing edge as missing; never infer one to fill a hole.
 
-**Async is not execution order.** The visible call tree is the *static* structure. A
+**Async is not execution order.** The visible call tree is the _static_ structure. A
 diagram of it is not a sequence diagram and must not be labelled as one.
 
 **"Dead code" is the most dangerous claim in the tool.** In Rust, false positives come
@@ -247,16 +249,17 @@ one failure that permanently destroys trust.
 **Edge noise.** MEASURED: 20 edges from one handler, of which the useful ones separate by
 **path prefix alone** — no name matching, no confidence score:
 
-| verdict | prefix | examples |
-|---|---|---|
-| first-party | `src/` | `tel_scope`, `passthrough` |
-| cross-repo leaf | `target/debug/build/*/out/` | the generated client stub |
-| in-org crate boundary | the org's own crates | `Call::start`, `call.run` |
-| drop | `/nix/store/…rust-lib-src/` | `pin`, `map`, `trim`, `Ok`, `Err`, `Some` |
-| drop | third-party crates | `into_inner`, `invalid_argument`, `encoded_len` |
+| verdict               | prefix                      | examples                                        |
+| --------------------- | --------------------------- | ----------------------------------------------- |
+| first-party           | `src/`                      | `tel_scope`, `passthrough`                      |
+| cross-repo leaf       | `target/debug/build/*/out/` | the generated client stub                       |
+| in-org crate boundary | the org's own crates        | `Call::start`, `call.run`                       |
+| drop                  | `/nix/store/…rust-lib-src/` | `pin`, `map`, `trim`, `Ok`, `Err`, `Some`       |
+| drop                  | third-party crates          | `into_inner`, `invalid_argument`, `encoded_len` |
 
 **Two hard prerequisites.**
-1. `rust-analyzer` must be present. MEASURED: it is *not* installed here — the binary on
+
+1. `rust-analyzer` must be present. MEASURED: it is _not_ installed here — the binary on
    PATH is `rustup` proxying to itself and looping. A bare `command -v rust-analyzer`
    **succeeds and proves nothing**. The tool must verify the server actually responds to
    `initialize`, not that a name resolves.

@@ -31,25 +31,25 @@ printing a column of dashes for it would re-suggest the shape the contract delet
 
 ### 1.1 Flags on the analyse path
 
-| flag | default | notes |
-|---|---|---|
-| `-o, --out <dir>` | `./out` | ADR-0006's directory. Refuses to write into a non-empty directory it did not create unless `--force`; the output is regenerated, so a stale mixed directory is a real hazard. |
-| `--renderer <id>` | `html` | Looked up by `PluginId` in the **renderer registry**, which is separate from the analysis registry (§3.1). Not a match on a hardcoded list, and not a capability filter — `Capability::Render` no longer exists. |
-| `--inline-threshold <bytes>` | `5MiB` | plan-05 §6.5. |
-| `--no-overview` | off | Suppress `overview.html` even under threshold. |
-| `--contract <path>` | repeatable | Files or directories the roots plugin should read. **Load-bearing for ADR-0007**: omitting a contract silently narrows coverage, which is the partial-index problem. §6 states what the CLI does about it. |
-| `--json` | off | Machine-readable run report on stdout. |
-| `-q, --quiet` / `-v, --verbose` | — | Progress verbosity (§5). |
+| flag                            | default    | notes                                                                                                                                                                                                            |
+| ------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-o, --out <dir>`               | `./out`    | ADR-0006's directory. Refuses to write into a non-empty directory it did not create unless `--force`; the output is regenerated, so a stale mixed directory is a real hazard.                                    |
+| `--renderer <id>`               | `html`     | Looked up by `PluginId` in the **renderer registry**, which is separate from the analysis registry (§3.1). Not a match on a hardcoded list, and not a capability filter — `Capability::Render` no longer exists. |
+| `--inline-threshold <bytes>`    | `5MiB`     | plan-05 §6.5.                                                                                                                                                                                                    |
+| `--no-overview`                 | off        | Suppress `overview.html` even under threshold.                                                                                                                                                                   |
+| `--contract <path>`             | repeatable | Files or directories the roots plugin should read. **Load-bearing for ADR-0007**: omitting a contract silently narrows coverage, which is the partial-index problem. §6 states what the CLI does about it.       |
+| `--json`                        | off        | Machine-readable run report on stdout.                                                                                                                                                                           |
+| `-q, --quiet` / `-v, --verbose` | —          | Progress verbosity (§5).                                                                                                                                                                                         |
 
 ### 1.2 Exit codes
 
-| code | meaning |
-|---|---|
-| 0 | analysis completed, artifact written |
-| 1 | internal error |
-| 2 | preflight failed (§4) |
-| 3 | no plugin detected for this repository (§3) |
-| 4 | bad usage |
+| code | meaning                                     |
+| ---- | ------------------------------------------- |
+| 0    | analysis completed, artifact written        |
+| 1    | internal error                              |
+| 2    | preflight failed (§4)                       |
+| 3    | no plugin detected for this repository (§3) |
+| 4    | bad usage                                   |
 
 **There is no exit code for "unreachable code was found", and no `--fail-on-unreachable`
 flag.** This is deliberate and is not a v0.1 omission to be filled in later.
@@ -74,7 +74,7 @@ templating, no analysis.** ADR-0006 specifies it, and specifies why it exists:
 That is the entire reason. It is a convenience, not architecture, and it locks in nothing.
 
 **It must never grow into an application server.** ADR-0006's rationale is not a taste
-preference: *the graph cannot be computed at request time.* MEASURED (design.md §8), the
+preference: _the graph cannot be computed at request time._ MEASURED (design.md §8), the
 whole-repository walk is an offline cost — see §5 for the precise label — so a server could
 only ever serve data that was precomputed by the analyse path. A stateful server would add
 a store, an API, a deployment and an authentication problem for private code, and would buy
@@ -83,10 +83,10 @@ in scope.
 
 ### 2.1 Crate choice
 
-| candidate | assessment |
-|---|---|
-| **`tower-http::ServeDir`** — *chosen* | "Roughly 20 lines" is only true with `ServeDir`, because `ServeDir` **is** the traversal-safe path resolution plus the MIME table. It handles `..`, percent-encoded traversal, symlink escape and content types as library code that other people test. |
-| `tiny_http` — fallback | Smaller tree, no async runtime. But path resolution, the MIME table and the traversal guard become ours to write, and that is the one place a hand-rolled static server earns a CVE — in a tool whose entire risk surface is leaking a map of private source. Not 20 lines. |
+| candidate                             | assessment                                                                                                                                                                                                                                                                  |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`tower-http::ServeDir`** — _chosen_ | "Roughly 20 lines" is only true with `ServeDir`, because `ServeDir` **is** the traversal-safe path resolution plus the MIME table. It handles `..`, percent-encoded traversal, symlink escape and content types as library code that other people test.                     |
+| `tiny_http` — fallback                | Smaller tree, no async runtime. But path resolution, the MIME table and the traversal guard become ours to write, and that is the one place a hand-rolled static server earns a CVE — in a tool whose entire risk surface is leaking a map of private source. Not 20 lines. |
 
 The "keep async out of the binary" argument for `tiny_http` is weak against an INFERRED
 40–80 MB `ra_ap_*` baseline (ADR-0001), so the dependency-tree argument does not carry the
@@ -122,11 +122,11 @@ can forward a port deliberately, which is a decision they make and we do not mak
 Stating "it must not grow" in prose is exactly the good-intentions policy ADR-0008 rejects.
 Three checks:
 
-| check | mechanism |
-|---|---|
-| `serve_module_has_no_graph_imports` | source-level: `src/serve.rs` contains no `use reachgraph_core` and no `use reachgraph_plugin_api` |
-| `serve_module_stays_small` | `src/serve.rs` is under **40 lines**. A blunt ratchet, deliberately. The number is **calibrated to the `ServeDir` design** of §2.1 — argument parsing, one `ServeDir`, one bind, one printed URL — and 40 is already generous for that. It is the check that fires when someone adds a query endpoint, and the person raising it has to justify it in review. A switch to `tiny_http` must re-justify this ceiling explicitly rather than silently inherit headroom, since hand-rolled resolution legitimately needs more lines and that is itself an argument against the switch. |
-| `serve_has_no_outbound_http_client` | `cargo metadata`: `reqwest`, `ureq` and `curl` are absent from the cli's dependency graph. **Asserted by name, not as "no HTTP crate"** — with `ServeDir` chosen, hyper is in the tree and serves the inbound role. |
+| check                               | mechanism                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `serve_module_has_no_graph_imports` | source-level: `src/serve.rs` contains no `use reachgraph_core` and no `use reachgraph_plugin_api`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `serve_module_stays_small`          | `src/serve.rs` is under **40 lines**. A blunt ratchet, deliberately. The number is **calibrated to the `ServeDir` design** of §2.1 — argument parsing, one `ServeDir`, one bind, one printed URL — and 40 is already generous for that. It is the check that fires when someone adds a query endpoint, and the person raising it has to justify it in review. A switch to `tiny_http` must re-justify this ceiling explicitly rather than silently inherit headroom, since hand-rolled resolution legitimately needs more lines and that is itself an argument against the switch. |
+| `serve_has_no_outbound_http_client` | `cargo metadata`: `reqwest`, `ureq` and `curl` are absent from the cli's dependency graph. **Asserted by name, not as "no HTTP crate"** — with `ServeDir` chosen, hyper is in the tree and serves the inbound role.                                                                                                                                                                                                                                                                                                                                                                |
 
 Traversal tests, required regardless of which crate is chosen: `../../etc/passwd`,
 `%2e%2e%2f`, an absolute path, a symlink inside `out/` pointing outside it, and a path with
@@ -239,14 +239,14 @@ Rules:
 - **Never `command -v`.** MEASURED (design.md §10): `rust-analyzer` resolves on PATH on
   the author's machine and is a `rustup` proxy that loops and is not installed. A name
   resolving proves nothing. Under ADR-0001 there is no external binary to probe in the
-  first place — the checks are about the *repository* (has it been built, does the
+  first place — the checks are about the _repository_ (has it been built, does the
   contract file exist, is the workspace manifest readable), not about the environment.
 - **Structured, not a string.** `Preflight::Failed { reason, remediation }` (plan-00 §2).
   Both fields are rendered; a check that can fail without saying what to do about it is
   not finished.
 - **Failure is fatal — exit 2.** No `--skip-preflight`. design.md §8's second hard
   prerequisite — the repository must have been built at least once — is MEASURED to change
-  the *content* of the answer, not merely its completeness: the cross-repo client-stub edge
+  the _content_ of the answer, not merely its completeness: the cross-repo client-stub edge
   resolved only because `target/debug/build/…/out/` existed. Proceeding past that produces
   a graph that is quietly wrong, and quietly-wrong output is what ADR-0007 and design.md §8
   are both organised against.
@@ -307,7 +307,7 @@ README says:
 - Progress goes to **stderr**. Artifacts go to disk. `--json` machine output goes to
   **stdout**. A pipeline consuming stdout must never receive a spinner.
 - **Phase-based with real counts, never a synthetic percentage.** `symbols: 1240 in 18
-  units` is true; `62%` is invented, because the denominator is unknown until the phase
+units` is true; `62%` is invented, because the denominator is unknown until the phase
   ends. Phases: detect → preflight → discover units → symbols → edges → roots → graph
   build → reachability → render.
 - Non-TTY (CI) → one line per phase completion, no redraw, no ANSI. `-q` suppresses all but
@@ -381,35 +381,35 @@ a temporary directory — no real repository, no indexing, no timing.
 
 ### 7.1 Command surface
 
-| test | asserts |
-|---|---|
-| `bare_path_analyses_to_default_out` | `reachgraph <repo>` writes `./out` with ADR-0006's layout |
-| `out_flag_redirects_output` | `-o` honoured; no write outside it |
-| `refuses_dirty_out_without_force` | pre-existing foreign files → error, no partial write |
-| `no_fail_on_unreachable_flag_exists` | §1.2: the flag is absent, and a run producing unreachable symbols exits 0 |
-| `exit_3_when_no_plugin_detects` | empty directory → exit 3, message lists each plugin's markers |
-| `json_report_is_on_stdout_progress_on_stderr` | streams do not cross |
+| test                                          | asserts                                                                   |
+| --------------------------------------------- | ------------------------------------------------------------------------- |
+| `bare_path_analyses_to_default_out`           | `reachgraph <repo>` writes `./out` with ADR-0006's layout                 |
+| `out_flag_redirects_output`                   | `-o` honoured; no write outside it                                        |
+| `refuses_dirty_out_without_force`             | pre-existing foreign files → error, no partial write                      |
+| `no_fail_on_unreachable_flag_exists`          | §1.2: the flag is absent, and a run producing unreachable symbols exits 0 |
+| `exit_3_when_no_plugin_detects`               | empty directory → exit 3, message lists each plugin's markers             |
+| `json_report_is_on_stdout_progress_on_stderr` | streams do not cross                                                      |
 
 ### 7.2 Registry and neutrality
 
-| test | asserts |
-|---|---|
-| `registry_has_no_language_branch` | §3.2, with the narrow token list |
-| `renderer_selected_by_id` | a second registered renderer is selectable by `--renderer <id>` with no cli change; an unknown id is a usage error that lists the registered ids |
-| `detect_never_returns_a_renderer` | `Registry::detect` on any fixture repository yields no renderer — enforced by type (plan-00 §3.6), asserted so a future merge of the two registries fails here first |
-| `fixture_absent_from_release_build` | the `fixture` feature is off in the release profile |
-| `ra_ap_not_a_direct_cli_dependency` | §3, direct-only assertion |
-| `no_process_spawn_in_workspace` | §4.1, scoped |
+| test                                | asserts                                                                                                                                                              |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `registry_has_no_language_branch`   | §3.2, with the narrow token list                                                                                                                                     |
+| `renderer_selected_by_id`           | a second registered renderer is selectable by `--renderer <id>` with no cli change; an unknown id is a usage error that lists the registered ids                     |
+| `detect_never_returns_a_renderer`   | `Registry::detect` on any fixture repository yields no renderer — enforced by type (plan-00 §3.6), asserted so a future merge of the two registries fails here first |
+| `fixture_absent_from_release_build` | the `fixture` feature is off in the release profile                                                                                                                  |
+| `ra_ap_not_a_direct_cli_dependency` | §3, direct-only assertion                                                                                                                                            |
+| `no_process_spawn_in_workspace`     | §4.1, scoped                                                                                                                                                         |
 
 ### 7.3 Preflight
 
-| test | asserts |
-|---|---|
-| `preflight_failure_exits_2` | fixture plugin returning `Failed` → exit 2, nothing analysed, nothing written |
-| `preflight_prints_reason_and_remediation` | both fields reach the output |
-| `preflight_subcommand_does_not_analyse` | no artifact written |
-| `preflight_json_is_machine_readable` | parses, one entry per analysis plugin |
-| `preflight_has_no_renderer_row` | §4: the selected renderer produces no row, not an `ok` row |
+| test                                      | asserts                                                                       |
+| ----------------------------------------- | ----------------------------------------------------------------------------- |
+| `preflight_failure_exits_2`               | fixture plugin returning `Failed` → exit 2, nothing analysed, nothing written |
+| `preflight_prints_reason_and_remediation` | both fields reach the output                                                  |
+| `preflight_subcommand_does_not_analyse`   | no artifact written                                                           |
+| `preflight_json_is_machine_readable`      | parses, one entry per analysis plugin                                         |
+| `preflight_has_no_renderer_row`           | §4: the selected renderer produces no row, not an `ok` row                    |
 
 ### 7.4 `serve`
 
@@ -419,25 +419,25 @@ regression guards, and they are exactly what makes a later switch to `tiny_http`
 day the crate changes, these are already written and the hand-rolled path has to satisfy
 them. Nobody reading this table should go looking for our traversal code; there is none.
 
-| test | asserts |
-|---|---|
-| `serve_returns_shard_json` | `GET /graph/<slug>.json` → 200, correct content type |
-| `serve_rejects_parent_traversal` | `../../etc/passwd`, `%2e%2e%2f`, absolute path, embedded NUL → 4xx, no filesystem path in the body |
-| `serve_rejects_symlink_escape` | symlink inside `out/` pointing outside → refused |
-| `serve_binds_loopback_only` | listener address is `127.0.0.1`; no flag can change it |
-| `serve_module_has_no_graph_imports` | §2.3 |
-| `serve_module_stays_small` | §2.3, the 120-line ratchet |
-| `serve_has_no_outbound_http_client` | §2.3, by crate name |
+| test                                | asserts                                                                                            |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `serve_returns_shard_json`          | `GET /graph/<slug>.json` → 200, correct content type                                               |
+| `serve_rejects_parent_traversal`    | `../../etc/passwd`, `%2e%2e%2f`, absolute path, embedded NUL → 4xx, no filesystem path in the body |
+| `serve_rejects_symlink_escape`      | symlink inside `out/` pointing outside → refused                                                   |
+| `serve_binds_loopback_only`         | listener address is `127.0.0.1`; no flag can change it                                             |
+| `serve_module_has_no_graph_imports` | §2.3                                                                                               |
+| `serve_module_stays_small`          | §2.3, the 120-line ratchet                                                                         |
+| `serve_has_no_outbound_http_client` | §2.3, by crate name                                                                                |
 
 ### 7.5 Report and privacy
 
-| test | asserts |
-|---|---|
-| `report_uses_binding_wording` | the unreachable line is ADR-0007's exact sentence |
-| `cli_authors_no_dead_wording` | scoped as plan-05 §8.4 — this crate's own literals only |
-| `privacy_note_printed_on_success` | present on stderr after a successful run |
-| `report_surfaces_unbound_roots` | `roots N (M unbound)` when the fixture supplies an `Unbound` root |
-| `report_surfaces_unresolved_edges` | count matches the fixture's unresolved targets |
+| test                               | asserts                                                           |
+| ---------------------------------- | ----------------------------------------------------------------- |
+| `report_uses_binding_wording`      | the unreachable line is ADR-0007's exact sentence                 |
+| `cli_authors_no_dead_wording`      | scoped as plan-05 §8.4 — this crate's own literals only           |
+| `privacy_note_printed_on_success`  | present on stderr after a successful run                          |
+| `report_surfaces_unbound_roots`    | `roots N (M unbound)` when the fixture supplies an `Unbound` root |
+| `report_surfaces_unresolved_edges` | count matches the fixture's unresolved targets                    |
 
 ### 7.6 Not tested here
 

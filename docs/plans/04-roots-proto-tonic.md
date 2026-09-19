@@ -31,18 +31,18 @@ Everything in this plan is grounded in one repository, re-measured 2026-09-17 at
 `/home/max/git/yadgarhq/task`. It is **evidence, not a fixture** — no test in this plan may
 depend on it (§12).
 
-| # | measurement | location |
-|---|---|---|
-| M1 | six RPCs in `taskapi.proto` join onto six handlers, CamelCase→snake_case, 6/6 | `proto/yadgar/taskapi/v1/taskapi.proto:107-113`; `src/service/handlers.rs:22,84,136,184,284,389` |
-| M2 | the served trait impl | `src/service/handlers.rs:21` — `impl TaskService for Task` |
-| M3 | the trait is imported from a generated `*_server` module | `src/service/handlers.rs:17` — `use crate::pb::yadgar::taskapi::v1::task_service_server::TaskService;` |
-| M4 | `task` **consumes** a second contract | `proto/yadgar/task/v1/task.proto:117-122`, service `TaskDbService`, five RPCs |
-| M5 | the consumed client is constructed in first-party source | `src/service.rs:6,54,60` — `TaskDbServiceClient::new(channel)` |
-| M6 | `create_task` exists twice; the second is a test double implementing the **consumed** service | `tests/service.rs:145` — `impl TaskDbService for MockDb`, `:146` — `async fn create_task` |
-| M7 | **`CreateTask` exists in both contracts** | `yadgar.taskapi.v1.TaskService/CreateTask` (served) and `yadgar.task.v1.TaskDbService/CreateTask` (consumed) |
-| M8 | the generated stub carries the fully-qualified name as a literal | `target/debug/build/yadgar-task-237f97ebf0e011bd/out/yadgar.taskapi.v1.rs:241,507` — `"/yadgar.taskapi.v1.TaskService/CreateTask"`; `:812` — `pub const SERVICE_NAME: &str = "yadgar.taskapi.v1.TaskService";` |
-| M9 | build.rs requests **both** halves for **both** contracts | `build.rs` — `tonic_prost_build::configure().build_server(true).build_client(true)` |
-| M10 | both server and client modules are generated for both protos | `out/yadgar.taskapi.v1.rs:131,373`; `out/yadgar.task.v1.rs:149,362` |
+| #   | measurement                                                                                   | location                                                                                                                                                                                                       |
+| --- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1  | six RPCs in `taskapi.proto` join onto six handlers, CamelCase→snake_case, 6/6                 | `proto/yadgar/taskapi/v1/taskapi.proto:107-113`; `src/service/handlers.rs:22,84,136,184,284,389`                                                                                                               |
+| M2  | the served trait impl                                                                         | `src/service/handlers.rs:21` — `impl TaskService for Task`                                                                                                                                                     |
+| M3  | the trait is imported from a generated `*_server` module                                      | `src/service/handlers.rs:17` — `use crate::pb::yadgar::taskapi::v1::task_service_server::TaskService;`                                                                                                         |
+| M4  | `task` **consumes** a second contract                                                         | `proto/yadgar/task/v1/task.proto:117-122`, service `TaskDbService`, five RPCs                                                                                                                                  |
+| M5  | the consumed client is constructed in first-party source                                      | `src/service.rs:6,54,60` — `TaskDbServiceClient::new(channel)`                                                                                                                                                 |
+| M6  | `create_task` exists twice; the second is a test double implementing the **consumed** service | `tests/service.rs:145` — `impl TaskDbService for MockDb`, `:146` — `async fn create_task`                                                                                                                      |
+| M7  | **`CreateTask` exists in both contracts**                                                     | `yadgar.taskapi.v1.TaskService/CreateTask` (served) and `yadgar.task.v1.TaskDbService/CreateTask` (consumed)                                                                                                   |
+| M8  | the generated stub carries the fully-qualified name as a literal                              | `target/debug/build/yadgar-task-237f97ebf0e011bd/out/yadgar.taskapi.v1.rs:241,507` — `"/yadgar.taskapi.v1.TaskService/CreateTask"`; `:812` — `pub const SERVICE_NAME: &str = "yadgar.taskapi.v1.TaskService";` |
+| M9  | build.rs requests **both** halves for **both** contracts                                      | `build.rs` — `tonic_prost_build::configure().build_server(true).build_client(true)`                                                                                                                            |
+| M10 | both server and client modules are generated for both protos                                  | `out/yadgar.taskapi.v1.rs:131,373`; `out/yadgar.task.v1.rs:149,362`                                                                                                                                            |
 
 M7 is the sharpest of the ten and §3 is built on it.
 
@@ -56,7 +56,7 @@ fully-qualified join key into `Root::join_key` (§8); handler binding via `conta
 `RootBinding::Unbound { reason }`; `coverage()`; Consumed-direction stubs recorded as
 cross-repo join keys.
 
-**Out:** the cross-repo *join itself* (v0.2 — ADR-0008 scope). OpenAPI, GraphQL, FastAPI,
+**Out:** the cross-repo _join itself_ (v0.2 — ADR-0008 scope). OpenAPI, GraphQL, FastAPI,
 axum. Any language other than Rust. Any reading of `raw_kind` by anything but this crate.
 
 ---
@@ -77,7 +77,7 @@ A bare-name join binds the **consumed** RPC to the **served** handler. That is a
 root: reachability is then computed from an endpoint this service does not serve, and the
 real `TaskDbService` client leaf is attributed to the wrong contract. This is an
 independent proof of the FQN requirement, stronger than the version-bearing-package
-argument alone — the collision here is on the *service*, and it would survive any amount
+argument alone — the collision here is on the _service_, and it would survive any amount
 of version handling.
 
 ### Spelling
@@ -99,7 +99,7 @@ defaulted (§5).
 ADR-0007 writes the example as `yadgar.task.v1.TaskService/CreateTask`. MEASURED (M7, M8):
 that string splices the **consumed** package `yadgar.task.v1` onto the **served** service
 name `TaskService`; neither contract contains it. The served key is
-`yadgar.taskapi.v1.TaskService/CreateTask`. The ADR's *decision* — the join key is the
+`yadgar.taskapi.v1.TaskService/CreateTask`. The ADR's _decision_ — the join key is the
 fully-qualified operation name, never the bare RPC name — is untouched and is what this
 plan implements. The example string was drawn from the generated client stub path
 (`yadgar.task.v1.rs:272`), which is the consumed side. ADR files are not edited; this is
@@ -111,12 +111,12 @@ where the corrected spelling lives.
 
 ### Candidate crates — MEASURED 2026-09-17, crates.io API
 
-| crate | version | SPDX | shape | needs a `protoc` binary? |
-|---|---|---|---|---|
-| `protox-parse` | 0.9.0 | MIT OR Apache-2.0 | parses **one** `.proto` file → `FileDescriptorProto` | **no** — MEASURED: its own lexer (`logos`), and its doc text states it never reads imported files |
-| `protox` | 0.9.1 | MIT OR Apache-2.0 | full pure-Rust protobuf **compiler**; resolves imports → `FileDescriptorSet` | no |
-| `protobuf-parse` | 3.7.2 | MIT | parses `.proto`; offers **either** a pure-Rust parser **or** shelling to `protoc` | only in protoc mode |
-| `prost-reflect` | 0.16.5 | MIT OR Apache-2.0 | reflection over an **existing** `FileDescriptorSet` | n/a — pairs with a parser, does not replace one |
+| crate            | version | SPDX              | shape                                                                             | needs a `protoc` binary?                                                                          |
+| ---------------- | ------- | ----------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `protox-parse`   | 0.9.0   | MIT OR Apache-2.0 | parses **one** `.proto` file → `FileDescriptorProto`                              | **no** — MEASURED: its own lexer (`logos`), and its doc text states it never reads imported files |
+| `protox`         | 0.9.1   | MIT OR Apache-2.0 | full pure-Rust protobuf **compiler**; resolves imports → `FileDescriptorSet`      | no                                                                                                |
+| `protobuf-parse` | 3.7.2   | MIT               | parses `.proto`; offers **either** a pure-Rust parser **or** shelling to `protoc` | only in protoc mode                                                                               |
+| `prost-reflect`  | 0.16.5  | MIT OR Apache-2.0 | reflection over an **existing** `FileDescriptorSet`                               | n/a — pairs with a parser, does not replace one                                                   |
 
 All four are licence-compatible with MIT OR Apache-2.0 (ADR-0001). The discriminating
 column is the last one: ADR-0001 forbids external binaries, so `protobuf-parse` qualifies
@@ -147,7 +147,7 @@ and `method` are structural fields — rather than a bespoke AST. So `(package, 
 rpc)` extraction is field access, not parsing.
 
 **MEASURED: it does not reject a file whose imports cannot be resolved.** Imports are
-recorded as dependency *names* on the descriptor (the crate's own example shows
+recorded as dependency _names_ on the descriptor (the crate's own example shows
 `import "dep.proto";` surfacing as `dependency: vec!["dep.proto".to_owned()]`) and are
 never followed. That is the behaviour this crate needs and the reason the choice holds:
 a roots plugin can read every service declaration in a repository without a single include
@@ -176,7 +176,7 @@ Walk `repo_root` for `**/*.proto`, excluding `target/` and any VCS directory. ME
 tag in `PROTO_VERSION` (`v1.11.2`).
 
 **The vendored contract tag is not the endpoint version.** `v1.11.2` is the version of the
-*bundle of proto files*; `yadgar.taskapi.v1` is the version of the *operation*. ADR-0007's
+_bundle of proto files_; `yadgar.taskapi.v1` is the version of the _operation_. ADR-0007's
 `version` field means the second. Conflating them would put a bundle release number on a
 root and produce exactly the fictional distinction ADR-0007 rejects.
 
@@ -203,7 +203,7 @@ a true statement about the contract.
 
 `ContractId` is the **repo-relative path of the `.proto` file**, e.g.
 `proto/yadgar/taskapi/v1/taskapi.proto` — not the package. Two files may share a package,
-`Coverage` must name what was *examined*, and a file path is what a user passes, excludes
+`Coverage` must name what was _examined_, and a file path is what a user passes, excludes
 or forgets. `Coverage::versions` then carries `(ContractId, Option<String>)` per file
 (§10).
 
@@ -257,7 +257,7 @@ Each clause earns its place:
   direction, not only for handler disambiguation.** It is the difference between the
   measured-correct answer and five fabricated endpoints.
 - **The `<Service>Client` corroboration** — MEASURED (M5): `src/service.rs:6,54,60`. It
-  distinguishes *consumed* from *declared but never used*.
+  distinguishes _consumed_ from _declared but never used_.
 
 ### Reading the client reference, and its limitation
 
@@ -340,7 +340,7 @@ and never resolve a Rust import.
 Parse it **anchored**, never by substring search:
 
 1. require the literal prefix `impl `;
-2. split once on ` for `; no match → inherent impl → not a trait impl → reject;
+2. split once on `for`; no match → inherent impl → not a trait impl → reject;
 3. take the left side, strip generic arguments, take the segment after the last `::`;
 4. compare to the proto service name, exactly.
 
@@ -370,7 +370,7 @@ Do not guess. The generated server trait **contains the emitted method names ver
 trait for a fixture containing acronym RPCs, and a disagreement is a failing test rather
 than a silently unbound root.
 
-Using the generated trait as the *runtime* source of truth is tempting and is deferred —
+Using the generated trait as the _runtime_ source of truth is tempting and is deferred —
 it would make binding depend on the workspace having been built (plan-03 §11 check 2),
 trading a small correctness gain for a large new prerequisite. §13 open question 4.
 
@@ -411,7 +411,7 @@ own tests, which is the only place that can legitimately assert it.
 `operation` instead would render a protobuf-shaped string wherever an operation name is
 shown, and would make the REST case (ADR-0007: version in a path prefix, a header, a query
 parameter, or nowhere) render inconsistently against the gRPC case. `version` and
-`contract` continue to carry the structured facts the waist *does* act on.
+`contract` continue to carry the structured facts the waist _does_ act on.
 
 MEASURED, and it is why the spelling needs no invention: the generated code contains this
 exact string as a literal (M8) — `"/yadgar.taskapi.v1.TaskService/CreateTask"`, modulo the
@@ -430,14 +430,14 @@ An unbound root is **carried into the artifact**, never dropped. ADR-0007's part
 problem is why: a dropped root is indistinguishable from a root that was never looked for,
 and both make live code read as unreachable.
 
-| case | `reason` |
-|---|---|
-| consumed RPC, **the expected case** | `"consumed: no handler expected in this repository; join key `yadgar.task.v1.TaskDbService/CreateTask` resolves in the serving repository"` |
-| consumed RPC, generated client stub absent | `"consumed: generated client stub not found under target/; build the workspace once to make the cross-repo leaf visible"` |
-| served, no candidate of that name | `"served: no non-test method named `create_task` in any `impl TaskService for …`"` |
-| served, candidates exist but none in a matching impl | `"served: 2 methods named `create_task`, none inside an `impl TaskService for …`"` |
-| served, ambiguous | `"ambiguous: 2 non-test candidates named `create_task` in matching impls"` |
-| service with no direction evidence | `"no first-party impl and no client reference for service `X`; direction assumed consumed"` |
+| case                                                 | `reason`                                                                                                                                    |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| consumed RPC, **the expected case**                  | `"consumed: no handler expected in this repository; join key `yadgar.task.v1.TaskDbService/CreateTask` resolves in the serving repository"` |
+| consumed RPC, generated client stub absent           | `"consumed: generated client stub not found under target/; build the workspace once to make the cross-repo leaf visible"`                   |
+| served, no candidate of that name                    | `"served: no non-test method named `create_task`in any`impl TaskService for …`"`                                                            |
+| served, candidates exist but none in a matching impl | `"served: 2 methods named `create_task`, none inside an `impl TaskService for …`"`                                                          |
+| served, ambiguous                                    | `"ambiguous: 2 non-test candidates named `create_task` in matching impls"`                                                                  |
+| service with no direction evidence                   | `"no first-party impl and no client reference for service `X`; direction assumed consumed"`                                                 |
 
 **Row 1 is a pass, not a failure.** MEASURED (M4): the five `TaskDbService` RPCs join onto
 nothing in `task/src/`, and that is the correct answer. A test asserts it as a success
@@ -578,14 +578,14 @@ Built from a small builder so each test states only what it cares about.
 Small real `.proto` files under `crates/reachgraph-roots-proto-tonic/tests/fixtures/`.
 They reproduce the measured shapes of §1 without depending on that repository:
 
-| file | package | service | rpcs | role |
-|---|---|---|---|---|
-| `api.proto` | `acme.api.v1` | `Widgets` | `CreateWidget`, `ListWidgets` | served |
-| `store.proto` | `acme.store.v2` | `WidgetDb` | `CreateWidget`, `GetWidget` | consumed; **`CreateWidget` collides with `api.proto`** (reproduces M7) |
-| `legacy.proto` | `acme.legacy` | `Old` | `Ping` | no version segment in the package |
-| `types.proto` | `acme.api.v1` | — | — | messages only, no service; coverage must still list it |
-| `acronym.proto` | `acme.api.v1` | `Odd` | `GetWidgetByID`, `ExportCSV` | the snake-case oracle test |
-| `broken.proto` | — | — | — | syntactically invalid |
+| file            | package         | service    | rpcs                          | role                                                                   |
+| --------------- | --------------- | ---------- | ----------------------------- | ---------------------------------------------------------------------- |
+| `api.proto`     | `acme.api.v1`   | `Widgets`  | `CreateWidget`, `ListWidgets` | served                                                                 |
+| `store.proto`   | `acme.store.v2` | `WidgetDb` | `CreateWidget`, `GetWidget`   | consumed; **`CreateWidget` collides with `api.proto`** (reproduces M7) |
+| `legacy.proto`  | `acme.legacy`   | `Old`      | `Ping`                        | no version segment in the package                                      |
+| `types.proto`   | `acme.api.v1`   | —          | —                             | messages only, no service; coverage must still list it                 |
+| `acronym.proto` | `acme.api.v1`   | `Odd`      | `GetWidgetByID`, `ExportCSV`  | the snake-case oracle test                                             |
+| `broken.proto`  | —               | —          | —                             | syntactically invalid                                                  |
 
 ### Named tests
 
@@ -693,7 +693,7 @@ join itself — v0.2.
    `pub fn parse(name: &str, source: &str) -> Result<FileDescriptorProto, ParseError>`
    (§4).
 3. **`SymbolIndex` cannot see types, so consumed-direction detection is a text scan.** (§6)
-   The clean alternative is a `RootProvider` that can ask for *edges* — the client
+   The clean alternative is a `RootProvider` that can ask for _edges_ — the client
    construction at `src/service.rs:60` is a resolved call into the generated client's
    `new`, which plan-03 already emits as an edge. That would make the corroboration a graph
    query instead of a scan. It also widens `RootProvider`'s surface, which plan-00 §3.4

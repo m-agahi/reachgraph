@@ -124,7 +124,7 @@ Rules:
 - Release builds run `cargo build --release --locked --offline`. `--offline` is the check
   that the vendoring is actually complete; `--locked` alone still permits a registry read.
 - **Vendor-drift test:** re-run `cargo vendor --locked` in CI and fail if `git diff
-  --exit-code vendor/ Cargo.lock` is non-empty. A vendor tree that has silently diverged
+--exit-code vendor/ Cargo.lock` is non-empty. A vendor tree that has silently diverged
   from the lockfile is worse than no vendor tree, because it looks auditable and is not.
 - An upstream bump is its own commit: re-vendor, re-lock, review the diff, note the
   rust-analyzer version in the changelog.
@@ -153,7 +153,7 @@ is a reasoned range, never an observation, and it is not a basis for a platform 
 projects may request an increase** (ADR-0001).
 
 **OPEN MEASUREMENT — actual binary size, and the number that matters is the compressed
-one.** A wheel is a zip, so the per-file limit applies to the *deflated* artifact.
+one.** A wheel is a zip, so the per-file limit applies to the _deflated_ artifact.
 
 ```bash
 cargo build --release --locked --offline -p reachgraph-cli
@@ -203,14 +203,14 @@ auditwheel show dist/*.whl      # linux only: prints the manylinux tag actually 
 
 Proposed tiers, to be confirmed by the measurement above:
 
-| tier | targets | commitment |
-|---|---|---|
-| **1 — must build, smoke-tested** | `x86_64-unknown-linux-gnu` (manylinux), `aarch64-apple-darwin` | CI fails the release if either fails |
-| **2 — built, best effort** | `aarch64-unknown-linux-gnu`, `x86_64-apple-darwin`, `x86_64-pc-windows-msvc` | failure documented, release proceeds |
-| **3 — not built in v0.1** | musllinux, 32-bit anything, `aarch64-pc-windows-msvc` | source build via `cargo install` |
+| tier                             | targets                                                                      | commitment                           |
+| -------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------ |
+| **1 — must build, smoke-tested** | `x86_64-unknown-linux-gnu` (manylinux), `aarch64-apple-darwin`               | CI fails the release if either fails |
+| **2 — built, best effort**       | `aarch64-unknown-linux-gnu`, `x86_64-apple-darwin`, `x86_64-pc-windows-msvc` | failure documented, release proceeds |
+| **3 — not built in v0.1**        | musllinux, 32-bit anything, `aarch64-pc-windows-msvc`                        | source build via `cargo install`     |
 
 **A note on build-time tooling, since ADR-0001 is strict about dependencies.** ADR-0001
-constrains the *artifact*: no external binaries, no subprocesses, no runtime downloads, no
+constrains the _artifact_: no external binaries, no subprocesses, no runtime downloads, no
 install-time fetch. It does not forbid a CI runner from having a cross-compiler. Using
 `maturin build --zig` or a cross-compilation container is therefore permitted, and it
 changes nothing about what the user installs. The line is precise: **tools may exist at
@@ -220,10 +220,10 @@ build time; nothing may be fetched or executed at install time or run time.**
 
 maturin publishes an sdist by default. Two options, and the choice is not free:
 
-| option | consequence |
-|---|---|
-| **Wheels only** (`--no-sdist`) | A platform outside the matrix cannot `pip install` at all. Clean, but it removes the escape hatch. |
-| **Wheels plus an sdist** | The sdist must contain `vendor/` to build offline and honour §2. That makes it large — how large is §2's OPEN MEASUREMENT — and **PyPI's 100.0 MiB per-file limit applies to the sdist too**. An sdist *without* `vendor/` builds only with network access, which contradicts §2's posture for anyone who builds from it. |
+| option                         | consequence                                                                                                                                                                                                                                                                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Wheels only** (`--no-sdist`) | A platform outside the matrix cannot `pip install` at all. Clean, but it removes the escape hatch.                                                                                                                                                                                                                        |
+| **Wheels plus an sdist**       | The sdist must contain `vendor/` to build offline and honour §2. That makes it large — how large is §2's OPEN MEASUREMENT — and **PyPI's 100.0 MiB per-file limit applies to the sdist too**. An sdist _without_ `vendor/` builds only with network access, which contradicts §2's posture for anyone who builds from it. |
 
 **Decision gate:** if `du -sh vendor/` (§2) leaves the compressed sdist comfortably under
 100.0 MiB, publish wheels plus a vendored sdist, and document that building from sdist
@@ -297,7 +297,7 @@ require the notice to travel with the redistribution.
   layout-base — all MIT). They are dependencies that happen not to be crates, and
   `cargo-about` will not find them; they are added from `VENDOR.toml` by the same CI step.
 - **plan-05 §7 is the other half of this obligation and is not optional:** the notice must
-  also be present in the *emitted artifact*, because emitting `out/vendor/*.js` and
+  also be present in the _emitted artifact_, because emitting `out/vendor/*.js` and
   `overview.html` is itself a distribution of MIT-licensed code, to people who never see
   this repository. No minification or banner-stripping pass may run over those bundles —
   the `/*! ... */` banner **is** the notice.
@@ -409,17 +409,17 @@ test proves the installed binary works end to end and not merely that it starts.
 
 ### 8.2 Repository-level checks
 
-| check | fails when |
-|---|---|
-| `vendor_matches_lockfile` | `cargo vendor --locked` produces a diff |
-| `builds_offline` | `cargo build --release --locked --offline` fails — the real proof that vendoring is complete |
-| `licences_within_allowlist` | `cargo deny check licenses` finds an SPDX outside §6.3's list |
-| `attribution_is_current` | regenerated `THIRD-PARTY-LICENSES.md` differs from the committed one |
-| `vendored_js_attributed` | a `VENDOR.toml` entry is missing from `THIRD-PARTY-LICENSES.md` |
-| `no_crabviz` | the string appears in a manifest, the lockfile or `vendor/` |
+| check                        | fails when                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `vendor_matches_lockfile`    | `cargo vendor --locked` produces a diff                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `builds_offline`             | `cargo build --release --locked --offline` fails — the real proof that vendoring is complete                                                                                                                                                                                                                                                                                                                                                                 |
+| `licences_within_allowlist`  | `cargo deny check licenses` finds an SPDX outside §6.3's list                                                                                                                                                                                                                                                                                                                                                                                                |
+| `attribution_is_current`     | regenerated `THIRD-PARTY-LICENSES.md` differs from the committed one                                                                                                                                                                                                                                                                                                                                                                                         |
+| `vendored_js_attributed`     | a `VENDOR.toml` entry is missing from `THIRD-PARTY-LICENSES.md`                                                                                                                                                                                                                                                                                                                                                                                              |
+| `no_crabviz`                 | the string appears in a manifest, the lockfile or `vendor/`                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `wheel_has_no_python_module` | a `.py` file appears in `unzip -l` **while §1.2's measurement stands unrefuted**. This guard is conditional on the bin-only decision holding, and deliberately so: if measurement 1 forces the launcher contingency, this check is **replaced** — not deleted quietly — by one asserting the launcher is present and `os.execv`s the packaged binary. A guard that fires on a sanctioned design change is a guard that gets deleted the first time it fires. |
-| `wheel_under_pypi_limit` | the wheel exceeds 100.0 MiB, before PyPI rejects it |
-| `version_is_single_sourced` | wheel metadata version ≠ `reachgraph --version` |
+| `wheel_under_pypi_limit`     | the wheel exceeds 100.0 MiB, before PyPI rejects it                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `version_is_single_sourced`  | wheel metadata version ≠ `reachgraph --version`                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 ---
 
@@ -428,17 +428,17 @@ test proves the installed binary works end to end and not merely that it starts.
 This plan cannot be executed to completion until these are run. They are collected here so
 none is lost in the prose.
 
-| # | measurement | command | what it decides |
-|---|---|---|---|
-| 1 | bin-only wheel behaviour; is any launcher needed | §1.2 | §1.1's entire configuration; whether `[project.scripts]` is used at all |
-| 2 | vendor tree size | `cargo vendor --locked && du -sh vendor/` | §4.1's sdist decision; contributor clone cost |
-| 3 | binary size — unstripped, stripped, and **compressed in the wheel** | §3 | whether 100.0 MiB is close; whether a limit increase must be requested |
-| 4 | size versus runtime under `opt-level = "z"` / LTO, **measured together** | §3.1 with plan-06 §5.1's timing command | the release profile |
-| 5 | `panic = "abort"` against salsa cancellation | plan-03 integration tests | whether that setting is usable at all |
-| 6 | which targets build; the manylinux tag actually satisfied | §4, `auditwheel show` | the tier table |
-| 7 | musl viability for `ra_ap_*` | §4 | whether musllinux leaves tier 3 |
-| 8 | wheel reproducibility, same image | §7.1 | what the release notes may claim |
-| 9 | vendored JS bundle set and size | plan-05 §3 | contributes to measurement 3; §5 residual 3's watch list |
+| #   | measurement                                                              | command                                   | what it decides                                                         |
+| --- | ------------------------------------------------------------------------ | ----------------------------------------- | ----------------------------------------------------------------------- |
+| 1   | bin-only wheel behaviour; is any launcher needed                         | §1.2                                      | §1.1's entire configuration; whether `[project.scripts]` is used at all |
+| 2   | vendor tree size                                                         | `cargo vendor --locked && du -sh vendor/` | §4.1's sdist decision; contributor clone cost                           |
+| 3   | binary size — unstripped, stripped, and **compressed in the wheel**      | §3                                        | whether 100.0 MiB is close; whether a limit increase must be requested  |
+| 4   | size versus runtime under `opt-level = "z"` / LTO, **measured together** | §3.1 with plan-06 §5.1's timing command   | the release profile                                                     |
+| 5   | `panic = "abort"` against salsa cancellation                             | plan-03 integration tests                 | whether that setting is usable at all                                   |
+| 6   | which targets build; the manylinux tag actually satisfied                | §4, `auditwheel show`                     | the tier table                                                          |
+| 7   | musl viability for `ra_ap_*`                                             | §4                                        | whether musllinux leaves tier 3                                         |
+| 8   | wheel reproducibility, same image                                        | §7.1                                      | what the release notes may claim                                        |
+| 9   | vendored JS bundle set and size                                          | plan-05 §3                                | contributes to measurement 3; §5 residual 3's watch list                |
 
 Inherited from plan-06 and load-bearing on measurement 4: **in-process analysis wall time
 is itself unmeasured** (plan-06 §5.1). design.md §8's "minutes, not seconds" was MEASURED

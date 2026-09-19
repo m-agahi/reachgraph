@@ -82,11 +82,11 @@ and — worse — makes two genuinely unversioned APIs look like the same versio
 
 Shared code gets a three-way classification:
 
-| class | meaning |
-|---|---|
-| reachable from `v1` only | dies when `v1` is sunset |
-| reachable from `v2` only | new path |
-| reachable from both | shared; survives the sunset |
+| class                    | meaning                     |
+| ------------------------ | --------------------------- |
+| reachable from `v1` only | dies when `v1` is sunset    |
+| reachable from `v2` only | new path                    |
+| reachable from both      | shared; survives the sunset |
 
 **"What dies when we sunset v1" is a first-class output.** It is arguably a better pitch
 than generic dead-code detection: it is a question teams actually ask, on a schedule, with
@@ -113,6 +113,7 @@ Binding requirements:
 
    Never "dead". The extended wording stays true when the version coverage is partial,
    and it still points the reader at the right places.
+
 3. `unreachable.json` (ADR-0006) carries the covered-root set, so any consumer can see
    what the claim was computed against.
 
