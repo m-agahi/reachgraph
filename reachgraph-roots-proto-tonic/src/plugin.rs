@@ -113,7 +113,7 @@ impl RootProvider for ProtoTonicPlugin {
         let mut roots = Vec::new();
         for contract in &contracts {
             for service in &contract.services {
-                let call = direction_of(evidence_for(&service.name, &sources, symbols, repo_root));
+                let call = direction_of(evidence_for(&service.name, &sources, symbols));
                 for rpc in &service.rpcs {
                     let operation = Operation::new(contract.package.as_deref(), &service.name, rpc);
                     let binding = match call {
@@ -273,12 +273,11 @@ fn evidence_for(
     service: &str,
     sources: &[RustSource],
     symbols: &dyn SymbolIndex,
-    repo_root: &Path,
 ) -> ServiceEvidence {
     let mut evidence = ServiceEvidence::default();
     for source in sources {
         if !evidence.first_party_impl
-            && symbols_in(symbols, source, repo_root)
+            && symbols_in(symbols, source)
                 .iter()
                 .any(|symbol| is_served_signal(symbol, service))
         {
@@ -302,20 +301,12 @@ fn evidence_for(
 /// plugin cannot know which produced the index it was handed. Asking both ways
 /// is the honest reading of a contract that does not say (plan-00 §8 is where
 /// the question belongs at n=2).
-fn symbols_in<'a>(
-    symbols: &'a dyn SymbolIndex,
-    source: &RustSource,
-    repo_root: &Path,
-) -> Vec<&'a Symbol> {
+fn symbols_in<'a>(symbols: &'a dyn SymbolIndex, source: &RustSource) -> Vec<&'a Symbol> {
     let relative = symbols.in_file(&source.relative);
     if !relative.is_empty() {
         return relative;
     }
-    let absolute = symbols.in_file(&source.path);
-    if !absolute.is_empty() {
-        return absolute;
-    }
-    symbols.in_file(&repo_root.join(&source.relative))
+    symbols.in_file(&source.path)
 }
 
 /// A consumed operation with no evidence at all.

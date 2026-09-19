@@ -352,3 +352,26 @@ fn a_client_named_only_in_a_test_does_not_corroborate() {
         "a mention inside a `tests/` target is not first-party non-test usage: {reason}"
     );
 }
+
+/// Plan-04 §4 — the vendored contract tag is not the endpoint version.
+///
+/// `PROTO_VERSION` in the fixture reads `v1.11.2`, which is the version of the
+/// **bundle of proto files**. `acme.api.v1` is the version of the **operation**,
+/// and ADR-0007's field means the second. Conflating them would put a bundle
+/// release number on a root.
+#[test]
+fn vendored_bundle_tag_is_not_the_endpoint_version() {
+    let (plugin, roots) = roots_of("repo", &repo_index());
+
+    for root in &roots {
+        assert_ne!(root.version, Some("v1.11.2".to_owned()));
+        assert!(
+            !root.join_key.contains("1.11.2"),
+            "the bundle tag reached a join key: {}",
+            root.join_key
+        );
+    }
+    for key in plugin.coverage().versions {
+        assert_ne!(key.version, Some("v1.11.2".to_owned()));
+    }
+}
