@@ -24,9 +24,13 @@
 //!
 //! `Node`, `GraphView`, `Shard`, `IndexCoverage` and `PluginDescriptor` are
 //! named as residents of this crate by plan-00 §1 and **defined by plan-01
-//! §3**, which owns their shape and their serde contract. `Renderer` and
-//! `OutputSink` (plan-00 §3.6) take a `&GraphView` and arrive with them. See
-//! this repository's `docs/plans/00-workspace-and-plugin-api.md`.
+//! §3**, which owns their shape and their serde contract.
+//!
+//! `Renderer` is the one trait of plan-00 §3 that is absent, because
+//! `Renderer::render` takes a `&GraphView` and arrives when that type does.
+//! [`OutputSink`] is here already: its signature needs nothing plan-01 has not
+//! yet written, and plan-01 §8.6 has the waist's own `emit.rs` writing through
+//! it, so deferring it would have made the waist wait on the renderer.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -667,6 +671,39 @@ pub trait RootProvider: Plugin {
 pub trait Classifier: Plugin {
     /// Classify one path within one unit.
     fn classify(&self, path: &Path, unit: &Unit) -> Category;
+}
+
+// ---------------------------------------------------------------------------
+// Output
+// ---------------------------------------------------------------------------
+
+/// Where a renderer's bytes go.
+///
+/// The core owns where bytes land — ADR-0006's `out/` layout — and a renderer
+/// names a relative path and writes. **It never touches the filesystem
+/// itself.** Plan-01 §8.6 puts the waist's own artifact files through the same
+/// sink, so the built-in output and a plugin renderer's output land by one
+/// mechanism rather than two.
+///
+/// Object-safe, deliberately. Plan-00 §3.6 spells the renderer's parameter
+/// `sink: &mut dyn OutputSink`, so a generic method, a `Self: Sized` bound or a
+/// by-value receiver would each break a caller that does not exist yet.
+///
+/// ONE METHOD, and the restraint is the point. A sink that also offered
+/// `mkdir`, `exists` or `base_path` would hand the renderer back the
+/// filesystem authority this trait exists to keep away from it, and every
+/// method here is contract a later implementor must satisfy.
+///
+/// This arrives before `Renderer` does — see the crate documentation — because
+/// it needs nothing that is not already here. The renderer's own signature
+/// takes a `&GraphView`, which plan-01 §3 defines.
+pub trait OutputSink {
+    /// Write `bytes` at `relative_path`, relative to a root the sink owns and
+    /// the caller does not know.
+    ///
+    /// The path is relative and stays relative. A sink resolves it; a renderer
+    /// never does.
+    fn write(&mut self, relative_path: &str, bytes: &[u8]) -> std::io::Result<()>;
 }
 
 // ---------------------------------------------------------------------------

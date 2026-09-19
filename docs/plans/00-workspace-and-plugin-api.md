@@ -18,6 +18,11 @@ by plan-02 §8 question 6. Changes are in §2, §4, §6.1 and §8.
 `Ok | Failed` could not express a non-fatal finding, so plan-03's checks 3 and 4 returned
 `Ok` and routed the finding to a side channel. Fifth instance of ADR-0003's honest-absence
 rule. Resolves plan-03 §14 question 11. Changes are in §2 and §8.
+**Amended:** 2026-09-19 (e) — a build note, not a design change. §3.6 presents `Renderer`
+and `OutputSink` together; they ship apart. `OutputSink` names no graph type, and plan-01
+§8.6 puts the waist's own `emit.rs` through it, so holding it back would have made the
+waist wait on the renderer. `Renderer::render` takes a `&GraphView`, which plan-01 §3
+defines, and arrives with it. Changes are in §3.6.
 **Depends on:** ADR-0001 … ADR-0008
 **Blocks:** every other plan
 
@@ -533,10 +538,20 @@ pub trait Renderer: Send + Sync {
 
 /// The core owns where bytes land (ADR-0006's out/ layout). A renderer
 /// names a relative path and writes; it never touches the filesystem itself.
+///
+/// Object-safe: the parameter above is spelled `&mut dyn OutputSink`, so a
+/// generic method or a `Self: Sized` bound would break a caller silently.
+/// ONE method, deliberately — a sink offering `mkdir`, `exists` or `base_path`
+/// hands the renderer back the filesystem authority the trait exists to
+/// withhold.
 pub trait OutputSink {
     fn write(&mut self, relative_path: &str, bytes: &[u8]) -> io::Result<()>;
 }
 ```
+
+`OutputSink` ships in the first pull request and `Renderer` does not (amendment (e)).
+Plan-01 §8.6 writes the waist's own artifact files through the same sink, so `emit.rs`
+needs the trait before any renderer exists.
 
 `position_encoding`, `detection` and `preflight` are meaningless for a renderer. A
 renderer analyses nothing, so it has no encoding; it claims no repository, so it detects

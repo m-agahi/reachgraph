@@ -197,6 +197,10 @@ pub trait LanguagePlugin: Plugin {
     fn discover_units(&self, root: &Path) -> Result<Vec<Unit>, PluginError>;
 }
 
+pub trait OutputSink {
+    fn write(&mut self, relative_path: &str, bytes: &[u8]) -> std::io::Result<()>;
+}
+
 pub trait Plugin: Send + Sync {
     fn id(&self) -> PluginId;
     fn provides(&self) -> &[Capability];
