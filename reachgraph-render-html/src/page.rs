@@ -427,32 +427,75 @@ pub fn render_page(
         vendor::LICENSES_PATH
     );
 
-    let page = TEMPLATE
-        .replace("{{RG_LICENCE_COMMENT}}", &licence_comment())
-        .replace("{{RG_TITLE}}", &escape_html(TITLE))
-        .replace("{{RG_STYLE}}", STYLE)
-        .replace("{{RG_SUBTITLE}}", &escape_html(&subtitle))
-        .replace("{{RG_OUT_HINT}}", "&lt;the directory holding this file&gt;")
-        .replace("{{RG_LICENCE_LIST}}", &licence_list())
-        .replace("{{RG_LICENCE_FOOTER}}", &escape_html(&licence_footer))
-        .replace("{{RG_PARTIAL_BANNER}}", &partial_banner(coverage))
+    let values: Vec<(&str, String)> = vec![
+        ("RG_LICENCE_COMMENT", licence_comment()),
+        ("RG_TITLE", escape_html(TITLE)),
+        ("RG_STYLE", STYLE.to_owned()),
+        ("RG_SUBTITLE", escape_html(&subtitle)),
+        (
+            "RG_OUT_HINT",
+            "&lt;the directory holding this file&gt;".to_owned(),
+        ),
+        ("RG_LICENCE_LIST", licence_list()),
+        ("RG_LICENCE_FOOTER", escape_html(&licence_footer)),
+        ("RG_PARTIAL_BANNER", partial_banner(coverage)),
         // Verbatim, from the waist's own file.
-        .replace("{{RG_CLAIM}}", &escape_html(&claim))
-        .replace(
-            "{{RG_COVERAGE}}",
-            &escape_html(&coverage_sentence(coverage)),
-        )
-        .replace(
-            "{{RG_TERMINAL}}",
-            &escape_html(&terminal_sentence(coverage)),
-        )
-        .replace("{{RG_NOTES}}", &notes_block(coverage))
-        .replace("{{RG_UNBOUND}}", &unbound_block(coverage))
-        .replace("{{RG_UNREACHABLE_COUNT}}", &unreachable_count.to_string())
-        .replace("{{RG_FOOTER}}", &escape_html(footer))
-        .replace("{{RG_DATA}}", &data)
-        .replace("{{RG_SCRIPTS}}", &scripts)
-        .replace("{{RG_LOADER}}", &loader);
+        ("RG_CLAIM", escape_html(&claim)),
+        ("RG_COVERAGE", escape_html(&coverage_sentence(coverage))),
+        ("RG_TERMINAL", escape_html(&terminal_sentence(coverage))),
+        ("RG_NOTES", notes_block(coverage)),
+        ("RG_UNBOUND", unbound_block(coverage)),
+        ("RG_UNREACHABLE_COUNT", unreachable_count.to_string()),
+        ("RG_FOOTER", escape_html(footer)),
+        ("RG_DATA", data),
+        ("RG_SCRIPTS", scripts),
+        ("RG_LOADER", loader),
+    ];
 
+    substitute(TEMPLATE, &values)
+}
+
+/// Fill every `{{KEY}}` in the template, in **one pass**.
+///
+/// Chained `str::replace` calls re-scan what an earlier substitution inserted,
+/// so a contract id, a plugin note, an unbound reason or a doc comment
+/// containing the literal text of a later placeholder would have that
+/// placeholder's content injected into the page — the presenter, in the worst
+/// case, and inside the JSON data block. Vanishingly unlikely, and the fix is
+/// smaller than the argument for skipping it: "arbitrary repository content
+/// does nothing" is the property this module spends its escaping on, and a
+/// property that holds for all but one input is not a property.
+///
+/// A key the template names and the caller does not supply is an error rather
+/// than an empty string. A page silently missing its coverage block is the
+/// failure this crate exists to refuse.
+fn substitute(template: &str, values: &[(&str, String)]) -> Result<String, RenderError> {
+    const OPEN: &str = "{{";
+    const CLOSE: &str = "}}";
+
+    let mut page = String::with_capacity(template.len() * 2);
+    let mut rest = template;
+
+    while let Some(start) = rest.find(OPEN) {
+        page.push_str(&rest[..start]);
+        let after = &rest[start + OPEN.len()..];
+        let Some(end) = after.find(CLOSE) else {
+            return Err(RenderError::Refused {
+                reason: "the page template holds an unterminated placeholder".to_owned(),
+            });
+        };
+        let key = &after[..end];
+        let value = values
+            .iter()
+            .find(|(name, _)| *name == key)
+            .map(|(_, value)| value)
+            .ok_or_else(|| RenderError::Refused {
+                reason: format!("the page template names {key} and nothing supplies it"),
+            })?;
+        page.push_str(value);
+        rest = &after[end + CLOSE.len()..];
+    }
+
+    page.push_str(rest);
     Ok(page)
 }

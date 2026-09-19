@@ -84,6 +84,7 @@
     selection: null,
     compare: null,
     depth: 3,
+    expandCollapseRegistered: false,
     strengths: {
       resolved: true,
       "type-inferred": true,
@@ -594,6 +595,15 @@
         style: { "border-style": "dashed" },
       },
       {
+        selector: "node.cy-expand-collapse-collapsed-node",
+        style: {
+          "background-opacity": 0.18,
+          "border-width": 3,
+          "border-style": "double",
+          shape: "round-rectangle",
+        },
+      },
+      {
         selector: "edge",
         style: {
           width: 3,
@@ -661,6 +671,67 @@
     }
   }
 
+  /* Plan-05 §6.2: collapsible module boxes, expand on click.
+
+     Cytoscape draws compound parents natively — the property §2 chose it for —
+     but it has no collapse of its own, so `cytoscape-expand-collapse` is
+     vendored alongside. It does not self-register the way fcose does, and it
+     is PROGRESSIVE ENHANCEMENT: the whole wiring sits inside a guard, because
+     a page whose extension fails should still draw its graph rather than show
+     a reader nothing at all. */
+  function collapsible(cy) {
+    if (!window.cytoscapeExpandCollapse) {
+      return null;
+    }
+    try {
+      if (!model.expandCollapseRegistered) {
+        window.cytoscape.use(window.cytoscapeExpandCollapse);
+        model.expandCollapseRegistered = true;
+      }
+      return cy.expandCollapse({
+        layoutBy: null,
+        animate: false,
+        undoable: false,
+        fisheye: false,
+        cueEnabled: true,
+        expandCollapseCuePosition: "top-left",
+      });
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /* §6.2: third-party and stdlib collapse by default; first-party expands.
+     design.md §8's MEASURED edge-noise table is the justification — of 20
+     edges from one handler, the useful ones separated by path prefix alone. */
+  function collapseNoise(cy, api) {
+    if (!api) {
+      return;
+    }
+    var boxes = cy.nodes(".rg-box");
+    var noisy = boxes.filter(function (box) {
+      var inside = box.descendants().filter(function (node) {
+        return !node.hasClass("rg-box");
+      });
+      if (inside.length === 0) {
+        return false;
+      }
+      return inside.every(function (node) {
+        return (
+          node.hasClass("category-third-party") || node.hasClass("category-stdlib")
+        );
+      });
+    });
+    if (noisy.length > 0) {
+      try {
+        api.collapse(noisy);
+      } catch (error) {
+        /* A collapse that fails leaves the box expanded, which is a worse
+           diagram and not a wrong one. */
+      }
+    }
+  }
+
   function draw() {
     var document_ = model.selection && model.selection.shard;
     if (!document_) {
@@ -679,8 +750,26 @@
       wheelSensitivity: 0.2,
     });
 
+    var api = collapsible(model.cy);
+    collapseNoise(model.cy, api);
+
     model.cy.on("tap", "node", function (event) {
-      inspect(document_, event.target);
+      var target = event.target;
+      /* Expand-on-click, and collapse on click again. A leaf opens the
+         inspector; a box toggles. */
+      if (api && target.hasClass("rg-box")) {
+        try {
+          if (target.hasClass("cy-expand-collapse-collapsed-node")) {
+            api.expand(target);
+          } else {
+            api.collapse(target);
+          }
+          return;
+        } catch (error) {
+          /* Fall through to the inspector rather than swallowing the tap. */
+        }
+      }
+      inspect(document_, target);
     });
 
     if (model.compare) {

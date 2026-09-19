@@ -71,7 +71,7 @@ pub const LICENSES_PATH: &str = "vendor/LICENSES.txt";
 /// `layout-base`, then `cose-base`, then `cytoscape-fcose`, with `cytoscape`
 /// itself first. `page_references_every_vendored_bundle` asserts the page
 /// carries all of them; this array is what fixes the sequence.
-pub const BUNDLES: [Bundle; 4] = [
+pub const BUNDLES: [Bundle; 5] = [
     Bundle {
         file: "cytoscape.min.js",
         name: "cytoscape",
@@ -103,5 +103,18 @@ pub const BUNDLES: [Bundle; 4] = [
         spdx: "MIT",
         notice: Notice::LicensesFile,
         source: include_str!("../vendor/cytoscape-fcose.js"),
+    },
+    // Plan-05 §6.2's collapsible module boxes. Cytoscape draws compound
+    // parents natively — which is why §2 chose it over Sigma — but it has no
+    // collapse of its own. Unlike fcose this one does not self-register; the
+    // presenter registers it inside a guard, so a page whose extension fails
+    // still draws its graph.
+    Bundle {
+        file: "cytoscape-expand-collapse.js",
+        name: "cytoscape-expand-collapse",
+        version: "4.1.1",
+        spdx: "MIT",
+        notice: Notice::LicensesFile,
+        source: include_str!("../vendor/cytoscape-expand-collapse.js"),
     },
 ];

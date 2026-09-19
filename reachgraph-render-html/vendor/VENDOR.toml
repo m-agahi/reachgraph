@@ -21,22 +21,34 @@
 # The host is where the file is obtained; it is never where the page loads it
 # from.
 #
-# The dependency chain is exactly the four plan-05 §3 predicted, MEASURED from
-# each package's own `package.json`:
+# The fcose dependency chain is exactly the four plan-05 §3 predicted, MEASURED
+# from each package's own `package.json`:
 #
 #   cytoscape-fcose 2.2.0  dependencies { cose-base ^2.2.0 }
 #                          peerDependencies { cytoscape ^3.2.0 }
 #   cose-base       2.2.0  dependencies { layout-base ^2.0.0 }
 #   layout-base     2.0.1  dependencies {}
 #
-# Total 759 606 bytes. That is the number plan-07's binary-size budget takes,
+# A FIFTH BUNDLE plan-05 §2 did not name, and §6.2 requires. "Collapsible
+# module boxes, expand-on-click" is the v0.1 UI and is the reason §2 chose
+# Cytoscape over Sigma at all. MEASURED: Cytoscape draws compound parents
+# natively but has no collapse of its own, so §6.2 needs
+# `cytoscape-expand-collapse` — MIT, 31 284 bytes, `dependencies: {}`,
+# `peerDependencies { cytoscape ^3.3.0 }`. It does NOT self-register on a
+# global the way fcose does; the presenter registers it with `cytoscape.use`,
+# inside a guard, so a page whose extension fails still draws its graph.
+#
+# Total 790 890 bytes. That is the number plan-07's binary-size budget takes,
 # and plan-05 §6.5's threshold does NOT count it: the inline threshold is over
 # the graph JSON, and `overview.html` is larger than the threshold by these
 # bytes plus the loader, on purpose.
 #
-# No minified build of the three iVis bundles is published — MEASURED by
-# listing each package's files on jsDelivr — so the unminified ones are what
-# ships. Minifying them here is forbidden by plan-05 §3 anyway.
+# No minified build of the three fcose-chain iVis bundles is published —
+# MEASURED by listing each package's files on jsDelivr — so the unminified ones
+# are what ships. Minifying them here is forbidden by plan-05 §3 anyway.
+# `cytoscape-expand-collapse` publishes only a minified build, and that is what
+# ships; it carries no licence banner and no LICENSE file in its npm tarball,
+# so its notice was taken from the repository and is in `LICENSES.txt`.
 #
 # `sha256` IS THE HASH OF THE FILE AS UPSTREAM PUBLISHED IT, and the committed
 # file is byte-identical to it. `.pre-commit-config.yaml` excludes this
@@ -92,6 +104,17 @@ bytes = 57239
 sha256 = "4b1cab218d74996aa59cd8473f9239cc6398b8c1774d84d7e59ad9a68959cb57"
 notice = "licenses-file"
 
+[[bundle]]
+file = "cytoscape-expand-collapse.js"
+name = "cytoscape-expand-collapse"
+version = "4.1.1"
+spdx = "MIT"
+source = "https://cdn.jsdelivr.net/npm/cytoscape-expand-collapse@4.1.1/cytoscape-expand-collapse.js"
+bytes = 31284
+sha256 = "0f2ad3c36a62c61071076044f70f7db844a816d199de3619373efd9d1ab864e6"
+notice = "licenses-file"
+
 # Load order matters and is the order above: a UMD bundle registers itself on
 # `window` and the next one reads it. layout-base, then cose-base, then
-# cytoscape-fcose, with cytoscape itself first.
+# cytoscape-fcose, with cytoscape itself first. `cytoscape-expand-collapse`
+# only needs cytoscape and goes last.

@@ -273,3 +273,67 @@ fn doc_text_is_not_injected_as_html() {
         );
     }
 }
+
+/// `overview.html` inlines each bundle raw, so a `</script` anywhere in the
+/// vendored JavaScript would end the element early and silently corrupt the
+/// page. MEASURED: none of the five contains one. Asserted rather than
+/// assumed, so a re-vendor cannot regress it unnoticed.
+#[test]
+fn no_vendored_bundle_contains_a_script_terminator() {
+    for bundle in reachgraph_render_html::vendor::BUNDLES {
+        let lowered = bundle.source.to_lowercase();
+        assert!(
+            !lowered.contains("</script"),
+            "{} cannot be inlined raw",
+            bundle.file
+        );
+        assert!(
+            !lowered.contains("<!--"),
+            "{} carries a comment opener",
+            bundle.file
+        );
+    }
+}
+
+/// Repository text that happens to spell a template placeholder does nothing.
+///
+/// The page is filled in ONE pass. Chained replacements re-scan what an
+/// earlier substitution inserted, so a plugin note reading like a placeholder
+/// would have that placeholder's content injected — the presenter, in the
+/// worst case, and inside the JSON data block.
+#[test]
+fn repository_text_that_looks_like_a_placeholder_is_inert() {
+    let payload = "{{RG_LOADER}} and {{RG_DATA}} and {{RG_SCRIPTS}}";
+
+    let mut coverage = support::coverage();
+    coverage.notes = vec![format!("a note containing {payload}")];
+
+    let base = support::index_view();
+    let view = reachgraph_plugin_api::GraphView::new(
+        base.nodes.clone(),
+        base.edges.clone(),
+        base.roots.clone(),
+        base.plugins.clone(),
+        coverage,
+    );
+
+    let written = support::render(&view, &[], &support::artifact());
+    for path in ["index.html", "overview.html"] {
+        let page = written.text(path);
+        assert!(
+            page.contains(payload),
+            "the note is not in {path} at all, so the guard proves nothing"
+        );
+        // One data block, one presenter — not two of either.
+        assert_eq!(
+            page.matches(r#"id="rg-data""#).count(),
+            usize::from(path == "overview.html"),
+            "the data block was duplicated in {path}"
+        );
+        assert_eq!(
+            page.matches("IT CLASSIFIES NOTHING").count(),
+            usize::from(path == "overview.html"),
+            "the presenter was injected into {path} by a placeholder in repository text"
+        );
+    }
+}
