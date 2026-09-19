@@ -65,6 +65,12 @@ impl Plugin for FailingProvider {
     fn preflight(&self, _root: &Path) -> Preflight {
         Preflight::Ok
     }
+
+    /// A double that fails every call has nothing to report about the index it
+    /// did not contribute to.
+    fn notes(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 impl LanguagePlugin for FailingProvider {
@@ -150,6 +156,10 @@ impl Plugin for SpyClassifier<'_> {
     fn preflight(&self, root: &Path) -> Preflight {
         self.inner.preflight(root)
     }
+
+    fn notes(&self) -> Vec<String> {
+        self.inner.notes()
+    }
 }
 
 impl Classifier for SpyClassifier<'_> {
@@ -220,6 +230,10 @@ impl Plugin for PreflightSpy<'_> {
             reason: self.reason.to_owned(),
             remediation: self.remediation.to_owned(),
         }
+    }
+
+    fn notes(&self) -> Vec<String> {
+        self.inner.notes()
     }
 }
 

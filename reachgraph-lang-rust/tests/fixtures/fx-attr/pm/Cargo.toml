@@ -1,0 +1,11 @@
+# The attribute macro. It is never expanded by reachgraph: v0.1 runs with
+# `ProcMacroServerChoice::None` (ADR-0728), which is the whole point of the
+# fixture. It is a real proc-macro crate so that `cargo metadata` resolves it
+# and the attribute path is a real one rather than an unresolved name.
+[package]
+name = "pm"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true

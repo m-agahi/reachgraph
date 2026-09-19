@@ -1,0 +1,9 @@
+# fx-attr — plan-03 §13 Tier B, and the fixture ADR-0731 rests on.
+#
+# An impl block under an attribute macro whose expander reachgraph does not
+# run, beside the same shape without one. The pair is the control: what the
+# header says with expansion off must not depend on whether an attribute is
+# written above the block.
+[workspace]
+resolver = "2"
+members = ["pm", "a"]

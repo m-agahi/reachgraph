@@ -1,6 +1,6 @@
 //! Detection — plan-00 §5, ADR-0008.
 
-use reachgraph_plugin_api::{Plugin, PluginId, Registry};
+use reachgraph_plugin_api::{Plugin, PluginId, Registration, Registry};
 
 use crate::support::{case, fixtures_dir};
 
@@ -13,7 +13,15 @@ fn empty_marker_files_matches_nothing() {
     assert!(plugin.detection().marker_files.is_empty());
 
     let mut registry = Registry::new();
-    registry.register(Box::new(case("minimal")));
+    registry
+        .register(
+            Registration::of(case("minimal"))
+                .symbols()
+                .edges()
+                .roots()
+                .classifier(),
+        )
+        .expect("the case declares every capability it hands over");
 
     assert!(registry.detect(&fixtures_dir().join("minimal")).is_empty());
 }
@@ -24,7 +32,15 @@ fn empty_marker_files_matches_nothing() {
 #[test]
 fn fixture_is_never_detected() {
     let mut registry = Registry::new();
-    registry.register(Box::new(case("minimal")));
+    registry
+        .register(
+            Registration::of(case("minimal"))
+                .symbols()
+                .edges()
+                .roots()
+                .classifier(),
+        )
+        .expect("the case declares every capability it hands over");
 
     // The case directory holds the document the fixture reads, which is the
     // one place a marker-file rule would most plausibly fire.

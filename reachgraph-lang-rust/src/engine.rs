@@ -8,7 +8,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use ra_ap_hir::{Crate, HasAttrs as _, Impl, Module, ModuleDef};
+use ra_ap_hir::{Crate, HasAttrs as _, HasSource as _, Impl, Module, ModuleDef};
 use ra_ap_ide::{Analysis, AnalysisHost, CallHierarchyConfig, FilePosition, RootDatabase};
 use ra_ap_ide_db::ra_fixture::RaFixtureConfig;
 use ra_ap_load_cargo::{load_workspace, LoadCargoConfig, ProcMacroServerChoice};
@@ -26,7 +26,7 @@ use reachgraph_plugin_api::{
 use crate::classify::{classify_facts, CrateOrigin, PathFacts};
 use crate::coverage::{MemberCoverage, OutDirMechanism, ProcMacroExpansion, RustCoverage};
 use crate::ids::{node_id, RawParts};
-use crate::kinds::{map_kind, render_impl_header, RustItem};
+use crate::kinds::{declared_trait_name, map_kind, render_impl_header, RustItem};
 use crate::preflight::{CargoProbe, PreflightFacts, WorkspaceProbe};
 use crate::{ENGINE, PLUGIN_ID};
 
@@ -71,6 +71,13 @@ struct UnitFacts {
     /// know a cargo target).
     root_file: PathBuf,
 }
+
+/// The unit half of an id for a file no crate in the graph holds.
+///
+/// A dependency's extracted source, the sysroot, a generated file nothing
+/// loaded. It is a real identity and deliberately not a member's: plan-01 §7.0
+/// calls such a node external, and no symbol is ever emitted under it.
+const EXTERNAL_UNIT: &str = "external";
 
 /// A loaded workspace, and the whole of this crate's mutable state.
 pub(crate) struct Loaded {
@@ -615,8 +622,24 @@ impl Loaded {
     /// name, so plan-04 compares against that directly and never resolves a
     /// Rust import. `Trait::name` is the declared name; the use-path is not
     /// available here and is not wanted.
+    ///
+    /// # The resolver is not the only route, and MEASURED it is not enough
+    ///
+    /// `Impl::trait_` answers `None` whenever the trait is not in the crate
+    /// graph, and on a real tonic repository it always is not: the service
+    /// trait is declared in build-script output, which plan-03 §9 D-D does not
+    /// load. The header then dropped the clause the source plainly contains
+    /// and every served root went unbound — see
+    /// [`crate::kinds::declared_trait_name`] and `fx-attr`.
+    ///
+    /// So the resolved name is preferred and the written one is the fallback.
+    /// Both produce the declared name; only the first needs the trait to
+    /// exist.
     fn impl_header(&self, db: &RootDatabase, imp: Impl) -> String {
-        let trait_name = imp.trait_(db).map(|tr| tr.name(db).as_str().to_owned());
+        let trait_name = imp
+            .trait_(db)
+            .map(|tr| tr.name(db).as_str().to_owned())
+            .or_else(|| written_trait_name(db, imp));
         render_impl_header(trait_name.as_deref(), &self_type_name(db, imp))
     }
 
@@ -690,6 +713,18 @@ impl Loaded {
         )
         .map_err(|error| engine_error(error.to_string()))
     }
+}
+
+/// The trait an impl block names in source, when the resolver could not.
+///
+/// A pure read of the syntax tree: the node is already parsed, the text is
+/// already there, and nothing is expanded, resolved or guessed to obtain it.
+fn written_trait_name(db: &RootDatabase, imp: Impl) -> Option<String> {
+    use ra_ap_syntax::AstNode as _;
+
+    let source = imp.source(db)?;
+    let written = source.value.trait_()?;
+    declared_trait_name(&written.syntax().text().to_string())
 }
 
 /// The self type's name, as the impl header and the impl symbol both spell it.
@@ -859,7 +894,7 @@ impl Loaded {
                 // `Symbol` is emitted for it and no edge can name it.
                 continue;
             };
-            let target_unit = self.unit_of(&target_path);
+            let target_unit = self.unit_of_target(item.target.file_id);
             let offset = item
                 .target
                 .focus_range
@@ -908,29 +943,49 @@ impl Loaded {
         }
     }
 
-    /// Which unit a path belongs to, for a node id minted mid-traversal.
+    /// The unit half of a call target's id — plan-03 §6's consistency rule.
     ///
-    /// A call target outside every enumerated unit — a dependency's library
-    /// source, the sysroot — still needs a stable identity (plan-03 §6, §9).
-    /// The unit half of its raw is the unit whose root directory contains it,
-    /// longest match first, and a synthesized `external` id when none does.
-    fn unit_of(&self, path: &Path) -> UnitId {
-        let mut best: Option<&UnitFacts> = None;
-        for facts in &self.units {
-            if !path.starts_with(&facts.unit.root) {
-                continue;
-            }
-            let longer = best.is_none_or(|current| {
-                facts.unit.root.as_os_str().len() > current.unit.root.as_os_str().len()
-            });
-            if longer {
-                best = Some(facts);
-            }
-        }
-        match best {
-            Some(facts) => facts.unit.id.clone(),
-            None => UnitId("external".to_owned()),
-        }
+    /// # Why the crate graph answers this and a directory cannot
+    ///
+    /// MEASURED 2026-09-19 on `/home/max/git/yadgarhq/task`: every Cargo target
+    /// of one package shares one manifest directory, so containment cannot tell
+    /// the library apart from an integration test — it answered with whichever
+    /// unit sorted first. The symbol walk meanwhile minted ids under the unit
+    /// whose crate it was walking, so a callee's id and the same definition's
+    /// emitted id differed in their unit half and matched nothing. Six shards
+    /// stopped at depth 1 and 221 of 227 symbols were reported as not reachable
+    /// from any endpoint.
+    ///
+    /// A file belongs to a crate, the crate graph knows which, and a unit is
+    /// joined to a crate by its target root file — the same join `crate_for`
+    /// makes from the other side. That is one answer rather than an ordering
+    /// accident.
+    ///
+    /// # A file no crate holds is `external`, and the directory rule is gone
+    ///
+    /// Symbols are emitted by walking crates, so a file outside every crate has
+    /// no emitted symbol under any unit id. Naming an enumerated unit for it —
+    /// which containment did whenever such a file sat inside a member's
+    /// directory — mints an id inside an indexed unit that no symbol carries.
+    /// That is the same phantom in miniature, so the rule that produced it is
+    /// deleted rather than kept as a fallback. `external` says what is true: it
+    /// is a stable identity (plan-03 §9) that claims no membership.
+    fn unit_of_target(&self, file_id: ra_ap_vfs::FileId) -> UnitId {
+        self.unit_of_crate(file_id)
+            .unwrap_or_else(|| UnitId(EXTERNAL_UNIT.to_owned()))
+    }
+
+    /// The unit whose crate owns this file, when one does.
+    fn unit_of_crate(&self, file_id: ra_ap_vfs::FileId) -> Option<UnitId> {
+        let db = self.host.raw_database();
+        let sema = ra_ap_hir::Semantics::new(db);
+        let module = sema.file_to_module_def(file_id)?;
+        let root_file = module.krate(db).root_file(db);
+
+        self.units
+            .iter()
+            .find(|facts| self.file_id(&facts.root_file) == Some(root_file))
+            .map(|facts| facts.unit.id.clone())
     }
 
     /// Plan-03 §10 — the five categories, from facts the engine already holds.

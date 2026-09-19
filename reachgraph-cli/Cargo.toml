@@ -1,7 +1,11 @@
-# SKELETON. plan-06 fills it. It exists now for the same reason
-# `reachgraph-core` does, from the other side: it is the one crate
-# `no_plugin_depends_on_core` must EXEMPT, so the exemption is exercised rather
-# than merely written.
+# The binary — plan-06. It owns the plugin registry, the feature flags and the
+# argument surface, and nothing else.
+#
+# The crate is a library with a thin `main`, so plan-06 §7's tests drive the
+# whole command surface in process. A test harness that had to spawn the built
+# binary would be slower, would couple every assertion to a build profile, and
+# would make `no_process_spawn_in_workspace` (§4.1) argue with its own test
+# suite.
 [package]
 name = "reachgraph-cli"
 description = "The reachgraph binary: owns the plugin registry and the feature flags."
@@ -11,10 +15,47 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[lib]
+name = "reachgraph_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "reachgraph"
 path = "src/main.rs"
 
+[features]
+# What a release build is. There is no `fixture` feature: plan-06 §3 sketches
+# one and a dev-dependency is the same rule enforced one level harder, because
+# a feature that is off by default can be switched on. A fixture plugin
+# reachable from a shipped binary would let a hand-written JSON file
+# masquerade as an analysis.
+default = ["lang-rust", "roots-proto-tonic", "serve"]
+lang-rust = ["dep:reachgraph-lang-rust"]
+roots-proto-tonic = ["dep:reachgraph-roots-proto-tonic"]
+# ADR-0006's convenience command, behind a feature so its cost is measurable
+# rather than asserted (plan-06 §2.1).
+serve = ["dep:axum", "dep:tokio", "dep:tower-http"]
+
 [dependencies]
 reachgraph-core.workspace = true
 reachgraph-plugin-api.workspace = true
+reachgraph-lang-rust = { workspace = true, optional = true }
+reachgraph-roots-proto-tonic = { workspace = true, optional = true }
+# The run report's machine-readable form (plan-06 §1.1 `--json`, §5.3).
+serde.workspace = true
+serde_json.workspace = true
+# `serve` only. See `src/serve.rs` for why the resolving is a library's job.
+axum = { version = "0.8.4", default-features = false, features = [
+    "http1",
+    "tokio",
+], optional = true }
+tokio = { version = "1.43", default-features = false, features = [
+    "rt-multi-thread",
+    "net",
+], optional = true }
+tower-http = { version = "0.6.2", default-features = false, features = [
+    "fs",
+], optional = true }
+
+[dev-dependencies]
+reachgraph-fixture.workspace = true

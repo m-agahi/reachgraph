@@ -358,3 +358,92 @@ fn preflight_warning_is_recorded_and_the_plugin_still_runs() {
         } if reason == spy.reason && remediation == spy.remediation
     )));
 }
+
+// ---------------------------------------------------------------------------
+// The run-record channel — plan-03 §9 D-D's second half
+// ---------------------------------------------------------------------------
+
+/// A plugin-authored note reaches the artifact unaltered.
+///
+/// D-D rules that generated code goes unindexed **and the artifact says so**,
+/// so a reader can tell *not indexed* from *not called*. The facts are one
+/// language's vocabulary, so the waist carries them as opaque strings rather
+/// than as fields — widening `IndexCoverage` with `out_dir_loaded` would be the
+/// ADR-0003 violation the fixture plugin exists to catch.
+#[test]
+fn a_plugin_note_reaches_the_artifact_verbatim() {
+    let sentence = "generated code was not indexed for 1 of 2 members; calls into \
+                    generated code from those members are absent from this index, not \
+                    proven absent from the code";
+
+    let mut doc = doc_of("minimal");
+    doc.notes = vec![sentence.to_owned()];
+    let plugin = plugin_from("minimal", doc);
+
+    let index = Index::build(Path::new("."), &inputs(&plugin), &BuildOptions::default())
+        .expect("the case builds");
+
+    assert_eq!(index.coverage().notes, vec![sentence.to_owned()]);
+    assert_eq!(
+        endpoints(&emit(&index)).coverage.notes,
+        vec![sentence.to_owned()],
+        "the note is carried into the artifact, which is where a reader is"
+    );
+}
+
+/// One plugin commonly fills three of the four slices. Asking each slice would
+/// write its sentence into the artifact three times, and a reader would take
+/// the repetition for three findings.
+#[test]
+fn a_plugin_in_several_slices_is_asked_once() {
+    let mut doc = doc_of("minimal");
+    doc.notes = vec!["said once".to_owned()];
+    let plugin = plugin_from("minimal", doc);
+
+    let inputs = inputs(&plugin);
+    assert!(
+        !inputs.symbols.is_empty() && !inputs.edges.is_empty() && !inputs.classifiers.is_empty(),
+        "the case under test occupies several slices, which is what makes the dedup load-bearing"
+    );
+
+    let index =
+        Index::build(Path::new("."), &inputs, &BuildOptions::default()).expect("the case builds");
+
+    assert_eq!(index.coverage().notes, vec!["said once".to_owned()]);
+}
+
+/// Two plugins each keep their own sentence. A `Vec<String>` the waist neither
+/// parses nor merges is the point: nothing here may decide two notes are "the
+/// same finding".
+#[test]
+fn notes_from_two_plugins_are_both_carried() {
+    let mut first = doc_of("two_plugins_a");
+    first.notes = vec!["from a".to_owned()];
+    let mut second = doc_of("two_plugins_b");
+    second.notes = vec!["from b".to_owned()];
+
+    let a = plugin_from("two_plugins_a", first);
+    let b = plugin_from("two_plugins_b", second);
+
+    let index = Index::build(
+        Path::new("."),
+        &crate::support::inputs_of(&[&a, &b]),
+        &BuildOptions::default(),
+    )
+    .expect("both cases build");
+
+    assert_eq!(
+        index.coverage().notes,
+        vec!["from a".to_owned(), "from b".to_owned()]
+    );
+}
+
+/// A run nobody had anything to say about emits an empty list, not a missing
+/// key. Absence of notes is a statement; a missing field would be a gap.
+#[test]
+fn a_run_with_no_notes_emits_an_empty_list() {
+    let index = build(&case("minimal"));
+
+    assert!(index.coverage().notes.is_empty());
+    assert!(endpoints(&emit(&index)).coverage.notes.is_empty());
+}

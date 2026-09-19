@@ -165,6 +165,48 @@ impl Plugin for RustPlugin {
             }),
         }
     }
+
+    /// Plan-03 §9 D-D's second half, which had no channel until now.
+    ///
+    /// The ruling is that generated code goes unindexed **and the artifact says
+    /// so**, because a reader must be able to tell *not indexed* from *not
+    /// called*. [`crate::coverage::RustCoverage`] held those facts on this
+    /// crate's own surface and nothing carried them out; `Plugin::notes` is
+    /// what carries them, as opaque strings the waist never parses.
+    ///
+    /// Every sentence here is about **this index**, not about the user's
+    /// machine, and none of them repeats a preflight remediation: preflight
+    /// says what to do before a run, a note says what the finished artifact
+    /// contains. An empty list means the run has nothing to qualify, which
+    /// cannot happen while ADR-0728 holds — proc-macro expansion is
+    /// unconditionally off, so the second sentence is always present and the
+    /// artifact always states it.
+    fn notes(&self) -> Vec<String> {
+        let Some(coverage) = self.coverage() else {
+            return Vec::new();
+        };
+
+        let mut notes = Vec::new();
+        if let Some(statement) = coverage.generated_code_statement() {
+            notes.push(statement);
+        }
+        match coverage.proc_macro_expansion {
+            crate::coverage::ProcMacroExpansion::Disabled => notes.push(
+                "proc-macro expansion is disabled in this index, so calls that cross an \
+                 attribute or derive macro are absent from it rather than proven absent \
+                 from the code"
+                    .to_owned(),
+            ),
+        }
+        if !coverage.rust_src_available {
+            notes.push(
+                "the sysroot source root did not resolve for this index, so standard-library \
+                 call targets are recorded as external rather than classified"
+                    .to_owned(),
+            );
+        }
+        notes
+    }
 }
 
 impl LanguagePlugin for RustPlugin {

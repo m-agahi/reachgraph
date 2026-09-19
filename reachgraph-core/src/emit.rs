@@ -224,6 +224,7 @@ fn coverage_row(coverage: &IndexCoverage) -> CoverageRow {
             .map(category)
             .collect(),
         partial: coverage.partial,
+        notes: coverage.notes.clone(),
     }
 }
 

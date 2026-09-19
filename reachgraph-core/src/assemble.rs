@@ -386,6 +386,7 @@ impl Index {
             plugins: distinct_plugins(inputs),
             traversal_terminal_categories: filter.categories().to_vec(),
             partial,
+            notes: collect_notes(inputs),
         };
 
         // The complement is unlimited, always (plan-01 §5.1).
@@ -534,6 +535,34 @@ fn plugin_views<'a>(inputs: &'a BuildInputs<'_>) -> Vec<&'a dyn Plugin> {
     all.extend(inputs.roots.iter().map(|p| *p as &dyn Plugin));
     all.extend(inputs.classifiers.iter().map(|p| *p as &dyn Plugin));
     all
+}
+
+/// Every contributing plugin's own account of the run, in registration order.
+///
+/// Collected **here**, after every provider has been asked for its symbols,
+/// edges and roots, because a plugin that learns what it could not see by
+/// loading a workspace has nothing to say before it loads one.
+///
+/// Deduplicated by `PluginId` for the same reason `descriptors` is: one plugin
+/// commonly appears in three of the four slices, and asking it three times
+/// would write its sentence into the artifact three times.
+///
+/// The strings are carried and never read. The waist does not know what a note
+/// means, does not order them by content and does not merge two that look
+/// alike — the same opacity it keeps over `NodeId::raw` and `Root::join_key`.
+fn collect_notes(inputs: &BuildInputs<'_>) -> Vec<String> {
+    let mut asked: Vec<PluginId> = Vec::new();
+    let mut notes: Vec<String> = Vec::new();
+
+    for plugin in plugin_views(inputs) {
+        if asked.contains(&plugin.id()) {
+            continue;
+        }
+        asked.push(plugin.id());
+        notes.extend(plugin.notes());
+    }
+
+    notes
 }
 
 fn descriptors(inputs: &BuildInputs<'_>) -> Vec<PluginDescriptor> {

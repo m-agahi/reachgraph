@@ -1,6 +1,6 @@
 //! The kind table and the impl-header grammar — plan-03 §8, ADR-0008 leak 6.
 
-use reachgraph_lang_rust::kinds::{map_kind, render_impl_header, RustItem};
+use reachgraph_lang_rust::kinds::{declared_trait_name, map_kind, render_impl_header, RustItem};
 use reachgraph_plugin_api::SymbolKind;
 
 /// Every row of plan-03 §8's table, including that `raw_kind` is preserved
@@ -96,4 +96,57 @@ fn the_impl_header_renders_the_name_it_is_given_verbatim() {
         "the two differ, so which one the walk supplies is a real choice"
     );
     assert_eq!(declared, "impl TaskService for Task");
+}
+
+// ---------------------------------------------------------------------------
+// The declared trait name, read from source text
+// ---------------------------------------------------------------------------
+
+/// Plan-03 §8 specifies the **declared** name, never the path it was imported
+/// by, so a path is reduced to its last segment.
+#[test]
+fn a_path_reduces_to_its_last_segment() {
+    assert_eq!(
+        declared_trait_name("task_service_server::TaskService"),
+        Some("TaskService".to_owned())
+    );
+    assert_eq!(
+        declared_trait_name("crate::pb::yadgar::taskapi::v1::TaskService"),
+        Some("TaskService".to_owned())
+    );
+}
+
+#[test]
+fn a_bare_name_is_itself() {
+    assert_eq!(
+        declared_trait_name("TaskService"),
+        Some("TaskService".to_owned())
+    );
+}
+
+/// Generic arguments belong to the use, not to the declared name, and plan-04
+/// §7 compares the name against a proto service spelling that has none.
+#[test]
+fn generic_arguments_are_dropped() {
+    assert_eq!(declared_trait_name("Svc<Channel>"), Some("Svc".to_owned()));
+    assert_eq!(
+        declared_trait_name("api::Svc<'a, T>"),
+        Some("Svc".to_owned())
+    );
+}
+
+#[test]
+fn surrounding_whitespace_is_ignored() {
+    assert_eq!(declared_trait_name("  Svc  "), Some("Svc".to_owned()));
+}
+
+/// A header cannot name these as a trait, and a mangled fragment would be
+/// worse than saying nothing — the honest-absence rule, one level down.
+#[test]
+fn a_type_that_is_not_a_plain_path_yields_nothing() {
+    assert_eq!(declared_trait_name("(A, B)"), None);
+    assert_eq!(declared_trait_name("&'a Svc"), None);
+    assert_eq!(declared_trait_name("[u8; 4]"), None);
+    assert_eq!(declared_trait_name(""), None);
+    assert_eq!(declared_trait_name("::"), None);
 }

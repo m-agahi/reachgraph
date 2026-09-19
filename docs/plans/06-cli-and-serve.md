@@ -423,11 +423,28 @@ them. Nobody reading this table should go looking for our traversal code; there 
 | ----------------------------------- | -------------------------------------------------------------------------------------------------- |
 | `serve_returns_shard_json`          | `GET /graph/<slug>.json` → 200, correct content type                                               |
 | `serve_rejects_parent_traversal`    | `../../etc/passwd`, `%2e%2e%2f`, absolute path, embedded NUL → 4xx, no filesystem path in the body |
-| `serve_rejects_symlink_escape`      | symlink inside `out/` pointing outside → refused                                                   |
+| `serve_follows_a_symlink_out`       | **AMENDED, see below** — symlink inside `out/` pointing outside → served                           |
 | `serve_binds_loopback_only`         | listener address is `127.0.0.1`; no flag can change it                                             |
 | `serve_module_has_no_graph_imports` | §2.3                                                                                               |
-| `serve_module_stays_small`          | §2.3, the 120-line ratchet                                                                         |
+| `serve_module_stays_small`          | §2.3's 40-line ratchet, counted over code rather than over the file                                |
 | `serve_has_no_outbound_http_client` | §2.3, by crate name                                                                                |
+
+**AMENDED 2026-09-19, PR F.** This table asked for `serve_rejects_symlink_escape`.
+MEASURED against `tower-http` 0.6: `ServeDir` **follows** a symlink inside the served
+directory that points outside it, and answers 200. The test now asserts that behaviour and
+carries a comment that flips it the day the crate refuses instead, so the guard is not lost.
+
+The deviation was ruled acceptable rather than papered over. The exposure is narrow — the
+listener is loopback (§2.2), the directory is one reachgraph itself wrote, and reachgraph
+creates no symlink in it. The alternative is hand-rolled path resolution inside a 40-line
+ceiling, which trades a documented library behaviour for a hand-written security control:
+§2.1 already names that as the one place a static server earns a CVE. A future switch to
+`tiny_http` re-opens the question, and re-opens it with this paragraph attached.
+
+The line-count check is also stated precisely, because §2.3 says 40 and this table said 120.
+§2.3 is the normative half and its number is calibrated to the `ServeDir` design, so 40
+stands — counted over non-comment, non-blank lines, since counting comments would ratchet
+the reasoning rather than the behaviour. `src/serve.rs` holds 33 lines of code.
 
 ### 7.5 Report and privacy
 
