@@ -346,6 +346,19 @@ pub struct UnboundRootRow {
     pub reason: String,
 }
 
+/// One contract a provider found and did not read, as the artifact spells it.
+///
+/// The row exists so a reader can subtract: every claim in this artifact is
+/// made over the contracts in `contracts` and over none of the contracts here.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UnexaminedContractRow {
+    /// The contract that was found and not read.
+    pub contract: String,
+    /// The provider's own words for why. Carried verbatim, never parsed.
+    pub reason: String,
+}
+
 /// What the index covered — ADR-0007 requirement 1, in the artifact rather
 /// than in a log line.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -361,13 +374,18 @@ pub struct CoverageRow {
     pub roots_bound: usize,
     /// The rest, with their reasons.
     pub unbound_roots: Vec<UnboundRootRow>,
+    /// Every contract found and not read, with the reason each provider gave.
+    ///
+    /// Disjoint from `contracts`. A non-empty list is why `partial` is true.
+    pub unexamined_contracts: Vec<UnexaminedContractRow>,
     /// Every unit enumerated.
     pub units_indexed: Vec<String>,
     /// Every contributing plugin.
     pub plugins: Vec<String>,
     /// Categories at which the walk stopped — a declared limitation.
     pub traversal_terminal_categories: Vec<CategoryRow>,
-    /// True when a provider failed and the run continued.
+    /// True when the index covered less than it set out to: a provider failed
+    /// and the run continued, or a provider reported an unexamined contract.
     pub partial: bool,
     /// What each contributing plugin said about this run, verbatim.
     ///

@@ -173,6 +173,7 @@ pub fn coverage() -> IndexCoverage {
             direction: Direction::Served,
             reason: "no `impl TaskService for T` method named `delete_task`".to_owned(),
         }],
+        unexamined_contracts: Vec::new(),
         units_indexed: vec![UnitId("crate:task".to_owned())],
         plugins: vec![RUST],
         traversal_terminal_categories: vec![Category::ThirdParty, Category::Stdlib],

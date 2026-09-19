@@ -15,6 +15,10 @@ mod renderers;
 mod report;
 mod support;
 mod surface;
+// The roots plugin this exercises is behind its own feature, and the module
+// names its type directly rather than through a trait object.
+#[cfg(feature = "roots-proto-tonic")]
+mod unexamined;
 
 #[cfg(feature = "serve")]
 mod serve;

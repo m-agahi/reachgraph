@@ -7,8 +7,8 @@ use std::path::Path;
 use reachgraph_plugin_api::{
     Capability, Category, Classifier, ContractId, EdgeProvider, GraphView, IndexCoverage, Node,
     NodeId, Plugin, PluginDescriptor, PluginError, PluginId, Preflight, Root, RootBinding,
-    RootProvider, Shard, Symbol, SymbolIndex, SymbolProvider, UnboundRoot, Unit, UnitId,
-    VersionKey,
+    RootProvider, Shard, Symbol, SymbolIndex, SymbolProvider, UnboundRoot, UnexaminedContract,
+    Unit, UnitId, VersionKey,
 };
 
 use crate::classify::{classify_all, Classifiers};
@@ -293,6 +293,7 @@ impl Index {
         let mut roots: Vec<Root> = Vec::new();
         let mut contracts: Vec<ContractId> = Vec::new();
         let mut version_keys: Vec<VersionKey> = Vec::new();
+        let unexamined_contracts: Vec<UnexaminedContract> = Vec::new();
 
         for provider in &inputs.roots {
             let plugin = provider.id();
@@ -382,6 +383,7 @@ impl Index {
             roots_total: roots.len(),
             roots_bound: bound.len(),
             unbound_roots,
+            unexamined_contracts,
             units_indexed,
             plugins: distinct_plugins(inputs),
             traversal_terminal_categories: filter.categories().to_vec(),

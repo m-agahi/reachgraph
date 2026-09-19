@@ -12,8 +12,9 @@ use std::sync::Mutex;
 use reachgraph_fixture::format::FixtureDoc;
 use reachgraph_fixture::{FixturePlugin, FIXTURE_DOCUMENT_NAME};
 use reachgraph_plugin_api::{
-    Capability, Category, Classifier, Detection, Edge, EdgeProvider, LanguagePlugin, NodeId,
-    Plugin, PluginError, PluginId, PositionEncoding, Preflight, Symbol, SymbolProvider, Unit,
+    Capability, Category, Classifier, ContractId, Coverage, Detection, Edge, EdgeProvider,
+    LanguagePlugin, NodeId, Plugin, PluginError, PluginId, PositionEncoding, Preflight, Root,
+    RootProvider, Symbol, SymbolIndex, SymbolProvider, UnexaminedContract, Unit,
 };
 
 use crate::support::fixtures_dir;
@@ -256,5 +257,67 @@ impl EdgeProvider for PreflightSpy<'_> {
 
     fn edges_from(&self, node: &NodeId) -> Result<Vec<Edge>, PluginError> {
         self.inner.edges_from(node)
+    }
+}
+
+/// A root provider that succeeded over part of what it found.
+///
+/// The second thing no corpus case can express. A case declares the coverage it
+/// wants; it cannot declare a provider that **returned roots and, in the same
+/// breath, named a contract it could not read**. That combination is the whole
+/// subject of ADR-0743, and it is a behaviour of a provider rather than a
+/// content of a document.
+pub struct PartialRootProvider {
+    pub id: PluginId,
+    pub unexamined: Vec<UnexaminedContract>,
+}
+
+impl Plugin for PartialRootProvider {
+    fn id(&self) -> PluginId {
+        self.id
+    }
+
+    fn provides(&self) -> &[Capability] {
+        &[Capability::Roots]
+    }
+
+    fn position_encoding(&self) -> PositionEncoding {
+        PositionEncoding::Utf8Bytes
+    }
+
+    fn detection(&self) -> Detection {
+        Detection {
+            marker_files: &[],
+            extensions: &[],
+        }
+    }
+
+    fn preflight(&self, _root: &Path) -> Preflight {
+        Preflight::Ok
+    }
+
+    /// The skipped file has a structured home in `Coverage`, so restating it
+    /// here would put one fact in two shapes — the thing a note exists to
+    /// avoid rather than to create.
+    fn notes(&self) -> Vec<String> {
+        Vec::new()
+    }
+}
+
+impl RootProvider for PartialRootProvider {
+    fn roots(
+        &self,
+        _repo_root: &Path,
+        _symbols: &dyn SymbolIndex,
+    ) -> Result<Vec<Root>, PluginError> {
+        Ok(Vec::new())
+    }
+
+    fn coverage(&self) -> Coverage {
+        Coverage {
+            contracts: vec![ContractId("proto/whole.proto".to_owned())],
+            versions: Vec::new(),
+            unexamined_contracts: self.unexamined.clone(),
+        }
     }
 }

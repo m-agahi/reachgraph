@@ -18,8 +18,8 @@ use crate::schema::{
     DirectionRow, DocFormatRow, EdgeRow, EdgeTargetRow, EncodingRow, EndpointsDocument,
     GeneratedBy, InferenceModeRow, NodeRef, NodeRow, OperationRow, OperationVersionRow, PluginRow,
     ProvenanceRow, RangeRow, ShardDocument, ShardRootRow, SpanRow, StatsRow, SymbolKindRow,
-    SymbolRow, UnboundRootRow, UnreachableDocument, UnreachableRow, VersionKeyRow, VersionNodeRow,
-    VersionsDocument, SCHEMA_VERSION, UNREACHABLE_CLAIM,
+    SymbolRow, UnboundRootRow, UnexaminedContractRow, UnreachableDocument, UnreachableRow,
+    VersionKeyRow, VersionNodeRow, VersionsDocument, SCHEMA_VERSION, UNREACHABLE_CLAIM,
 };
 use crate::shard::shard_path;
 use crate::versions::class_of;
@@ -205,6 +205,14 @@ fn coverage_row(coverage: &IndexCoverage) -> CoverageRow {
                 operation: root.operation.clone(),
                 direction: direction(root.direction),
                 reason: root.reason.clone(),
+            })
+            .collect(),
+        unexamined_contracts: coverage
+            .unexamined_contracts
+            .iter()
+            .map(|entry| UnexaminedContractRow {
+                contract: entry.contract.0.clone(),
+                reason: entry.reason.clone(),
             })
             .collect(),
         units_indexed: coverage

@@ -291,21 +291,138 @@ fn coverage_is_empty_before_a_run() {
     assert!(coverage.versions.is_empty());
 }
 
-/// Plan-04 §10 — loud over lenient.
+/// ADR-0743, and the test plan-04 §10 used to pin the other way round.
+///
+/// It asserted that an unparseable `.proto` made `roots()` return `Err`. That
+/// was loud, and it was also the end of the run: the second `workflow_dispatch`
+/// dry run of release.yaml (run 35459855283) died on this very fixture, so
+/// reachgraph could not analyse its own repository. Loud is right; **aborting**
+/// is not the only way to be loud, and it is the only way that leaves the user
+/// with nothing.
+///
+/// What it asserts now: the file is recorded rather than dropped, the parser's
+/// own message comes with it, and the run returns roots.
 #[test]
-fn unparseable_proto_is_an_error_not_silent_coverage_loss() {
+fn an_unparseable_proto_is_recorded_rather_than_fatal() {
     let plugin = ProtoTonicPlugin::new();
     let index = FakeIndex::new(Vec::new());
-    let error = plugin
+    let roots = plugin
         .roots(&fixture("broken"), &index)
-        .expect_err("a `.proto` that does not parse fails the run");
+        .expect("one unreadable contract does not end the run");
 
-    let rendered = error.to_string();
-    assert!(rendered.contains("broken.proto"), "{rendered}");
+    // The fixture holds exactly one `.proto` and it is the truncated one, so
+    // no root is the honest answer here rather than a dropped result.
+    assert!(roots.is_empty(), "{roots:?}");
 
+    let coverage = plugin.coverage();
     assert!(
-        plugin.coverage().contracts.is_empty(),
-        "a failed run does not leave behind a coverage claim it did not earn"
+        coverage.contracts.is_empty(),
+        "a file nobody read is not a file that was examined: {:?}",
+        coverage.contracts
+    );
+    assert_eq!(
+        coverage
+            .unexamined_contracts
+            .iter()
+            .map(|entry| entry.contract.0.as_str())
+            .collect::<Vec<_>>(),
+        ["proto/broken.proto"]
+    );
+    let reason = coverage.unexamined_contracts[0].reason.as_str();
+    assert!(
+        reason.contains("expected") && reason.contains("end of file"),
+        "the parser's own words: {reason}"
+    );
+}
+
+/// The counter-argument, kept where it can fail.
+///
+/// plan-04 §10 was right that an omitted contract makes live code read as
+/// unreachable — ADR-0007's false-positive class. Recording answers it only if
+/// the record is impossible to miss, so the skipped file must never appear as
+/// examined and must never be silently absent from both lists.
+#[test]
+fn a_skipped_contract_is_in_exactly_one_of_the_two_lists() {
+    let plugin = ProtoTonicPlugin::new();
+    let index = FakeIndex::new(Vec::new());
+    plugin
+        .roots(&fixture("broken"), &index)
+        .expect("the run continues");
+
+    let coverage = plugin.coverage();
+    let examined: Vec<&str> = coverage
+        .contracts
+        .iter()
+        .map(|contract| contract.0.as_str())
+        .collect();
+    let skipped: Vec<&str> = coverage
+        .unexamined_contracts
+        .iter()
+        .map(|entry| entry.contract.0.as_str())
+        .collect();
+
+    assert_eq!(
+        examined.len() + skipped.len(),
+        1,
+        "{examined:?} {skipped:?}"
+    );
+    assert!(
+        !examined.iter().any(|path| skipped.contains(path)),
+        "examined and skipped are disjoint: {examined:?} {skipped:?}"
+    );
+}
+
+/// The boundary, at the other end: a `.proto` that is not text.
+///
+/// Found-and-unreadable is one class however the reading failed, so a file
+/// whose bytes are not UTF-8 lands in the same list as one the parser rejects.
+/// Splitting the two would make the rule "recorded unless the failure happens
+/// in `std`", which is not a rule anybody could state.
+#[test]
+fn a_contract_that_is_not_utf8_is_recorded_too() {
+    let temp = std::env::temp_dir().join(format!("reachgraph-proto-utf8-{}", std::process::id()));
+    let proto = temp.join("proto");
+    std::fs::create_dir_all(&proto).expect("the temporary directory is writable");
+    std::fs::write(proto.join("raw.proto"), [0x73, 0x79, 0xff, 0xfe, 0x0a])
+        .expect("the temporary directory is writable");
+
+    let plugin = ProtoTonicPlugin::new();
+    let index = FakeIndex::new(Vec::new());
+    let result = plugin.roots(&temp, &index);
+    let coverage = plugin.coverage();
+    let _ = std::fs::remove_dir_all(&temp);
+
+    result.expect("a contract that is not text does not end the run");
+    assert_eq!(
+        coverage
+            .unexamined_contracts
+            .iter()
+            .map(|entry| entry.contract.0.as_str())
+            .collect::<Vec<_>>(),
+        ["proto/raw.proto"]
+    );
+}
+
+/// The other side of the boundary: a tree that cannot be walked is still fatal.
+///
+/// Coverage is a claim about what was found, and a directory that cannot be
+/// read yields no finding at all — there is no file to name and no count to
+/// state. Recording "something under here, unknown, unread" would be a claim
+/// about a tree nobody enumerated, which is the partial-index bug wearing the
+/// opposite costume.
+#[test]
+fn a_repository_that_cannot_be_walked_is_still_an_error() {
+    let plugin = ProtoTonicPlugin::new();
+    let index = FakeIndex::new(Vec::new());
+    let missing = std::env::temp_dir().join("reachgraph-proto-no-such-repository");
+    let _ = std::fs::remove_dir_all(&missing);
+
+    let error = plugin
+        .roots(&missing, &index)
+        .expect_err("a tree that cannot be enumerated is not a tree that was covered");
+    assert!(
+        matches!(error, reachgraph_plugin_api::PluginError::Io { .. }),
+        "{error:?}"
     );
 }
 

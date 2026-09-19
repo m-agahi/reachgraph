@@ -168,6 +168,7 @@ impl RootProvider for ProtoTonicPlugin {
         Coverage {
             contracts: examined.contracts,
             versions: examined.versions,
+            unexamined_contracts: Vec::new(),
         }
     }
 }
