@@ -218,11 +218,14 @@ JSON documents and `vendor/` with its `LICENSES.txt`. The wheel's interpreter ta
 | the binary **deflated** in the wheel  | 6 633 993     |
 | **the wheel**                         | **6 698 343** |
 
-**6.7% of PyPI's per-file limit.** MEASURED from PyPI's own help page: the default limit
-is 100 MB and a project may request an increase. No increase is needed, and ADR-0001's
-INFERRED 40–80 MB range was pessimistic by a factor of four — it reasoned from
-rust-analyzer's whole binary, and reachgraph links `ra_ap_ide` rather than shipping the
-server.
+**6.4% of PyPI's per-file limit** — 6 698 343 of 104 857 600 bytes. CONFIRMED against
+PyPI's own help page rather than from memory: the default per-file limit is **100.0 MiB**,
+the default project limit is 10.0 GiB, and administrators can raise either on request. No
+increase is needed here.
+
+ADR-0001's INFERRED 40–80 MB range was pessimistic by a factor of four. It reasoned from
+rust-analyzer's own 14.8 MB gzipped release asset, and reachgraph links `ra_ap_ide` rather
+than shipping the server.
 
 The wheel also carries a CycloneDX SBOM maturin generates unprompted (335 693 bytes), the
 two licence files and the attribution notice.
