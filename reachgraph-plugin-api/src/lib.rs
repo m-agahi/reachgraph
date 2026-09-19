@@ -1224,6 +1224,29 @@ pub trait Renderer: Send + Sync {
     /// by.
     fn id(&self) -> PluginId;
 
+    /// The top-level names this renderer writes into, relative to the
+    /// artifact root: a file name, or a directory name it owns wholesale.
+    ///
+    /// # Why this is on the trait rather than known by the caller
+    ///
+    /// The artifact is **regenerated, never merged into** — a directory
+    /// holding a previous run's files for roots this run does not have would
+    /// serve a reader a repository state nobody analysed. So the binary
+    /// removes the previous artifact before the new one lands, and it removes
+    /// only what it owns.
+    ///
+    /// Which names those are depends on which renderer ran. A binary that
+    /// hardcoded one renderer's paths would silently leave another's behind,
+    /// and the reader would open a page from the run before last. Asking the
+    /// renderer is the only answer that stays true when a second one exists
+    /// (ADR-0002 names five).
+    ///
+    /// **Required rather than defaulted**, like [`Plugin::notes`]: a provided
+    /// empty slice would make "this renderer writes nothing that needs
+    /// removing" indistinguishable from "this renderer was never asked", and
+    /// the second reads as the first right up until a stale page is served.
+    fn owns(&self) -> &[&'static str];
+
     /// Write this format's files through the sink.
     ///
     /// Object-safe, like [`OutputSink`], and for the same reason: the binary

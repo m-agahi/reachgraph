@@ -2143,6 +2143,7 @@ dependencies = [
  "reachgraph-fixture",
  "reachgraph-lang-rust",
  "reachgraph-plugin-api",
+ "reachgraph-render-html",
  "reachgraph-roots-proto-tonic",
  "serde",
  "serde_json",

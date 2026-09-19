@@ -44,6 +44,10 @@ impl Renderer for Echo {
         PluginId("echo")
     }
 
+    fn owns(&self) -> &[&'static str] {
+        &["index.html"]
+    }
+
     fn render(
         &self,
         input: &RenderInput<'_>,
@@ -140,6 +144,15 @@ fn an_artifact_file_carries_the_bytes_the_waist_wrote() {
 #[test]
 fn a_renderer_has_an_identity() {
     assert_eq!(Echo.id(), PluginId("echo"));
+}
+
+/// A renderer names what it writes, so the binary can remove the previous
+/// artifact without removing a file it does not own — and without holding a
+/// list of one renderer's paths that a second renderer would falsify.
+#[test]
+fn a_renderer_names_what_it_owns() {
+    let renderer: &dyn Renderer = &Echo;
+    assert_eq!(renderer.owns(), &["index.html"]);
 }
 
 /// [`Coverage`] is a root provider's; a renderer sees [`IndexCoverage`]

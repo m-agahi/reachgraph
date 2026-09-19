@@ -29,9 +29,13 @@ path = "src/main.rs"
 # a feature that is off by default can be switched on. A fixture plugin
 # reachable from a shipped binary would let a hand-written JSON file
 # masquerade as an analysis.
-default = ["lang-rust", "roots-proto-tonic", "serve"]
+default = ["lang-rust", "roots-proto-tonic", "render-html", "serve"]
 lang-rust = ["dep:reachgraph-lang-rust"]
 roots-proto-tonic = ["dep:reachgraph-roots-proto-tonic"]
+# The page half of the artifact (plan-05). A feature for the same reason
+# `serve` is one: the vendored JavaScript is 759 606 bytes of binary, and a
+# cost that can be measured is a cost somebody can argue about.
+render-html = ["dep:reachgraph-render-html"]
 # ADR-0006's convenience command, behind a feature so its cost is measurable
 # rather than asserted (plan-06 §2.1).
 serve = ["dep:axum", "dep:tokio", "dep:tower-http"]
@@ -41,6 +45,7 @@ reachgraph-core.workspace = true
 reachgraph-plugin-api.workspace = true
 reachgraph-lang-rust = { workspace = true, optional = true }
 reachgraph-roots-proto-tonic = { workspace = true, optional = true }
+reachgraph-render-html = { workspace = true, optional = true }
 # The run report's machine-readable form (plan-06 §1.1 `--json`, §5.3).
 serde.workspace = true
 serde_json.workspace = true

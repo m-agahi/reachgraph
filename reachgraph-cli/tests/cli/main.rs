@@ -8,6 +8,8 @@
 
 mod guards;
 mod preflight;
+#[cfg(feature = "render-html")]
+mod renderers;
 mod report;
 mod support;
 mod surface;

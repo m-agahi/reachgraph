@@ -28,7 +28,9 @@ pub mod args;
 mod outdir;
 mod preflight;
 pub mod registry;
+pub mod renderers;
 pub mod report;
+mod sink;
 
 #[cfg(feature = "serve")]
 pub mod serve;
@@ -38,10 +40,11 @@ use std::path::Path;
 use std::time::Instant;
 
 use reachgraph_core::{BuildInputs, BuildOptions, DirectorySink, Index};
-use reachgraph_plugin_api::Registry;
+use reachgraph_plugin_api::{Registry, RenderInput};
 
 use crate::args::{Analyse, Command, UsageError};
 use crate::report::{RunReport, Timings};
+use crate::sink::RecordingSink;
 
 /// Analysis completed and the artifact was written.
 pub const EXIT_OK: u8 = 0;
@@ -110,14 +113,13 @@ fn emit(into: &mut dyn Write, text: &str) -> u8 {
     }
 }
 
-/// Plan-06 §1: analysis plugins with their capabilities, detection markers and
-/// position encoding.
+/// Plan-06 §1: two tables, because there are two registries.
 ///
-/// **One table, because there is one registry.** Plan-06 §1 asks for two —
-/// analysis plugins and renderers — and `Renderer` does not exist in the
-/// contract yet (plan-05 has not landed). Printing an empty renderer table
-/// would re-suggest a shape nothing implements, which is the reason plan-06 §1
-/// gives for not printing a column of dashes.
+/// The second one can exist now that `Renderer` does (plan-05), and the split
+/// is the point rather than a layout choice: an analysis plugin is **detected**
+/// from a repository and a renderer is **asked for**. A plugin table that
+/// listed both would suggest a renderer could be detected, which
+/// `detect_never_returns_a_renderer` exists to refuse.
 fn plugins(registry: &Registry, streams: &mut Streams<'_>) -> u8 {
     let _ = writeln!(streams.out, "analysis plugins");
     for entry in registry.plugins() {
@@ -141,6 +143,32 @@ fn plugins(registry: &Registry, streams: &mut Streams<'_>) -> u8 {
             "",
             list(detection.marker_files),
             list(detection.extensions)
+        );
+    }
+
+    let _ = writeln!(streams.out);
+    let _ = writeln!(
+        streams.out,
+        "output formats  (asked for with --renderer, never detected)"
+    );
+    let formats = renderers::default_registry();
+    let mut any = false;
+    for entry in formats.all() {
+        any = true;
+        let renderer = entry.renderer();
+        let _ = writeln!(
+            streams.out,
+            "  {:<28} writes: {}",
+            renderer.id().0,
+            list(renderer.owns())
+        );
+    }
+    if !any {
+        // A build with every renderer feature off. Said plainly rather than
+        // printed as an empty heading, which reads as a bug in the table.
+        let _ = writeln!(
+            streams.out,
+            "  none — this build has no renderer feature enabled"
         );
     }
 
@@ -177,7 +205,23 @@ fn analyse(registry: &Registry, options: &Analyse, streams: &mut Streams<'_>) ->
         &format!("detect: {} plugins", detected.len()),
     );
 
-    if let Err(message) = outdir::check(&options.out, options.force) {
+    let formats = renderers::renderer_registry(options);
+    let selected = match formats.select(options.renderer.as_deref()) {
+        Ok(entry) => entry,
+        Err(available) => {
+            let _ = writeln!(
+                streams.err,
+                "error: no output format named {}",
+                options.renderer.as_deref().unwrap_or("<default>")
+            );
+            let _ = writeln!(streams.err, "  available: {}", list(&available));
+            return EXIT_USAGE;
+        }
+    };
+    let renderer = selected.renderer();
+    let owned = outdir::owned(renderer);
+
+    if let Err(message) = outdir::check(&options.out, &owned, options.force) {
         let _ = writeln!(streams.err, "error: {message}");
         return EXIT_USAGE;
     }
@@ -222,11 +266,17 @@ fn analyse(registry: &Registry, options: &Analyse, streams: &mut Streams<'_>) ->
     let analysis_ms = analysis_started.elapsed().as_millis() as u64;
 
     let emit_started = Instant::now();
-    if let Err(error) = outdir::clear(&options.out) {
+    if let Err(error) = outdir::clear(&options.out, &owned) {
         let _ = writeln!(streams.err, "error: {}: {error}", out);
         return EXIT_INTERNAL;
     }
-    let mut sink = DirectorySink::new(&options.out);
+
+    // The sink records what it lands, and the recording is what reaches the
+    // renderer. Plan-05 §6.5's single-file page inlines the same JSON the
+    // sharded directory holds, and "the same" is the requirement: a second
+    // serialisation could drift in key order, in number formatting, or in a
+    // field one side forgot. There is one serialiser, and it is the waist's.
+    let mut sink = RecordingSink::new(DirectorySink::new(&options.out));
     if let Err(error) = index.emit(&mut sink) {
         let _ = writeln!(streams.err, "error: {}: {error}", out);
         return EXIT_INTERNAL;
@@ -253,6 +303,23 @@ fn analyse(registry: &Registry, options: &Analyse, streams: &mut Streams<'_>) ->
         return EXIT_INTERNAL;
     }
 
+    // After `emit`, because the renderer reads what `emit` wrote.
+    let written = sink.recorded();
+    let render_input = RenderInput {
+        view: index.view(),
+        shards: index.shards(),
+        artifact: &written,
+    };
+    if let Err(error) = renderer.render(&render_input, &mut sink) {
+        let _ = writeln!(streams.err, "error: {}: {error}", renderer.id().0);
+        return EXIT_INTERNAL;
+    }
+    progress(
+        options,
+        streams,
+        &format!("rendered {} with {}", out, renderer.id().0),
+    );
+
     if options.json {
         match serde_json::to_string_pretty(&report) {
             Ok(text) => {
@@ -273,7 +340,7 @@ fn analyse(registry: &Registry, options: &Analyse, streams: &mut Streams<'_>) ->
 }
 
 fn write_run_record(
-    sink: &mut DirectorySink,
+    sink: &mut RecordingSink,
     report: &RunReport,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use reachgraph_plugin_api::OutputSink;

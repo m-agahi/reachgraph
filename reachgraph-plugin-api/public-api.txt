@@ -306,6 +306,7 @@ pub trait Plugin: Send + Sync {
 
 pub trait Renderer: Send + Sync {
     fn id(&self) -> PluginId;
+    fn owns(&self) -> &[&'static str];
     fn render(
         &self,
         input: &RenderInput<'_>,

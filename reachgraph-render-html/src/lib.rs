@@ -83,6 +83,23 @@ pub const INDEX_PATH: &str = "index.html";
 /// Where the single-file page lands, when it is emitted.
 pub const OVERVIEW_PATH: &str = "overview.html";
 
+/// The directory the vendored bundles and their notices land in.
+pub const VENDOR_DIR: &str = "vendor";
+
+/// The top-level names this renderer owns, for `Renderer::owns`.
+///
+/// `overview.html` is here whether or not this run emits it: the previous run
+/// may have, and a stale single-file page beside a fresh sharded one would
+/// show a reader two different repositories with nothing saying which is
+/// current.
+const OWNS: [&str; 5] = [
+    INDEX_PATH,
+    OVERVIEW_PATH,
+    STRUCTURE_PATH,
+    page::LOADER_PATH,
+    VENDOR_DIR,
+];
+
 /// ADR-0006's threshold: roughly 5 MB of graph JSON.
 ///
 /// **Measured over the serialised graph JSON and nothing else** (plan-05
@@ -171,6 +188,10 @@ fn write(sink: &mut dyn OutputSink, path: &str, bytes: &[u8]) -> Result<(), Rend
 impl Renderer for HtmlRenderer {
     fn id(&self) -> PluginId {
         PluginId(RENDERER_ID)
+    }
+
+    fn owns(&self) -> &[&'static str] {
+        &OWNS
     }
 
     fn render(
