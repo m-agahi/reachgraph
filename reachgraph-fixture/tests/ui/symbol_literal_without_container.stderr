@@ -1,0 +1,5 @@
+error[E0063]: missing field `container` in initializer of `Symbol`
+  --> tests/ui/symbol_literal_without_container.rs:13:13
+   |
+13 |     let _ = Symbol {
+   |             ^^^^^^ missing `container`

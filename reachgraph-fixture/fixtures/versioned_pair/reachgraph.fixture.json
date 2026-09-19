@@ -1,0 +1,158 @@
+{
+  "fixture_version": 1,
+  "plugin_id": "fixture",
+  "position_encoding": "utf8_bytes",
+  "capabilities": ["symbols", "edges", "roots", "classify"],
+  "detection": { "marker_files": [], "extensions": [] },
+  "preflight": "ok",
+  "engine": "reachgraph-fixture 0.1.0",
+
+  "units": [{ "id": "unit:app", "display_name": "app", "root": "src" }],
+
+  "symbols": {
+    "unit:app": [
+      {
+        "raw": "impl:TaskService_for_TaskServer",
+        "name": "TaskServer",
+        "kind": "type",
+        "raw_kind": "impl TaskService for TaskServer",
+        "file": "src/service/mod.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:v1/create_task",
+        "name": "create_task",
+        "kind": "method",
+        "raw_kind": "fn",
+        "file": "src/service/handlers_v1.rs",
+        "doc": "Create a task. v1.",
+        "doc_format": "markdown",
+        "is_test": false,
+        "container": "impl:TaskService_for_TaskServer"
+      },
+      {
+        "raw": "fn:v2/create_task",
+        "name": "create_task",
+        "kind": "method",
+        "raw_kind": "fn",
+        "file": "src/service/handlers_v2.rs",
+        "doc": "Create a task. v2, validating.",
+        "doc_format": "markdown",
+        "is_test": false,
+        "container": "impl:TaskService_for_TaskServer"
+      },
+      {
+        "raw": "fn:shared/persist",
+        "name": "persist",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/db/persist.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:v1only/legacy_audit",
+        "name": "legacy_audit",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/audit/legacy.rs",
+        "doc": "Audit hook retired in v2.",
+        "doc_format": "markdown",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:v2only/validate",
+        "name": "validate",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/validate.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      },
+      {
+        "raw": "fn:orphan/unused_helper",
+        "name": "unused_helper",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/util.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      }
+    ]
+  },
+
+  "edges": {
+    "unit:app": [
+      {
+        "from": "fn:v1/create_task",
+        "to": { "resolved": "fn:shared/persist" },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      },
+      {
+        "from": "fn:v1/create_task",
+        "to": { "resolved": "fn:v1only/legacy_audit" },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      },
+      {
+        "from": "fn:v2/create_task",
+        "to": { "resolved": "fn:shared/persist" },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "resolved"
+      },
+      {
+        "from": "fn:v2/create_task",
+        "to": { "resolved": "fn:v2only/validate" },
+        "provenance_plugin": "fixture",
+        "engine": "reachgraph-fixture 0.1.0",
+        "inference_mode": "type_inferred"
+      }
+    ]
+  },
+
+  "roots": [
+    {
+      "contract": "acme.task",
+      "version": "v1",
+      "service": "TaskService",
+      "operation": "CreateTask",
+      "direction": "served",
+      "join_key": "acme.task.v1.TaskService/CreateTask",
+      "binding": { "bound": "fn:v1/create_task" }
+    },
+    {
+      "contract": "acme.task",
+      "version": "v2",
+      "service": "TaskService",
+      "operation": "CreateTask",
+      "direction": "served",
+      "join_key": "acme.task.v2.TaskService/CreateTask",
+      "binding": { "bound": "fn:v2/create_task" }
+    }
+  ],
+
+  "coverage": {
+    "contracts": ["acme.task"],
+    "versions": [
+      { "contract": "acme.task", "version": "v1" },
+      { "contract": "acme.task", "version": "v2" }
+    ]
+  },
+
+  "classify": [{ "prefix": "src/", "category": "first_party" }],
+  "classify_fallback": "third_party"
+}

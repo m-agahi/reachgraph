@@ -1,8 +1,11 @@
-# SKELETON. plan-02 fills it with `FixturePlugin` and the JSON corpus. What it
-# already carries is the neutrality guard pair of plan-02 §7.2 — those assert
-# over `cargo metadata`, so they need no fixture code to run, and putting them
-# here now means PR B adds `fixture_implements_every_trait` to a file that
-# already exists.
+# The fixture plugin — ADR-0008's mechanical n=2, and permanent test
+# infrastructure rather than scaffolding to delete when a second language lands
+# (ADR-0008 Consequences, plan-02 §1).
+#
+# The two `cargo metadata` guards of plan-02 §7.2 live in `tests/neutrality.rs`
+# alongside `fixture_implements_every_trait`, which is why they are here rather
+# than in a crate of their own — plan-02 §8 question 1 records that this is
+# slightly wrong and why it is not worth a fifth `Cargo.toml` yet.
 [package]
 name = "reachgraph-fixture"
 description = "The reachgraph fixture plugin: a LanguagePlugin that is not a language (ADR-0008)."
@@ -14,9 +17,16 @@ repository.workspace = true
 
 [dependencies]
 reachgraph-plugin-api.workspace = true
+# The fixture format is JSON, so these are library dependencies rather than
+# dev ones: `FixturePlugin::load` parses a document. They are the whole of what
+# this crate adds to `plugin-api`, and plan-00 §1's "the fixture is behind a
+# Cargo feature in `reachgraph-cli`" is what keeps them out of a release build.
+serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
-# Reading `cargo metadata --format-version 1`. Dev-only: nothing in this
-# crate's library uses it, and ADR-0001's no-subprocess rule is about the
-# shipped binary rather than a test harness (plan-02 §7.2 says so explicitly).
-serde_json.workspace = true
+# `assert_impl_all!` — plan-02 §7.2's compile-level guard, the strongest in the
+# project.
+static_assertions.workspace = true
+# The compile-fail cases of plan-02 §7.3.
+trybuild.workspace = true

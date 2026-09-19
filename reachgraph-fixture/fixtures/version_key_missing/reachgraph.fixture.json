@@ -1,0 +1,48 @@
+{
+  "fixture_version": 1,
+  "plugin_id": "fixture",
+  "position_encoding": "utf8_bytes",
+  "capabilities": ["symbols", "edges", "roots", "classify"],
+  "detection": { "marker_files": [], "extensions": [] },
+  "preflight": "ok",
+  "engine": "reachgraph-fixture 0.1.0",
+
+  "units": [{ "id": "unit:app", "display_name": "app", "root": "src" }],
+
+  "symbols": {
+    "unit:app": [
+      {
+        "raw": "fn:handlers/create_task",
+        "name": "create_task",
+        "kind": "method",
+        "raw_kind": "fn",
+        "file": "src/service/handlers.rs",
+        "doc": "Create a task.",
+        "doc_format": "markdown",
+        "is_test": false,
+        "container": null
+      }
+    ]
+  },
+
+  "edges": { "unit:app": [] },
+
+  "roots": [
+    {
+      "contract": "acme.task",
+      "service": "TaskService",
+      "operation": "CreateTask",
+      "direction": "served",
+      "join_key": "acme.task.v1.TaskService/CreateTask",
+      "binding": { "bound": "fn:handlers/create_task" }
+    }
+  ],
+
+  "coverage": {
+    "contracts": ["acme.task"],
+    "versions": [{ "contract": "acme.task", "version": "v1" }]
+  },
+
+  "classify": [{ "prefix": "src/", "category": "first_party" }],
+  "classify_fallback": "third_party"
+}

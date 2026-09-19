@@ -1,0 +1,39 @@
+{
+  "fixture_version": 1,
+  "plugin_id": "fixture",
+  "position_encoding": "utf8_bytes",
+  "capabilities": ["symbols", "edges", "roots", "classify"],
+  "detection": { "marker_files": [], "extensions": [] },
+  "preflight": {
+    "failed": {
+      "reason": "The case declares that its prerequisite is not met. Nothing was checked on disk to decide that.",
+      "remediation": "Nothing to do: this case exists so a core that ignores a failed preflight has something to fail against."
+    }
+  },
+  "engine": "reachgraph-fixture 0.1.0",
+
+  "units": [{ "id": "unit:app", "display_name": "app", "root": "src" }],
+
+  "symbols": {
+    "unit:app": [
+      {
+        "raw": "fn:handlers/create_task",
+        "name": "create_task",
+        "kind": "method",
+        "raw_kind": "fn",
+        "file": "src/service/handlers.rs",
+        "doc": null,
+        "doc_format": "plain",
+        "is_test": false,
+        "container": null
+      }
+    ]
+  },
+
+  "edges": { "unit:app": [] },
+  "roots": [],
+  "coverage": { "contracts": [], "versions": [] },
+
+  "classify": [{ "prefix": "src/", "category": "first_party" }],
+  "classify_fallback": "third_party"
+}

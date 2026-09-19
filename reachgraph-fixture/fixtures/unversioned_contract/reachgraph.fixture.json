@@ -1,0 +1,49 @@
+{
+  "fixture_version": 1,
+  "plugin_id": "fixture",
+  "position_encoding": "utf8_bytes",
+  "capabilities": ["symbols", "edges", "roots", "classify"],
+  "detection": { "marker_files": [], "extensions": [] },
+  "preflight": "ok",
+  "engine": "reachgraph-fixture 0.1.0",
+
+  "units": [{ "id": "unit:app", "display_name": "app", "root": "src" }],
+
+  "symbols": {
+    "unit:app": [
+      {
+        "raw": "fn:legacy/handle_ping",
+        "name": "handle_ping",
+        "kind": "function",
+        "raw_kind": "fn",
+        "file": "src/legacy/ping.rs",
+        "doc": "Answer a ping. Predates versioning.",
+        "doc_format": "markdown",
+        "is_test": false,
+        "container": null
+      }
+    ]
+  },
+
+  "edges": { "unit:app": [] },
+
+  "roots": [
+    {
+      "contract": "acme.legacy",
+      "version": null,
+      "service": "PingService",
+      "operation": "Ping",
+      "direction": "served",
+      "join_key": "acme.legacy.PingService/Ping",
+      "binding": { "bound": "fn:legacy/handle_ping" }
+    }
+  ],
+
+  "coverage": {
+    "contracts": ["acme.legacy"],
+    "versions": [{ "contract": "acme.legacy", "version": null }]
+  },
+
+  "classify": [{ "prefix": "src/", "category": "first_party" }],
+  "classify_fallback": "third_party"
+}

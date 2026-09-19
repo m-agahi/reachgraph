@@ -1,0 +1,11 @@
+error[E0432]: unresolved import `reachgraph_core`
+ --> tests/ui/plugin_uses_core_internals.rs:7:5
+  |
+7 | use reachgraph_core::Whatever;
+  |     ^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reachgraph_core`
+  |
+help: there is a crate or module with a similar name
+  |
+7 - use reachgraph_core::Whatever;
+7 + use reachgraph_fixture::Whatever;
+  |
