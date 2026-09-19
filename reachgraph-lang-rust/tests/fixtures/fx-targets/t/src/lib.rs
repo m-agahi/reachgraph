@@ -6,3 +6,8 @@ pub mod inner;
 pub fn caller() -> u32 {
     inner::leaf()
 }
+
+/// Calls a crate the workspace does not enumerate as a unit.
+pub fn calls_outside() -> u32 {
+    dep::outside()
+}

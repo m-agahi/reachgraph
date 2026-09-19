@@ -57,7 +57,7 @@ fn a_call_target_names_the_unit_that_owns_the_file() {
     let library: Vec<&UnitId> = units
         .iter()
         .map(|unit| &unit.id)
-        .filter(|id| id.0.ends_with("::lib"))
+        .filter(|id| id.0.ends_with("::t::lib"))
         .collect();
     let [library] = library.as_slice() else {
         panic!("the fixture has exactly one library target");
@@ -80,6 +80,35 @@ fn a_call_target_names_the_unit_that_owns_the_file() {
             "the callee's file belongs to the library crate and to no other target"
         );
     }
+}
+
+/// The other half of the rule: a callee no enumerated unit owns is `external`,
+/// never a member's unit id.
+///
+/// A member id there would mint an id inside an indexed unit that no symbol
+/// carries — the same phantom in miniature — and on the probe repository it
+/// would do so for every one of the 26 dependency targets the six shards reach.
+/// `dep` is a path dependency that the workspace does not list as a member, so
+/// its crate is in the graph and is not a unit: the shape every third-party
+/// callee has, with no registry and no network.
+#[test]
+fn a_callee_outside_every_unit_is_external() {
+    let (plugin, units) = load("fx-targets");
+    let symbols = all_symbols(&plugin, &units);
+    let caller = named(&symbols, "calls_outside");
+
+    let units_of_targets: Vec<String> = all_edges(&plugin, &units)
+        .iter()
+        .filter(|edge| edge.from == caller.id)
+        .filter_map(|edge| match &edge.to {
+            EdgeTarget::Resolved(target) => {
+                Some(target.raw.split('|').next().unwrap_or_default().to_owned())
+            }
+            EdgeTarget::Unresolved { .. } => None,
+        })
+        .collect();
+
+    assert_eq!(units_of_targets, vec!["external".to_owned()]);
 }
 
 /// The guard for the whole class, across every fixture the suite loads.

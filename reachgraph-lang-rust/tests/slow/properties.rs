@@ -10,7 +10,16 @@ use crate::support::{all_edges, all_symbols, load};
 /// `fx-macro` is excluded: it needs a build-state setup step, and a property
 /// suite that silently built a fixture would hide plan-03 §4 D-B's
 /// prohibition inside a helper.
-const FIXTURES: [&str; 4] = ["fx-plain", "fx-docs", "fx-impl", "fx-generic"];
+const FIXTURES: [&str; 5] = [
+    "fx-plain",
+    "fx-docs",
+    "fx-impl",
+    "fx-generic",
+    // Added with the fixture, PR F: a package with three targets is the shape
+    // `edge_targets_are_symbols_or_outside_the_enumerated_units` had never been
+    // given, which is why the defect it describes reached a real repository.
+    "fx-targets",
+];
 
 #[test]
 fn every_emitted_node_id_decodes() {

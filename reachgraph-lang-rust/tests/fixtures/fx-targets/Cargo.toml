@@ -9,3 +9,9 @@
 [workspace]
 resolver = "2"
 members = ["t"]
+# `dep` is a path dependency of `t` and deliberately NOT a member: a crate that
+# is in the crate graph and is not an enumerated unit. Without the exclusion
+# cargo adopts a path dependency inside the workspace directory as a member,
+# which is exactly what it did on the first attempt — MEASURED, the callee came
+# back as `dep@0.1.0 …::dep::lib` rather than as `external`.
+exclude = ["dep"]

@@ -72,6 +72,13 @@ struct UnitFacts {
     root_file: PathBuf,
 }
 
+/// The unit half of an id for a file no crate in the graph holds.
+///
+/// A dependency's extracted source, the sysroot, a generated file nothing
+/// loaded. It is a real identity and deliberately not a member's: plan-01 §7.0
+/// calls such a node external, and no symbol is ever emitted under it.
+const EXTERNAL_UNIT: &str = "external";
+
 /// A loaded workspace, and the whole of this crate's mutable state.
 pub(crate) struct Loaded {
     /// The **workspace** root, which is not the directory the caller named.
@@ -887,7 +894,7 @@ impl Loaded {
                 // `Symbol` is emitted for it and no edge can name it.
                 continue;
             };
-            let target_unit = self.unit_of_target(item.target.file_id, &target_path);
+            let target_unit = self.unit_of_target(item.target.file_id);
             let offset = item
                 .target
                 .focus_range
@@ -954,13 +961,18 @@ impl Loaded {
     /// makes from the other side. That is one answer rather than an ordering
     /// accident.
     ///
-    /// The directory rule remains as the fallback, and only there is it right:
-    /// a file in **no** crate — a dependency's extracted source, the sysroot, a
-    /// generated file nothing loaded — still needs a stable identity (plan-03
-    /// §9), and there is no crate to ask.
-    fn unit_of_target(&self, file_id: ra_ap_vfs::FileId, path: &Path) -> UnitId {
+    /// # A file no crate holds is `external`, and the directory rule is gone
+    ///
+    /// Symbols are emitted by walking crates, so a file outside every crate has
+    /// no emitted symbol under any unit id. Naming an enumerated unit for it —
+    /// which containment did whenever such a file sat inside a member's
+    /// directory — mints an id inside an indexed unit that no symbol carries.
+    /// That is the same phantom in miniature, so the rule that produced it is
+    /// deleted rather than kept as a fallback. `external` says what is true: it
+    /// is a stable identity (plan-03 §9) that claims no membership.
+    fn unit_of_target(&self, file_id: ra_ap_vfs::FileId) -> UnitId {
         self.unit_of_crate(file_id)
-            .unwrap_or_else(|| self.unit_of(path))
+            .unwrap_or_else(|| UnitId(EXTERNAL_UNIT.to_owned()))
     }
 
     /// The unit whose crate owns this file, when one does.
@@ -974,30 +986,6 @@ impl Loaded {
             .iter()
             .find(|facts| self.file_id(&facts.root_file) == Some(root_file))
             .map(|facts| facts.unit.id.clone())
-    }
-
-    /// Which unit a path belongs to when no crate holds it.
-    ///
-    /// The unit whose root directory contains it, longest match first, and a
-    /// synthesized `external` id when none does. Reached only through
-    /// [`Loaded::unit_of_target`]'s fallback.
-    fn unit_of(&self, path: &Path) -> UnitId {
-        let mut best: Option<&UnitFacts> = None;
-        for facts in &self.units {
-            if !path.starts_with(&facts.unit.root) {
-                continue;
-            }
-            let longer = best.is_none_or(|current| {
-                facts.unit.root.as_os_str().len() > current.unit.root.as_os_str().len()
-            });
-            if longer {
-                best = Some(facts);
-            }
-        }
-        match best {
-            Some(facts) => facts.unit.id.clone(),
-            None => UnitId("external".to_owned()),
-        }
     }
 
     /// Plan-03 §10 — the five categories, from facts the engine already holds.

@@ -1,0 +1,7 @@
+# A path dependency that is NOT a workspace member, so its crate is in the
+# crate graph and is not an enumerated unit. That is the shape every
+# third-party dependency has, without a registry or a network.
+[package]
+name = "dep"
+version = "0.1.0"
+edition = "2021"
