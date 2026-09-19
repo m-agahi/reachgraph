@@ -125,3 +125,44 @@ static_assertions = "1.1.0"
 
 # Compile-fail cases (plan-02 §7.3). Dev-side only.
 trybuild = "1.0.101"
+
+# THE RELEASE PROFILE, DECIDED BY MEASUREMENT — plan-07 §3.1, measurements 4
+# and 5. The plan feared one trade and MEASURED 2026-09-19 it does not exist in
+# the direction it feared.
+#
+# Four profiles, one machine, one binary each, timed three times against the
+# same repository (8 units, 227 symbols, 364 edges) and sized stripped and
+# gzip-9'd, which is what a wheel's deflate approximates:
+#
+#   profile                          unstripped   stripped      gz-9   median wall
+#   release (as cargo ships it)      30 353 432  20 949 824  7 553 999      5.41 s
+#   + opt-level="z", lto="thin"      28 407 440  14 147 200  4 795 531      8.21 s
+#   + lto="fat", codegen-units=1     19 107 176  15 394 448  6 446 978      4.86 s
+#   + lto="fat", cu=1, panic=abort   16 655 008  13 690 848  5 627 572      4.18 s
+#
+# `opt-level = "z"` IS REFUSED. It buys 1.2 MB of stripped binary and costs 52%
+# of the runtime — the worst row in the table on the number a user feels. Fat
+# LTO is both smaller and faster than the default release profile, so the
+# size-versus-runtime trade plan-07 §3.1 was written around does not arise: the
+# two agree.
+#
+# `panic = "abort"` IS ALSO REFUSED, and NOT because the win is small — plan-07
+# §3.1 guessed it would be and MEASURED it is not: 1.70 MB of stripped binary
+# and 14% of the runtime. It is refused on the failure mode, which is worse
+# than the plan INFERRED. MEASURED 2026-09-19 by reading the vendored sources:
+# `salsa::Cancelled::throw` is `panic::resume_unwind`, `Cancelled::catch` is
+# `panic::catch_unwind`, and `ra_ap_ide::Analysis::with_db` wraps EVERY query in
+# the latter — so `outgoing_calls` returning `Err` at engine.rs:880 is an
+# unwind being caught. Under `panic = "abort"` there is nothing to catch and the
+# process dies instead. `throw` also documents that it uses `resume_unwind`
+# rather than `panic!` SPECIFICALLY to skip the panic hook, so the abort would
+# print nothing at all. A tool whose premise is reporting the limits of its own
+# run must not exit silently, and 1.7 MB off a ~14 MB wheel against a 100.0 MiB
+# limit does not buy that.
+#
+# NO `strip` KEY HERE, deliberately. `[tool.maturin] strip = true` strips the
+# copy that goes into the wheel, which is the copy the limit governs, and a
+# local `target/release/reachgraph` keeps its symbols for a backtrace.
+[profile.release]
+lto = "fat"
+codegen-units = 1

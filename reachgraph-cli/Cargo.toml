@@ -33,8 +33,12 @@ default = ["lang-rust", "roots-proto-tonic", "render-html", "serve"]
 lang-rust = ["dep:reachgraph-lang-rust"]
 roots-proto-tonic = ["dep:reachgraph-roots-proto-tonic"]
 # The page half of the artifact (plan-05). A feature for the same reason
-# `serve` is one: the vendored JavaScript is 759 606 bytes of binary, and a
+# `serve` is one: the vendored JavaScript is 790 890 bytes of binary, and a
 # cost that can be measured is a cost somebody can argue about.
+#
+# 790 890, not the 759 606 this comment carried until plan-07's size audit.
+# That was the four-bundle sum written before `cytoscape-expand-collapse`
+# landed; `VENDOR.toml` has recorded the five-bundle total since PR G.
 render-html = ["dep:reachgraph-render-html"]
 # ADR-0006's convenience command, behind a feature so its cost is measurable
 # rather than asserted (plan-06 §2.1).

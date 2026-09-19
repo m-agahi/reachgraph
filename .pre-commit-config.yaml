@@ -89,6 +89,32 @@ repos:
       # tests but no marker scan gets only half of it.
       - id: no-test-skips
 
+  # THE LOCKFILE GATE, and it is here because ADR-0001's 2026-09-19 amendment
+  # made `Cargo.lock` load-bearing in a way it was not before. The vendor tree
+  # is no longer committed, so the lockfile is the whole of this repository's
+  # build determinism: exact `=0.0.352` pins on the `ra_ap_*` family, a
+  # sha256 per crate, and two transitive pins — salsa 0.28.2 and
+  # unicode-ident 1.0.24 — that break the build one patch release later and
+  # live in no manifest at all.
+  #
+  # MEASURED 2026-09-19: the shared `ci-pr.yaml` runs `cargo test
+  # --all-features` and `cargo test --no-default-features` with NO `--locked`,
+  # so a manifest edited without re-locking passes there. `pre-commit/action`
+  # runs this file in CI with no skip list, so a hook here closes that leg on
+  # both sides.
+  #
+  # `--offline` as well as `--locked`: the failure this catches is a stale
+  # lockfile, and reaching the network to resolve one is the behaviour being
+  # refused rather than a fallback.
+  - repo: local
+    hooks:
+      - id: cargo-locked
+        name: Cargo.lock is current (--locked --offline)
+        entry: cargo metadata --locked --offline --format-version 1
+        language: system
+        pass_filenames: false
+        files: (^|/)Cargo\.(toml|lock)$
+
   # WHAT GETS ADDED WHEN src/ LANDS, written down so it is a lookup rather than
   # a rediscovery. Kept after the fact rather than deleted: the four hooks above
   # are the discharge of this note, and a reader who wants to know why they

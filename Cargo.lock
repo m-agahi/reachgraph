@@ -3162,7 +3162,9 @@ dependencies = [
  "quote",
  "reachgraph-lang-rust",
  "reachgraph-plugin-api",
+ "serde",
  "syn 2.0.119",
+ "toml",
 ]
 
 [[package]]

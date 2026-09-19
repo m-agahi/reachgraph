@@ -1,0 +1,52 @@
+# `cargo-about`'s configuration — plan-07 §6.2.
+#
+# The binary links its dependencies statically, so shipping a wheel
+# redistributes their code, and MIT and Apache-2.0 both require the notice to
+# travel with the redistribution. `THIRD-PARTY-LICENSES.md` is that notice. It
+# is GENERATED — `cargo xtask third-party-licenses` — committed, and CI fails if
+# regenerating it produces a diff. A hand-maintained attribution file is wrong
+# within two dependency bumps.
+#
+# THE ACCEPT LIST IS NOT deny.toml's ALLOW LIST, and the difference is
+# deliberate. `deny.toml` decides what this project is *willing to depend on*
+# and is a pre-approved set with entries nothing currently uses. This list
+# decides which licence text cargo-about writes into the notice when a crate
+# offers a choice — `MIT OR Apache-2.0` resolves to whichever appears first
+# here. MIT leads because it is the shorter text and the one the Rust ecosystem
+# reproduces by default.
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT-0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "CC0-1.0",
+]
+
+# The notice covers what is SHIPPED. `xtask` is a workspace member that nothing
+# shipped depends on — its own comment says so — and its dependency tree
+# (syn, prettyplease, toml) reaches the wheel through nothing.
+workarounds = []
+
+# Build-dependencies are not linked into the binary and dev-dependencies are
+# not built for a release, so neither is redistributed and neither belongs in
+# the notice. The private targets stay out for the same reason the tier table
+# in plan-07 §4 exists: this notice describes the wheels that are published.
+ignore-build-dependencies = true
+ignore-dev-dependencies = true
+
+# Only the targets a published wheel is built for. Without this, cargo-about
+# walks every platform's cfg and attributes the Windows import libraries and
+# the Redox, WASI and SGX shims that no wheel in plan-07 §4's tier table
+# contains.
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+]

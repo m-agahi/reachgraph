@@ -19,3 +19,17 @@ target
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# The wheel and the sdist. `maturin build --out dist/` writes here.
+/dist
+
+# `cargo vendor` output. ADR-0001's 2026-09-19 amendment: the vendor tree is
+# GENERATED AT RELEASE TIME into the sdist and is never committed — MEASURED
+# 219 366 235 bytes across 11 877 files, a quarter of it prebuilt Windows
+# import libraries. This entry is what keeps a local `cargo vendor` from being
+# staged by accident.
+#
+# ROOT-ANCHORED, and that matters: a bare `vendor` would also match
+# `reachgraph-render-html/vendor/`, which is committed on purpose and whose
+# bytes a test asserts against upstream hashes (ADR-0738).
+/vendor

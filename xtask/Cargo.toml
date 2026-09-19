@@ -27,6 +27,14 @@ prettyplease.workspace = true
 proc-macro2.workspace = true
 quote.workspace = true
 
+# `cargo xtask third-party-licenses` reads `VENDOR.toml`, and
+# `tests/packaging.rs` reads `Cargo.lock` and `pyproject.toml` — both as data
+# rather than by string matching, for the same reason plan-05 §8.3 parses the
+# emitted page: a grep passes on a file that would not parse. The `toml` pin
+# matches the one `reachgraph-render-html` already resolved.
+serde.workspace = true
+toml = "1.1.6"
+
 [features]
 # The `fx-impl` golden dump loads a real Cargo workspace through cargo, which
 # takes seconds. Same split, and the same reason, as plan-03 §13's Tier B:
