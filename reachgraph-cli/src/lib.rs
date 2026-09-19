@@ -29,6 +29,7 @@ mod outdir;
 mod preflight;
 pub mod registry;
 pub mod renderers;
+pub mod repo;
 pub mod report;
 mod sink;
 
@@ -36,7 +37,7 @@ mod sink;
 pub mod serve;
 
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use reachgraph_core::{BuildInputs, BuildOptions, DirectorySink, Index};
@@ -100,9 +101,33 @@ pub fn run_with(registry: &Registry, args: &[String], streams: &mut Streams<'_>)
             &format!("reachgraph {}", env!("CARGO_PKG_VERSION")),
         ),
         Command::Plugins => plugins(registry, streams),
-        Command::Preflight { repo, json } => preflight::subcommand(registry, &repo, json, streams),
-        Command::Analyse(options) => analyse(registry, &options, streams),
+        Command::Preflight { repo, json } => match resolved(&repo, streams) {
+            Ok(repo) => preflight::subcommand(registry, &repo, json, streams),
+            Err(code) => code,
+        },
+        Command::Analyse(options) => match resolved(&options.repo, streams) {
+            Ok(repo) => analyse(registry, &Analyse { repo, ..options }, streams),
+            Err(code) => code,
+        },
         Command::Serve { out, port } => serve_command(&out, port, streams),
+    }
+}
+
+/// The repository argument, resolved once — see [`repo`] for the panic this
+/// gate exists to stop.
+///
+/// BOTH entry points that take a repository come through here. `preflight` is
+/// not an afterthought in that list: it hands the same path to the same
+/// plugins, so a version of this that only covered `analyse` would panic in
+/// exactly the same place one subcommand over.
+fn resolved(named: &Path, streams: &mut Streams<'_>) -> Result<PathBuf, u8> {
+    match repo::resolve(named) {
+        Ok(resolved) => Ok(resolved),
+        Err(error) => {
+            let _ = writeln!(streams.err, "error: {}", error.reason);
+            let _ = writeln!(streams.err, "  → {}", error.remediation);
+            Err(EXIT_USAGE)
+        }
     }
 }
 

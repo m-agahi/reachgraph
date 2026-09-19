@@ -8,6 +8,7 @@
 
 mod formats;
 mod guards;
+mod paths;
 mod preflight;
 #[cfg(feature = "render-html")]
 mod renderers;

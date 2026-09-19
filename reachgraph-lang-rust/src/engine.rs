@@ -197,6 +197,25 @@ pub fn probe_program(program: &str) -> CargoProbe {
 /// resolve; reporting a mechanism that changes nothing observable would claim
 /// coverage this crate does not have.
 pub(crate) fn load(root: &Path) -> Result<Loaded, PluginError> {
+    // NOT `AbsPathBuf::assert` on an unchecked path. MEASURED 2026-09-19 by
+    // the release workflow's smoke test (run 35457883578): `assert` refuses a
+    // relative path by PANICKING — "expected absolute path, got ." — so
+    // `reachgraph .` died with a backtrace out of a dependency and no message
+    // of its own.
+    //
+    // `reachgraph-cli`'s `repo::resolve` is where the policy lives and it
+    // resolves the path before any plugin is reached. This is the second wall,
+    // and it is not a duplicate of the first: it makes THIS crate refuse rather
+    // than abort for any caller, including one that is not the cli. A library
+    // that panics on bad input is a library whose contract is "do not get this
+    // wrong", which is not a contract a plugin interface can carry.
+    if !root.is_absolute() {
+        return Err(engine_error(format!(
+            "{} is not an absolute path, and the engine cannot resolve a relative one",
+            root.display()
+        )));
+    }
+
     let abs_root = AbsPathBuf::assert(
         Utf8PathBuf::from_path_buf(root.to_path_buf())
             .map_err(|path| engine_error(format!("{} is not valid UTF-8", path.display())))?,
