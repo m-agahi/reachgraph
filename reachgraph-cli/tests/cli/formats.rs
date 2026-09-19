@@ -120,6 +120,54 @@ mod without_a_renderer {
         }
     }
 
+    /// A refusal must not claim reachgraph did not write a file reachgraph
+    /// wrote.
+    ///
+    /// MEASURED: run the default build into a directory, then run a build
+    /// without `render-html` into the same one. `Renderer::owns` no longer
+    /// names `index.html`, `loader.js`, `structure.json` or `vendor/`, so the
+    /// directory reads as foreign and the user was told "holds files
+    /// reachgraph did not write" about four files reachgraph had just
+    /// written. Refusing is right — this build cannot regenerate what it does
+    /// not own, and deleting by guess removes a file nobody wrote. The
+    /// **provenance claim** is what was wrong, in a tool whose whole premise
+    /// is not making claims it cannot support.
+    #[test]
+    fn a_refusal_does_not_claim_reachgraph_wrote_nothing_there() {
+        let temp = TempDir::new("foreign-page");
+        let repo = support::repo_for("minimal", &temp);
+        let out = temp.join("out");
+        let registry = support::registry_of(support::doc_of("minimal"), &repo);
+
+        // What a build WITH a renderer left behind.
+        fs::create_dir_all(out.join("vendor")).expect("writable");
+        fs::write(out.join("index.html"), b"<!doctype html>").expect("writable");
+        fs::write(out.join("loader.js"), b"// presenter").expect("writable");
+
+        let result = support::run(
+            &registry,
+            &[
+                repo.to_str().expect("utf-8"),
+                "-o",
+                out.to_str().expect("utf-8"),
+            ],
+        );
+
+        assert_eq!(result.code, reachgraph_cli::EXIT_USAGE, "{}", result.err);
+        assert!(
+            !result.err.contains("reachgraph did not write"),
+            "the refusal claims reachgraph wrote nothing there: {}",
+            result.err
+        );
+        // And it names what it means, so the claim is checkable.
+        assert!(result.err.contains("index.html"), "{}", result.err);
+        assert!(result.err.contains("--force"), "{}", result.err);
+
+        // Nothing was deleted, and nothing was written.
+        assert!(out.join("index.html").is_file());
+        assert!(!out.join("endpoints.json").exists());
+    }
+
     /// The other half stays an error: a name that is not registered.
     #[test]
     fn asking_for_a_format_this_build_lacks_is_still_a_usage_error() {

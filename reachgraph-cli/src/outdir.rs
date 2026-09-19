@@ -72,14 +72,33 @@ pub fn check(out: &Path, owned: &[String], force: bool) -> Result<(), String> {
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
         .collect();
 
-    if names.is_empty() || names.iter().all(|name| owned.contains(name)) {
+    let mut foreign: Vec<&str> = names
+        .iter()
+        .filter(|name| !owned.contains(name))
+        .map(String::as_str)
+        .collect();
+    if foreign.is_empty() {
         return Ok(());
     }
+    foreign.sort_unstable();
 
+    // NOT "files reachgraph did not write", which is a provenance claim this
+    // function cannot support. MEASURED: run the default build into a
+    // directory, then a build without the `render-html` feature into the same
+    // one — `Renderer::owns` no longer names `index.html`, `loader.js`,
+    // `structure.json` or `vendor/`, so all four read as foreign and the user
+    // was told reachgraph had not written four files reachgraph had just
+    // written. Refusing is still right: this build cannot regenerate what it
+    // does not own, and deleting by guess removes a file nobody wrote. What
+    // this function knows is OWNERSHIP BY THIS BUILD, so that is what it says,
+    // and it names the files so the claim is checkable.
     Err(format!(
-        "{} holds files reachgraph did not write; the artifact is regenerated rather than \
-         merged into, so pick an empty directory or pass --force",
-        out.display()
+        "{} holds files this build does not own: {}. The artifact is regenerated rather than \
+         merged into, so pick an empty directory or pass --force. A build with a different \
+         renderer compiled in owns different names, so a page it left reads as foreign from \
+         here.",
+        out.display(),
+        foreign.join(" ")
     ))
 }
 
