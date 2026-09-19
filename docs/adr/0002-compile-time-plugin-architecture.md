@@ -27,7 +27,7 @@ defined by the core.**
 
 Modularity for development and maintenance — the actual stated goal — is fully preserved:
 one crate per plugin, independently testable, added one at a time. What is lost is
-*runtime* extensibility by third parties.
+_runtime_ extensibility by third parties.
 
 That loss is not a compromise. One binary and supply-chain control are **incompatible**
 with loading third-party plugins at runtime: an artifact that loads arbitrary foreign code
@@ -35,13 +35,13 @@ is not a self-contained artifact. The goals agree rather than conflict.
 
 ### Five plugin kinds
 
-| kind | varies by | example |
-|---|---|---|
-| symbol/doc provider | language | `ra_ap_ide` for Rust; tree-sitter extraction (ADR-0005) |
-| call-edge provider | language | `ra_ap_ide::Analysis::outgoing_calls`; hand-written resolvers |
-| root/contract provider | language × framework | proto+tonic, OpenAPI+axum, FastAPI decorators |
-| classifier | language × build system | first-party vs generated vs vendored vs stdlib |
-| renderer | nothing | static HTML, JSON, DOT, SARIF, PR comment |
+| kind                   | varies by               | example                                                       |
+| ---------------------- | ----------------------- | ------------------------------------------------------------- |
+| symbol/doc provider    | language                | `ra_ap_ide` for Rust; tree-sitter extraction (ADR-0005)       |
+| call-edge provider     | language                | `ra_ap_ide::Analysis::outgoing_calls`; hand-written resolvers |
+| root/contract provider | language × framework    | proto+tonic, OpenAPI+axum, FastAPI decorators                 |
+| classifier             | language × build system | first-party vs generated vs vendored vs stdlib                |
+| renderer               | nothing                 | static HTML, JSON, DOT, SARIF, PR comment                     |
 
 Symbol/doc and call-edge are **separate kinds**, not one "language plugin". Rust already
 proves the split is real: one engine may supply both, or two sources may supply one each.
@@ -83,12 +83,12 @@ six fields in ADR-0003 still matter, but they are now cheap to revise rather tha
 permanent.
 
 **The fixture plugin does not count toward n=3.** It is a synthetic consumer: it exercises
-the *shape* of an interface, never the awkwardness of a real language's semantics. Three
+the _shape_ of an interface, never the awkwardness of a real language's semantics. Three
 means three real languages.
 
 **Languages 2 and 3 must be written by the maintainers, not by contributors.** The point
 of the exercise is to break our own interface before anyone depends on it. A
-contributor-written language 2 means learning the interface is wrong *and* owing someone a
+contributor-written language 2 means learning the interface is wrong _and_ owing someone a
 migration.
 
 ## Consequences
@@ -100,7 +100,7 @@ migration.
 - Binary size grows with every language compiled in. Cargo features allow trimmed builds;
   INFERRED that the published wheel enables all supported languages by default, since
   per-language wheels would recreate the acquisition problem ADR-0001 exists to remove.
-- A stdio subprocess plugin kind remains *possible* later as an escape hatch for a
+- A stdio subprocess plugin kind remains _possible_ later as an escape hatch for a
   language nobody wants to port. It would be opt-in and off by default, and it would
   forfeit the ADR-0001 guarantees for anyone who enables it.
 

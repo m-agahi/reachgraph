@@ -4,7 +4,7 @@
 **Date:** 2026-09-17
 
 > Filename retained as `0005-doc-comments-from-tree-sitter.md` for link stability. The
-> title changed when the decision narrowed — see *History* at the end.
+> title changed when the decision narrowed — see _History_ at the end.
 
 ## Context
 
@@ -32,12 +32,12 @@ DOCS: ['Adds two numbers together.\n\nThis is a multi-line doc comment to test w
 
 SCIP's doc fidelity is excellent. What fails is getting an indexer. MEASURED 2026-09-17:
 
-| indexer | health |
-|---|---|
-| `scip-go` | current |
-| `scip-python` | last **human** commit 2025-09-05 — over a year stale; a hard-fail bug (#223) open and unaddressed |
-| `scip-clang` | last human commit 2026-03-24 — ~6 months stale; bug #544 open since 2026-09-10 |
-| `scip-typescript`, `scip-java`, `scip-ruby` | alive but unpackaged |
+| indexer                                     | health                                                                                            |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `scip-go`                                   | current                                                                                           |
+| `scip-python`                               | last **human** commit 2025-09-05 — over a year stale; a hard-fail bug (#223) open and unaddressed |
+| `scip-clang`                                | last human commit 2026-03-24 — ~6 months stale; bug #544 open since 2026-09-10                    |
+| `scip-typescript`, `scip-java`, `scip-ruby` | alive but unpackaged                                                                              |
 
 Five of six require their own npm, gem or bazel toolchain to obtain — an acquisition
 problem, under an architecture (ADR-0001) whose whole purpose is to have none.
@@ -61,12 +61,12 @@ the resolver is imported, no additional parser is needed to obtain doc text at a
 **Doc comments come from whatever parse tree the language's own resolver already
 produces.**
 
-| language | doc source |
-|---|---|
-| Rust | `ra_ap_*` — the engine already supplying call edges |
-| Python | `ruff_python_ast` — already present via `ruff_python_semantic` |
-| Go | tree-sitter-go, as the parser substrate for the resolver we must write |
-| Java | tree-sitter-java, likewise |
+| language | doc source                                                             |
+| -------- | ---------------------------------------------------------------------- |
+| Rust     | `ra_ap_*` — the engine already supplying call edges                    |
+| Python   | `ruff_python_ast` — already present via `ruff_python_semantic`         |
+| Go       | tree-sitter-go, as the parser substrate for the resolver we must write |
+| Java     | tree-sitter-java, likewise                                             |
 
 tree-sitter's role is therefore **narrow and specific**: it is the parser substrate for
 the languages where ADR-0004 obliges us to write the resolver ourselves. It is not a
@@ -101,16 +101,16 @@ and 0 of 40 `Method` nodes carry any docstring at all.
 
 MEASURED 2026-09-17 (crates.io). All MIT.
 
-| crate | version | last publish |
-|---|---|---|
-| `tree-sitter` (core) | 0.27.0 | 2026-08-30 |
-| `tree-sitter-rust` | 0.24.2 | 2026-03-27 |
-| `tree-sitter-go` | 0.25.0 | 2025-08-29 |
-| `tree-sitter-python` | 0.25.0 | 2025-09-11 |
-| `tree-sitter-java` | 0.23.5 | 2024-12-21 |
+| crate                | version | last publish |
+| -------------------- | ------- | ------------ |
+| `tree-sitter` (core) | 0.27.0  | 2026-08-30   |
+| `tree-sitter-rust`   | 0.24.2  | 2026-03-27   |
+| `tree-sitter-go`     | 0.25.0  | 2025-08-29   |
+| `tree-sitter-python` | 0.25.0  | 2025-09-11   |
+| `tree-sitter-java`   | 0.23.5  | 2024-12-21   |
 
 **There is no version-skew problem**, contrary to the usual expectation. MEASURED: each
-grammar depends on the full `tree-sitter` crate only as a *dev-dependency*, for its own
+grammar depends on the full `tree-sitter` crate only as a _dev-dependency_, for its own
 test suite. The runtime linkage point for consumers is the small, ABI-stable
 `tree-sitter-language` crate, pinned `^0.1` identically across all four grammars. Grammars
 and core may therefore advance independently.

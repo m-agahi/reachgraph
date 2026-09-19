@@ -76,17 +76,17 @@ public surface.
 Direct dependencies, INFERRED from the API surface this plan uses — **the exact set is
 UNVERIFIED and is settled by the first successful compile**, not by this list:
 
-| crate | why |
-|---|---|
-| `ra_ap_ide` | `Analysis`, `outgoing_calls`, `CallItem`, `NavigationTarget` |
-| `ra_ap_ide_db` | `RootDatabase`, symbol search |
-| `ra_ap_hir` | semantic walk, `HasAttrs` for docs, `Impl` for `container` |
-| `ra_ap_load-cargo` | `load_workspace_at`, `LoadCargoConfig` |
-| `ra_ap_project_model` | `CargoConfig`, manifest discovery, sysroot resolution |
-| `ra_ap_vfs` | `Vfs`, `FileId` ↔ path (never crosses the plugin boundary — leak 2) |
-| `ra_ap_paths` | `AbsPathBuf` |
+| crate                  | why                                                                                                                                                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ra_ap_ide`            | `Analysis`, `outgoing_calls`, `CallItem`, `NavigationTarget`                                                                                                                                                             |
+| `ra_ap_ide_db`         | `RootDatabase`, symbol search                                                                                                                                                                                            |
+| `ra_ap_hir`            | semantic walk, `HasAttrs` for docs, `Impl` for `container`                                                                                                                                                               |
+| `ra_ap_load-cargo`     | `load_workspace_at`, `LoadCargoConfig`                                                                                                                                                                                   |
+| `ra_ap_project_model`  | `CargoConfig`, manifest discovery, sysroot resolution                                                                                                                                                                    |
+| `ra_ap_vfs`            | `Vfs`, `FileId` ↔ path (never crosses the plugin boundary — leak 2)                                                                                                                                                      |
+| `ra_ap_paths`          | `AbsPathBuf`                                                                                                                                                                                                             |
 | `ra_ap_proc-macro-srv` | only if §4 D-C's in-process wiring is taken. MEASURED: its own dependencies are `ra_ap_intern`, `ra_ap_paths`, `ra_ap_span`, `ra_ap_stdx`, `rustc-hash` — all already in the tree, so it adds no new third-party surface |
-| `ra_ap_syntax` | only if §14 open question 8 is taken |
+| `ra_ap_syntax`         | only if §14 open question 8 is taken                                                                                                                                                                                     |
 
 The engine string on every `Provenance` (`"ra_ap_ide 0.0.352"`) is built from a `const`
 derived from the pinned version, never hand-typed. A test asserts it (§13, Tier C).
@@ -180,7 +180,7 @@ Two of these fields are why §4 exists.
 
 ## 4. The ADR-0001 collision — two decisions and one measured gap
 
-ADR-0001 says: *no external binaries, no subprocesses, no runtime downloads.* The measured
+ADR-0001 says: _no external binaries, no subprocesses, no runtime downloads._ The measured
 `LoadCargoConfig` shape (§3) puts three subprocess-shaped decisions on the critical path.
 Two are now settled by user decision; the third is measured and leaves exactly one
 ADR-level question open.
@@ -190,7 +190,7 @@ ADR-level question open.
 `load_workspace_at` takes a `&CargoConfig` and obtains the workspace by invoking `cargo`.
 
 **Decision 2026-09-17: the target language's own build toolchain is carved out of
-ADR-0001.** The ban covers analysis tooling a user would install *for reachgraph's sake*
+ADR-0001.** The ban covers analysis tooling a user would install _for reachgraph's sake_
 — rust-analyzer, gopls, jdtls. It does not cover `cargo`. The test: a tool is carved out
 when it is a precondition of the repository being analysable at all, and a Rust repository
 on a machine with no Rust toolchain is not analysable by anything. ADR-0001 is being
@@ -206,7 +206,7 @@ ADR-0003 field 5, and the same discipline the rustup proxy loop taught.
 `cargo build`. `load_out_dirs_from_check` is **not** set to a value that builds.
 
 This is the decision D-A does not cover, and the distinction is exact: reading a
-workspace's structure is a precondition of analysis; *producing artifacts* is doing the
+workspace's structure is a precondition of analysis; _producing artifacts_ is doing the
 user's build for them, with the user's build scripts, at a time the user did not choose.
 
 It matches design.md §8's second hard prerequisite — MEASURED, the client-stub leaf at
@@ -247,8 +247,8 @@ ProcMacroServerChoice::None => Some(Err(ProcMacroLoadingError::Disabled)),
 
 MEASURED: `Explicit` takes a path to an **executable** and spawns it;
 `find_sysroot_proc_macro_srv() -> Option<Result<AbsPathBuf>>` returns a path that is
-spawned the same way. So through this API the only choices are *spawn a server binary* or
-*disable expansion*. There is no third option in `load-cargo`.
+spawned the same way. So through this API the only choices are _spawn a server binary_ or
+_disable expansion_. There is no third option in `load-cargo`.
 
 **MEASURED: the in-process capability nonetheless exists, one layer down.**
 `ra_ap_proc-macro-srv` 0.0.352 (MIT OR Apache-2.0, `has_lib: true`, `bin_names: []`,
@@ -297,8 +297,8 @@ Verify that seam before committing to it — it is the one remaining engineering
 **Recommended order of work, and it does not require the ADR to rule first:** verify the
 expander seam and wire `ProcMacroSrv` in-process. If it works, no subprocess is ever
 spawned, ADR-0001 is satisfied exactly as written, and the ADR-level question never has to
-be asked. Only if the seam proves closed does the choice become *spawn a server* versus
-*lose the design's central measured result*, and that choice belongs in an ADR.
+be asked. Only if the seam proves closed does the choice become _spawn a server_ versus
+_lose the design's central measured result_, and that choice belongs in an ADR.
 
 Until it is wired, the ADR-0001-compatible configuration is
 `ProcMacroServerChoice::None`, and §11 check 3 makes the degradation visible.
@@ -377,13 +377,13 @@ this crate emits carries `span: Some(_)`. The `None` case exists for plugins who
 resolver knows a file but not an offset; `lang-rust` never produces it, and §13 asserts
 that.
 
-The two optionalities are unrelated and must not be conflated. `span: None` means *located
-in a file, offset unknown*. A target that fails the `Vfs` lookup entirely (§9) has no file
+The two optionalities are unrelated and must not be conflated. `span: None` means _located
+in a file, offset unknown_. A target that fails the `Vfs` lookup entirely (§9) has no file
 either, so no `Symbol` is emitted at all — plan-01's "external". A `Symbol` with a file and
 no span is still classifiable, which is the property plan-01 §7.0's termination argument
 depends on.
 
-**Consequence, and it is the design's simplification:** `NodeId` is a *pure function* of
+**Consequence, and it is the design's simplification:** `NodeId` is a _pure function_ of
 `(unit, path, name-token offset)`. Converting a node to a position is therefore a **decode,
 not a lookup** — no table is required for the forward direction, and no table is required
 to mint a `NodeId` for a call target discovered mid-traversal. That matters: the
@@ -413,8 +413,8 @@ struct NodeTable {
 
 The table is built during `symbols_in` and **invalidated whenever `Loaded` is replaced**.
 It is never persisted and never written to the artifact. Because `raw` is decodable, a
-`NodeId` that survives across a reload of the *same* commit still resolves; a `NodeId`
-from a *different* commit resolves to a wrong or absent offset and is caught by check (2)
+`NodeId` that survives across a reload of the _same_ commit still resolves; a `NodeId`
+from a _different_ commit resolves to a wrong or absent offset and is caught by check (2)
 above. Node identity is stable within one run and across runs of one commit — which is
 all ADR-0006 needs, since the artifact is regenerated per run rather than mutated.
 
@@ -478,19 +478,19 @@ view.
 
 A pure function, table-driven, unit-testable without an engine:
 
-| `ra_ap` kind | `SymbolKind` | `raw_kind` |
-|---|---|---|
-| `Function` | `Function` | `"Function"` |
-| `Function` in an `impl` | `Method` | `"Method"` |
-| `Struct`, `Enum`, `Union`, `TypeAlias` | `Type` | the ra_ap term |
-| `Trait`, `TraitAlias` | `Type` | `"Trait"` |
-| `Impl` | `Other` | **the rendered impl header** — see below |
-| `Module` | `Module` | `"Module"` |
-| `Field` | `Field` | `"Field"` |
-| `Macro`, `Static`, `Const`, everything else | `Other` | the ra_ap term |
+| `ra_ap` kind                                | `SymbolKind` | `raw_kind`                               |
+| ------------------------------------------- | ------------ | ---------------------------------------- |
+| `Function`                                  | `Function`   | `"Function"`                             |
+| `Function` in an `impl`                     | `Method`     | `"Method"`                               |
+| `Struct`, `Enum`, `Union`, `TypeAlias`      | `Type`       | the ra_ap term                           |
+| `Trait`, `TraitAlias`                       | `Type`       | `"Trait"`                                |
+| `Impl`                                      | `Other`      | **the rendered impl header** — see below |
+| `Module`                                    | `Module`     | `"Module"`                               |
+| `Field`                                     | `Field`      | `"Field"`                                |
+| `Macro`, `Static`, `Const`, everything else | `Other`      | the ra_ap term                           |
 
 `raw_kind` is display text that the waist is forbidden to interpret (plan-00 §3.4). One
-consumer *is* permitted to read it: a roots plugin, walking up through `container`.
+consumer _is_ permitted to read it: a roots plugin, walking up through `container`.
 
 ### `container` — the field plan-04 depends on
 
@@ -528,7 +528,7 @@ declared name in one repository render identically. §14 open question 6.
 
 UNVERIFIED: the exact `ra_ap_hir::Impl` accessors for the trait and self type (something
 of the shape `Impl::trait_(db)` / `Impl::self_ty(db)`). Verify against docs.rs before
-writing the renderer. The *content* of the string is settled here; the call that produces
+writing the renderer. The _content_ of the string is settled here; the call that produces
 it is not.
 
 ### `is_test`
@@ -680,16 +680,16 @@ MEASURED, `ra_ap_project_model::ProjectWorkspace::to_roots() -> Vec<PackageRoot>
 entries `ProjectFolders::new` feeds to the VFS loader. `PackageRoot` is MEASURED to carry
 `is_local: bool`, `include: Vec<AbsPathBuf>`, `exclude: Vec<AbsPathBuf>`.
 
-| target class | resolves? | mechanism |
-|---|---|---|
-| workspace member | **yes** | member roots are loaded; these are the enumerated units |
-| dependency crate (registry, git, path) | **yes** | MEASURED: `to_roots()` emits `PackageRoot`s for non-member packages too, with `is_local: false`. Source comes from cargo's own extracted checkout. MEASURED limit, in the source's own words — *"For non-workspace-members, we only resolve library targets"* — so a dependency's examples, tests and benches are out of scope. Not a practical gap: a call lands in a lib target. |
-| sysroot / stdlib | **conditional** | MEASURED: `mk_sysroot()` sets `include: self.sysroot.rust_lib_src_root().map(\|it\| it.to_path_buf())`. **Resolves only when the `rust-src` component is installed.** Absent, there is no sysroot root, stdlib files have no `FileId`, and every stdlib target is external. |
-| generated code in `OUT_DIR` | **no, under §4 D-B — see below** | MEASURED: `to_roots()` adds it via `build_scripts.get_output(pkg).and_then(\|it\| it.out_dir.clone())` then `include.extend(out_dir)` |
+| target class                           | resolves?                        | mechanism                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| workspace member                       | **yes**                          | member roots are loaded; these are the enumerated units                                                                                                                                                                                                                                                                                                                            |
+| dependency crate (registry, git, path) | **yes**                          | MEASURED: `to_roots()` emits `PackageRoot`s for non-member packages too, with `is_local: false`. Source comes from cargo's own extracted checkout. MEASURED limit, in the source's own words — _"For non-workspace-members, we only resolve library targets"_ — so a dependency's examples, tests and benches are out of scope. Not a practical gap: a call lands in a lib target. |
+| sysroot / stdlib                       | **conditional**                  | MEASURED: `mk_sysroot()` sets `include: self.sysroot.rust_lib_src_root().map(\|it\| it.to_path_buf())`. **Resolves only when the `rust-src` component is installed.** Absent, there is no sysroot root, stdlib files have no `FileId`, and every stdlib target is external.                                                                                                        |
+| generated code in `OUT_DIR`            | **no, under §4 D-B — see below** | MEASURED: `to_roots()` adds it via `build_scripts.get_output(pkg).and_then(\|it\| it.out_dir.clone())` then `include.extend(out_dir)`                                                                                                                                                                                                                                              |
 
 The stdlib row is checkable in advance and therefore belongs in `preflight()` as an
 informational fact rather than a surprise — §11 check 4, feeding `rust_src_available` in
-the run record. MEASURED corroboration that it *was* present for the probe: design.md §8
+the run record. MEASURED corroboration that it _was_ present for the probe: design.md §8
 lists `/nix/store/…rust-lib-src/` paths among the 20 edges, which is the stdlib row
 resolving.
 
@@ -723,13 +723,13 @@ Whether an escape exists, MEASURED as far as documentation goes:
 
 - `ProjectWorkspace::set_build_scripts(&mut self, bs: WorkspaceBuildScripts)` is **public**,
   and `load_workspace(ws, extra_env, load_config)` takes an already-constructed workspace —
-  so the *shape* "construct the build-script data from what is already on disk, then load"
+  so the _shape_ "construct the build-script data from what is already on disk, then load"
   exists.
 - **But `WorkspaceBuildScripts` has private fields and no public constructor except
   `Default`** (MEASURED). A downstream crate cannot populate it with an out-dir it
   discovered itself. `set_build_scripts` has nothing useful to be handed.
 - MEASURED: `ProjectWorkspace::extra_includes: Vec<AbsPathBuf>` is a **public field**,
-  documented as *"Additional includes to add for the VFS."* Pushing each discovered
+  documented as _"Additional includes to add for the VFS."_ Pushing each discovered
   `target/<profile>/build/<pkg>-<hash>/out/` onto it before `load_workspace` should make
   those files VFS-resident and therefore locatable. **UNVERIFIED** — this is the one thing
   here that needs running code, and it is the highest-value next measurement in this plan.
@@ -742,7 +742,7 @@ correctness bug the coordinator warned about:
 1. **A call into generated code that `ra_ap` resolves, whose target cannot be located.**
    This would breach the obligation. INFERRED that it does not arise: the out-dir module
    reaches the crate graph through the same build-script data that is missing, so without
-   it `ra_ap` has no generated module to resolve *into* and returns no `CallItem` at all.
+   it `ra_ap` has no generated module to resolve _into_ and returns no `CallItem` at all.
    No target, nothing to locate, obligation intact.
 2. **The edge is absent entirely.** This is what actually happens, it is already documented
    (§11's run record, §12), and it is a reachability gap rather than a termination gap.
@@ -760,7 +760,7 @@ there is no `--allow-build` flag.**
 
 So this is no longer a branch. Question 9a (§14) stays open because a working
 `extra_includes` is strictly better — it would recover both classes at no cost — but its
-*failure* is now a known outcome with specified behaviour, not a decision waiting to be
+_failure_ is now a known outcome with specified behaviour, not a decision waiting to be
 made. Nothing downstream should be written as though the answer is pending.
 
 The specified behaviour, and it is the behaviour already written elsewhere in this plan
@@ -772,8 +772,8 @@ rather than a new mechanism:
   N of M members; calls into generated code from those members are absent from this index,
   not proven absent from the code"** (§11).
 
-**That sentence is the entire point of the ruling.** It lets a reader distinguish *not
-indexed* from *not called*. Those are different facts about the world, and only one of
+**That sentence is the entire point of the ruling.** It lets a reader distinguish _not
+indexed_ from _not called_. Those are different facts about the world, and only one of
 them is about the code. An index that simply showed fewer edges would collapse them and
 would be making design.md §8's most dangerous claim by omission — presenting an artifact
 of the tool's own configuration as a property of the user's code.
@@ -813,7 +813,7 @@ exist for the languages ADR-0004 says must be written.
 
 The honest consequence: **`EdgeTarget::Unresolved` is also never produced in v0.1.** When
 `ra_ap` cannot resolve a call it returns no `CallItem` at all — there is no candidate set
-to report. So an unresolved call is *invisible* rather than *reported*, which is in tension
+to report. So an unresolved call is _invisible_ rather than _reported_, which is in tension
 with design.md §8's rule that a missing edge is shown as missing. See §12 and §14
 open question 8.
 
@@ -830,13 +830,13 @@ fn classify(&self, path: &Path, unit: &Unit) -> Category
 MEASURED, design.md §8 — 20 edges from one handler, separating by path prefix alone, no
 name matching and no confidence score:
 
-| verdict | prefix observed | examples |
-|---|---|---|
-| first-party | `src/` | `tel_scope`, `passthrough` |
-| cross-repo leaf | `target/debug/build/*/out/` | the generated client stub |
-| in-org crate boundary | the org's own crates | `Call::start`, `call.run` |
-| drop | `/nix/store/…rust-lib-src/` | `pin`, `map`, `trim`, `Ok`, `Err`, `Some` |
-| drop | third-party crates | `into_inner`, `invalid_argument`, `encoded_len` |
+| verdict               | prefix observed             | examples                                        |
+| --------------------- | --------------------------- | ----------------------------------------------- |
+| first-party           | `src/`                      | `tel_scope`, `passthrough`                      |
+| cross-repo leaf       | `target/debug/build/*/out/` | the generated client stub                       |
+| in-org crate boundary | the org's own crates        | `Call::start`, `call.run`                       |
+| drop                  | `/nix/store/…rust-lib-src/` | `pin`, `map`, `trim`, `Ok`, `Err`, `Some`       |
+| drop                  | third-party crates          | `into_inner`, `invalid_argument`, `encoded_len` |
 
 That table is the **evidence that the five categories are the right five**. It is not the
 implementation, and turning it into a literal prefix list would be a bug, because two of
@@ -851,7 +851,7 @@ would not fix it; it would just move the same trap.
 `ra_ap` already knows the sysroot and which crates are workspace members, so four of the
 five categories are **queries, not prefixes**:
 
-1. **`Stdlib`** — the file is under the *resolved* sysroot source directory, as reported by
+1. **`Stdlib`** — the file is under the _resolved_ sysroot source directory, as reported by
    the loaded project model. Never a literal path.
 2. **`Generated`** — the path contains a `target/<profile>/build/<pkg>-<hash>/out/`
    component, or is under an `OUT_DIR` recorded during the workspace load. This is the one
@@ -866,9 +866,8 @@ identity. §7 emits a separate `Unit` per target kind for a package with several
 comparing unit ids would classify `src/lib.rs` as `WorkspaceSibling` while indexing the
 `mycrate (test)` unit of the same package. That is the exact shape §13's `fx-impl` fixture
 creates, and it is wrong: a package's own `src/` is first-party to every one of its
-targets.
-5. **`ThirdParty`** — everything else: registry, git and path dependencies outside the
-   workspace.
+targets. 5. **`ThirdParty`** — everything else: registry, git and path dependencies outside the
+workspace.
 
 Only rule 2 contains a literal. Rules 1, 3, 4 and 5 are facts the engine already holds.
 
@@ -904,7 +903,7 @@ fn preflight(&self, root: &Path) -> Preflight
 
 ADR-0003 field 5: structured guidance, and **never `command -v`**.
 
-### What preflight does *not* check, and why that is written down
+### What preflight does _not_ check, and why that is written down
 
 It does not check for a `rust-analyzer` binary. **There is no external binary under
 ADR-0001** — the engine is linked in. The check is absent by design, and the reason is
@@ -980,22 +979,22 @@ reaches the output, never only a log line.
 
 The run record carries, per workspace member:
 
-| field | meaning |
-|---|---|
-| `has_build_script` | the member declares a `build.rs` |
-| `out_dir_loaded` | generated output was actually loaded into the VFS for this member — not merely present on disk (§9) |
-| `proc_macro_expansion` | `in_process`, `disabled`, or `unavailable_not_built` |
+| field                  | meaning                                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------------------------- |
+| `has_build_script`     | the member declares a `build.rs`                                                                    |
+| `out_dir_loaded`       | generated output was actually loaded into the VFS for this member — not merely present on disk (§9) |
+| `proc_macro_expansion` | `in_process`, `disabled`, or `unavailable_not_built`                                                |
 
 and two workspace-level facts, both MEASURED in §9 to be real conditionals rather than
 theoretical ones:
 
-| field | meaning |
-|---|---|
+| field                | meaning                                                                                                                                                          |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `rust_src_available` | the sysroot source root resolved, so stdlib targets are locatable and classifiable. False means every stdlib call target is **external** in plan-01 §7.0's sense |
-| `out_dir_mechanism` | `build_script_data`, `extra_includes`, or `none` — **which** mechanism put generated code in the VFS, not merely whether a directory existed on disk (§9) |
+| `out_dir_mechanism`  | `build_script_data`, `extra_includes`, or `none` — **which** mechanism put generated code in the VFS, not merely whether a directory existed on disk (§9)        |
 
 `out_dir_mechanism` is deliberately not a boolean. §9 MEASURED that an out-dir present on
-disk is *still* unindexed when no mechanism loaded it, so a boolean named
+disk is _still_ unindexed when no mechanism loaded it, so a boolean named
 a boolean named `out_dir_indexed` would answer a different question from the one a reader asks.
 
 and one workspace-level statement: **generated code was not indexed for N of M members;
@@ -1010,7 +1009,7 @@ unbound consumed roots.
 ### Check 3 — proc-macro expansion mode is recorded, not refused
 
 `Preflight` is binary: `Ok` or `Failed`. Degraded proc-macro expansion is not a reason to
-refuse to run — MEASURED, design.md §4 shows what is *lost* (the `#[tonic::async_trait]`
+refuse to run — MEASURED, design.md §4 shows what is _lost_ (the `#[tonic::async_trait]`
 crossing), and losing an edge class is a reported gap, not a broken run.
 
 So: return `Ok`, and record the expansion mode in **both** places it matters — the run
@@ -1039,7 +1038,7 @@ plan-01 §7.0's sense.
 **This is never a `Failed`.** MEASURED, design.md §8's edge-noise table: stdlib targets
 (`pin`, `map`, `trim`, `Ok`, `Err`, `Some`) are in the `drop` column. Refusing to run over
 a component whose contribution is dropped anyway would be strictly worse for the user than
-running. What is lost is the ability to *classify* those targets as `Stdlib` and drop them
+running. What is lost is the ability to _classify_ those targets as `Stdlib` and drop them
 deliberately rather than by absence — a real but small difference, and one that belongs in
 the record rather than in an error.
 
@@ -1099,8 +1098,8 @@ Nothing is inferred around. The index states which members lacked which artifact
 states that the missing calls are **absent from the index, not proven absent from the
 code**.
 
-Keep the two failure modes apart when reading this: the edge is *absent*, not
-*unlocatable*. plan-01 §7.0's provider obligation and plan-01's traversal termination are
+Keep the two failure modes apart when reading this: the edge is _absent_, not
+_unlocatable_. plan-01 §7.0's provider obligation and plan-01's traversal termination are
 untouched (§9).
 
 **Async is not execution order.** design.md §8. The graph is static structure. Nothing in
@@ -1124,16 +1123,16 @@ These run in milliseconds and are the bulk of the suite. Each requires the logic
 test to be a free function over plain data, which is itself the point: it forces the
 engine-facing half and the decision-making half apart.
 
-| test | asserts |
-|---|---|
-| `node_id_encode_decode_roundtrip` | `(unit, offset, path)` → `raw` → back, byte-identical. Cases: a path containing `\|`, a non-ASCII path, a path with spaces, offset 0, offset `u32::MAX`. |
-| `node_id_is_a_pure_function_of_location` | the same `(unit, path, offset)` from `symbols_in` and from a `CallItem` target produce byte-identical `raw` |
-| `symbol_kind_mapping_table` | every row of §8's table, including that `raw_kind` is preserved verbatim for `Trait`, `Impl`, `Macro`, `Static` |
-| `impl_header_rendering` | `impl TaskService for Task`, `impl MockDb`, generic self type, trait with generic args — exact strings, since plan-04 parses them |
-| `classifier_rules_over_synthetic_facts` | `classify_facts(&PathFacts) -> Category` over all five categories. Sysroot cases supplied as data: a nix store path, a rustup toolchain path, `/usr/lib/rustlib/src/`. **The test passes without any of those strings appearing in the source.** |
-| `classifier_generated_prefix` | `target/debug/build/x-hash/out/y.rs` → `Generated`; `target/debug/deps/…` → not `Generated` |
-| `preflight_failure_messages` | the exact `reason` and `remediation` strings of §11. Reviewing remediation text is the point; a test is how it gets reviewed. |
-| `engine_string_matches_pinned_version` | `ENGINE` **starts with** `"ra_ap_ide <version>"` for the version pinned in `Cargo.toml` — a prefix assertion, per §11's grammar, so an appended run-mode suffix does not break it. Catches a re-vendor that forgot the stamp. |
+| test                                     | asserts                                                                                                                                                                                                                                          |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `node_id_encode_decode_roundtrip`        | `(unit, offset, path)` → `raw` → back, byte-identical. Cases: a path containing `\|`, a non-ASCII path, a path with spaces, offset 0, offset `u32::MAX`.                                                                                         |
+| `node_id_is_a_pure_function_of_location` | the same `(unit, path, offset)` from `symbols_in` and from a `CallItem` target produce byte-identical `raw`                                                                                                                                      |
+| `symbol_kind_mapping_table`              | every row of §8's table, including that `raw_kind` is preserved verbatim for `Trait`, `Impl`, `Macro`, `Static`                                                                                                                                  |
+| `impl_header_rendering`                  | `impl TaskService for Task`, `impl MockDb`, generic self type, trait with generic args — exact strings, since plan-04 parses them                                                                                                                |
+| `classifier_rules_over_synthetic_facts`  | `classify_facts(&PathFacts) -> Category` over all five categories. Sysroot cases supplied as data: a nix store path, a rustup toolchain path, `/usr/lib/rustlib/src/`. **The test passes without any of those strings appearing in the source.** |
+| `classifier_generated_prefix`            | `target/debug/build/x-hash/out/y.rs` → `Generated`; `target/debug/deps/…` → not `Generated`                                                                                                                                                      |
+| `preflight_failure_messages`             | the exact `reason` and `remediation` strings of §11. Reviewing remediation text is the point; a test is how it gets reviewed.                                                                                                                    |
+| `engine_string_matches_pinned_version`   | `ENGINE` **starts with** `"ra_ap_ide <version>"` for the version pinned in `Cargo.toml` — a prefix assertion, per §11's grammar, so an appended run-mode suffix does not break it. Catches a re-vendor that forgot the stamp.                    |
 
 ### Tier B — integration, against checked-in fixture workspaces
 
@@ -1144,7 +1143,7 @@ engine-facing half and the decision-making half apart.
 applies to the test suite too — a plugin that built a fixture in order to index it would
 be exercising a code path that cannot exist in production. So `fx-macro`, and any fixture
 whose assertions need `OUT_DIR` contents or a compiled proc-macro dylib, are built by the
-harness as a setup step *before* the plugin is invoked. That makes the prerequisite
+harness as a setup step _before_ the plugin is invoked. That makes the prerequisite
 explicit rather than incidental, and it gives the suite a second, free assertion: run
 `fx-macro` **without** the setup step and `preflight()` must return the §11 check 2
 `Failed`, with the run record marking `out_dir_loaded: false` and `out_dir_mechanism: none`. The degraded path is
@@ -1153,13 +1152,13 @@ tested, not merely described.
 Fixtures are **small samples authored inside `reachgraph`**. `/home/max/git/yadgarhq/task`
 is cited throughout this plan as measured evidence; no test may depend on it.
 
-| fixture | shape | asserts |
-|---|---|---|
-| `fx-plain` | two crates, `a` calls `b` | `discover_units` → 2; one `Resolved` edge; `FirstParty` and `WorkspaceSibling`; `provenance.engine` populated |
-| `fx-docs` | `///` multi-line block, `//!` module doc, `#[doc = "…"]` | full text, sigils stripped, **all** lines present. Explicitly asserts the failure design.md §5 measured: not last-line-only, not truncated at 83 chars, and a method's doc is non-empty |
-| `fx-impl` | `trait Svc`; `impl Svc for Real` in `src/`; `impl Svc for Mock` in `tests/`; inherent `impl Real` | `container` set on every method; container `raw_kind` exactly `impl Svc for Real` / `impl Svc for Mock` / `impl Real`; `is_test` true only for the `tests/` one. **This is the fixture plan-04 binds against**, and its symbol dump is checked in as golden JSON for plan-04 to consume statically. |
-| `fx-macro` | an attribute proc-macro crate in the workspace, plus a build script writing a module into `OUT_DIR`, with a call crossing both | the edge exists, and the target is classified `Generated`. **The expensive, load-bearing test**: it is the in-repo equivalent of design.md §4's measured result, and it is the test that fails if §4 D-C ends at `ProcMacroServerChoice::None`, and the test that must be run against both a built and an unbuilt fixture because §4 D-B forbids reachgraph building it. |
-| `fx-generic` | a call dispatched through a generic parameter | **asserts the edge is absent**, citing rust-analyzer #19358, with a comment stating that an upstream fix makes this test fail and that the correct response is to delete the test and update §12 — not to relax the assertion |
+| fixture      | shape                                                                                                                          | asserts                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `fx-plain`   | two crates, `a` calls `b`                                                                                                      | `discover_units` → 2; one `Resolved` edge; `FirstParty` and `WorkspaceSibling`; `provenance.engine` populated                                                                                                                                                                                                                                                            |
+| `fx-docs`    | `///` multi-line block, `//!` module doc, `#[doc = "…"]`                                                                       | full text, sigils stripped, **all** lines present. Explicitly asserts the failure design.md §5 measured: not last-line-only, not truncated at 83 chars, and a method's doc is non-empty                                                                                                                                                                                  |
+| `fx-impl`    | `trait Svc`; `impl Svc for Real` in `src/`; `impl Svc for Mock` in `tests/`; inherent `impl Real`                              | `container` set on every method; container `raw_kind` exactly `impl Svc for Real` / `impl Svc for Mock` / `impl Real`; `is_test` true only for the `tests/` one. **This is the fixture plan-04 binds against**, and its symbol dump is checked in as golden JSON for plan-04 to consume statically.                                                                      |
+| `fx-macro`   | an attribute proc-macro crate in the workspace, plus a build script writing a module into `OUT_DIR`, with a call crossing both | the edge exists, and the target is classified `Generated`. **The expensive, load-bearing test**: it is the in-repo equivalent of design.md §4's measured result, and it is the test that fails if §4 D-C ends at `ProcMacroServerChoice::None`, and the test that must be run against both a built and an unbuilt fixture because §4 D-B forbids reachgraph building it. |
+| `fx-generic` | a call dispatched through a generic parameter                                                                                  | **asserts the edge is absent**, citing rust-analyzer #19358, with a comment stating that an upstream fix makes this test fail and that the correct response is to delete the test and update §12 — not to relax the assertion                                                                                                                                            |
 
 ### Tier C — properties over Tier B output
 
@@ -1204,7 +1203,7 @@ Question 3 is the only one still blocking engine-facing code.
    is indexed with holes and the holes are recorded in the run record (§11, §12).
 3. **The proc-macro wiring seam, and the ADR-level question behind it.** (§4 D-C)
    MEASURED: `ra_ap_proc-macro-srv` 0.0.352 exposes `ProcMacroSrv::{new, expand,
-   list_macros}` and expands **in-process** by `dlopen`-ing the compiled dylib — no
+list_macros}` and expands **in-process** by `dlopen`-ing the compiled dylib — no
    subprocess. MEASURED: `ra_ap_load-cargo` offers no route to it; all three
    `ProcMacroServerChoice` variants spawn a binary or disable expansion. UNVERIFIED: the
    seam by which reachgraph supplies its own expander to the database instead of
@@ -1221,7 +1220,7 @@ Question 3 is the only one still blocking engine-facing code.
 5. **Are `AnalysisHost` and `Analysis` `Send` and `Sync`?** (§5) Decides whether `Loaded`
    stores a snapshot or mints one per call under the lock.
 6. **The `ra_ap_hir::Impl` accessors for trait and self type**, and the same-name-trait
-   collision (§8). The string contract's *content* is settled; the call that produces it is
+   collision (§8). The string contract's _content_ is settled; the call that produces it is
    not, and the collision has no mitigation in v0.1.
 7. **"In-org crate boundary" has no Cargo concept** (§10). Comparing dependency source
    hosts against the repository's `origin` is the only mechanism that does not require
@@ -1233,7 +1232,7 @@ Question 3 is the only one still blocking engine-facing code.
    manufactures noise. v0.1 ships counters instead; v0.2 decides.
 9. **The exact direct-dependency set among the ~48 `ra_ap_*` crates** (§2). Settled by the
    first compile, not by this list.
-9a. **Does `ProjectWorkspace::extra_includes` put an `OUT_DIR` into the VFS without running
+   9a. **Does `ProjectWorkspace::extra_includes` put an `OUT_DIR` into the VFS without running
    build scripts?** (§9) **The highest-value unmeasured item in this plan**, and the only
    one here that documentation cannot settle. MEASURED: the field is public and documented
    as "Additional includes to add for the VFS"; MEASURED: the normal route is closed,
@@ -1243,7 +1242,7 @@ Question 3 is the only one still blocking engine-facing code.
    which is why it is still worth measuring. **Failure is no longer a decision point**: §9
    D-D rules that v0.1 then ships with generated code unindexed and says so in coverage.
    Measure it; do not block on it.
-9b. **plan-01 §11 question 8 is answered in §9** — partially, and the partition is the
+   9b. **plan-01 §11 question 8 is answered in §9** — partially, and the partition is the
    answer: workspace members and dependency lib sources resolve at no extra cost; stdlib
    resolves only with `rust-src` installed; `OUT_DIR` does not resolve under D-B, pending
    9a. plan-01 §7.0's termination argument is **not** threatened by the `OUT_DIR` gap —

@@ -57,7 +57,7 @@ Astral's; the engine crate is `ty_python_semantic`.
 
 **Scope resolution is not rentable for anything else.** MEASURED 2026-09-17 (GitHub API):
 `github/stack-graphs` is archived — `"archived": true`, `pushed_at: 2025-09-09`, and the
-final commit is titled *"This repository is no longer being maintained."* crates.io
+final commit is titled _"This repository is no longer being maintained."_ crates.io
 confirms the dormancy: `stack-graphs` 0.14.1 and `tree-sitter-stack-graphs` 0.10.0 both
 last published 2024-12-13. MEASURED: the shipped language definitions before archival were
 `java`, `javascript`, `python`, `typescript` — **Go was never covered at all.**
@@ -69,7 +69,7 @@ scope-resolution layer on top of tree-sitter does not exist.
 (crates.io):
 
 - Go: the only candidates are Goscript's `go-types` and `go-parser` — a different,
-  Go-*inspired* scripting language, stale since 2023-09-12 — and `woolink` (0 stars, 76
+  Go-_inspired_ scripting language, stale since 2023-09-12 — and `woolink` (0 stars, 76
   downloads, stale 2026-03-24). Nothing real to vendor.
 - Java: the best hits are AST-only with negligible adoption — `java-ast-parser` (224
   downloads, no name or type resolution), `codegraph-java` (117 downloads),
@@ -77,21 +77,21 @@ scope-resolution layer on top of tree-sitter does not exist.
 
 ### What was measured and deliberately not taken
 
-Recorded because the road not taken measured *well*, and a future reader will otherwise
+Recorded because the road not taken measured _well_, and a future reader will otherwise
 assume it was rejected for weakness. MEASURED 2026-09-17, LSP `initialize` plus live
 `callHierarchy/outgoingCalls` against hello-world samples:
 
-| server | version | `callHierarchyProvider` | real edges |
-|---|---|---|---|
-| rust-analyzer | 2026-06-15 | true | yes |
-| gopls | 0.23.0 | true | yes |
-| pyright | 1.1.411 | true | yes |
-| basedpyright | 1.39.8 | true | yes |
-| typescript-language-server | 5.3.0 | true | yes |
-| clangd | 21.1.8 | true | yes |
-| jdtls | 1.60.0 | true | yes |
-| jedi-language-server | 0.47.0 | **false** | `-32601 Method Not Found` |
-| python-lsp-server | 1.14.0 | **false** | `-32601 Method Not Found` |
+| server                     | version    | `callHierarchyProvider` | real edges                |
+| -------------------------- | ---------- | ----------------------- | ------------------------- |
+| rust-analyzer              | 2026-06-15 | true                    | yes                       |
+| gopls                      | 0.23.0     | true                    | yes                       |
+| pyright                    | 1.1.411    | true                    | yes                       |
+| basedpyright               | 1.39.8     | true                    | yes                       |
+| typescript-language-server | 5.3.0      | true                    | yes                       |
+| clangd                     | 21.1.8     | true                    | yes                       |
+| jdtls                      | 1.60.0     | true                    | yes                       |
+| jedi-language-server       | 0.47.0     | **false**               | `-32601 Method Not Found` |
+| python-lsp-server          | 1.14.0     | **false**               | `-32601 Method Not Found` |
 
 `callHierarchy` is a universal capability among mainstream servers. It was rejected on
 acquisition, not capability — see ADR-0001.
@@ -106,12 +106,12 @@ Call edges come from a per-language source, declared in the plugin's capability 
 (ADR-0003 field 1), with `provenance` and `inference_mode` on every edge produced
 (ADR-0003 field 4).
 
-| language | source | cost |
-|---|---|---|
-| **Rust** | **import** `ra_ap_ide::Analysis::outgoing_calls` and the `ra_ap_*` family | near-zero; works now |
-| **Python** | **import** `ruff_python_semantic` for lexical resolution, `ty_python_semantic` for type inference | moderate; both crates exist and are MIT |
-| **Go** | **create.** No Rust-native Go analyzer; no stack-graphs Go definition; gopls is Go source and cannot link | months |
-| **Java** | **create.** Classpath resolution, generics, overload resolution, inheritance | largest |
+| language   | source                                                                                                    | cost                                    |
+| ---------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| **Rust**   | **import** `ra_ap_ide::Analysis::outgoing_calls` and the `ra_ap_*` family                                 | near-zero; works now                    |
+| **Python** | **import** `ruff_python_semantic` for lexical resolution, `ty_python_semantic` for type inference         | moderate; both crates exist and are MIT |
+| **Go**     | **create.** No Rust-native Go analyzer; no stack-graphs Go definition; gopls is Go source and cannot link | months                                  |
+| **Java**   | **create.** Classpath resolution, generics, overload resolution, inheritance                              | largest                                 |
 
 Language order Rust → Python → Go → Java (ADR-0002) follows directly from this table: it
 is descending import-availability.
@@ -148,7 +148,7 @@ unresolved call is a known gap. They must not render identically.
   optional decoration; it is the mechanism that keeps the output honest. A hand-written
   resolver's edge must be distinguishable from an `ra_ap`-resolved one in the artifact.
 - `docs/design.md` §8's warning that trait dispatch and generics produce missing edges
-  (rust-analyzer issue #19358) applies *more* strongly to resolvers we write. Show a
+  (rust-analyzer issue #19358) applies _more_ strongly to resolvers we write. Show a
   missing edge as missing. Never infer one to fill a hole.
 - INFERRED: a hand-written Go resolver will not match gopls. The tool must not imply it
   does.
@@ -163,7 +163,7 @@ unresolved call is a known gap. They must not render identically.
 
 **SCIP as the edge source.** Rejected twice over. MEASURED from the SCIP schema:
 `Relationship` carries only `is_reference`, `is_implementation`, `is_type_definition`,
-`is_definition` — so a call graph must be *inferred* by finding a reference occurrence and
+`is_definition` — so a call graph must be _inferred_ by finding a reference occurrence and
 asking which definition's range encloses it, rather than queried directly. Separately,
 SCIP indexer availability is poor (see ADR-0005).
 

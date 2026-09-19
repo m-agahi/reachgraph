@@ -1,0 +1,52 @@
+name: ci
+
+# CI is defined once, in yadgarhq/actions. This file is the whole of this
+# repository's CI configuration: the shared workflow detects what the repository
+# is and runs what applies to it.
+#
+# NO WORKFLOW-LEVEL `permissions:` BLOCK, deliberately. A job cannot be granted
+# more permission than the workflow holds, so a top-level block becomes a cap
+# that a later job has to fight. When it bites, the symptom is a run with ZERO
+# JOBS, no logs and no annotations, whose only report is the word `failure` —
+# nothing in that points at permissions. The permissions live on the job.
+#
+# PULL REQUESTS ONLY, and both omissions are about what would actually run
+# rather than about taste.
+#
+# NO PUSH JOB. `ci-pr.yaml`'s `version` job is the only thing a push to the
+# default branch runs, and it hard-fails twice here: its gate reads the squash
+# commit message as a pull request body, so every merge message must carry the
+# five sections; and its credential step exits 1 once a version is derived and
+# the release App secrets are empty. There is no yadgarhq release App on this
+# repository. A push trigger with nothing to run would also open a workflow run
+# with no job in it, which reports as a failure that names nothing.
+#
+# NO RELEASE JOB. `ci-release.yaml` gates its jobs on `Containerfile` and
+# `chart/`, so with neither it does nothing — and what it does elsewhere is
+# publish container images and Helm charts to ghcr. This repository publishes a
+# Python wheel through maturin. Packaging gets its own workflow when it lands
+# (docs/plans/07-packaging-pypi.md).
+#
+# `edited` IS SUBSCRIBED, so a pull request body fixed after the fact re-runs
+# the template check instead of leaving the gate red. `checks: read` below is
+# the price of that subscription rather than a spare permission: on an `edited`
+# event most jobs skip, and the shared workflow reads the verdict already
+# standing on the commit before it accepts those skips as success.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  # THE NAME `ci` IS LOAD-BEARING. The required status check is `ci / passed`,
+  # which is `<caller job id> / <called job id>` — renaming this job does not
+  # report anything, it breaks the merge gate.
+  #
+  # NO `secrets:` AND NO `secrets: inherit`. Only the `version` job reads
+  # secrets and only on a push, which this workflow never sends. `inherit` would
+  # hand every organisation secret the caller can see to a run that builds the
+  # branch's own code, and it grows silently as secrets are added.
+  ci:
+    uses: yadgarhq/actions/.github/workflows/ci-pr.yaml@main
+    permissions:
+      contents: read
+      checks: read

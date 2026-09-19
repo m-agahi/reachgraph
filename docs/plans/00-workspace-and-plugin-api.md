@@ -27,15 +27,15 @@ them.
 
 A Cargo workspace, one crate per module.
 
-| crate | role | depends on |
-|---|---|---|
-| `reachgraph-plugin-api` | the five traits and every shared type | nothing in this workspace |
-| `reachgraph-core` | the waist (ADR-0003): graph build, reachability, sharding | `plugin-api` |
-| `reachgraph-lang-rust` | Rust symbols, edges, classification (ADR-0004) | `plugin-api`, `ra_ap_*` |
-| `reachgraph-roots-proto-tonic` | `.proto` parsing, tonic handler binding | `plugin-api` |
-| `reachgraph-fixture` | the fixture plugin (ADR-0008) | `plugin-api` |
-| `reachgraph-render-html` | static HTML renderer (ADR-0006) | `plugin-api` |
-| `reachgraph-cli` | the binary; owns the registry and feature flags | `core` + every plugin |
+| crate                          | role                                                      | depends on                |
+| ------------------------------ | --------------------------------------------------------- | ------------------------- |
+| `reachgraph-plugin-api`        | the five traits and every shared type                     | nothing in this workspace |
+| `reachgraph-core`              | the waist (ADR-0003): graph build, reachability, sharding | `plugin-api`              |
+| `reachgraph-lang-rust`         | Rust symbols, edges, classification (ADR-0004)            | `plugin-api`, `ra_ap_*`   |
+| `reachgraph-roots-proto-tonic` | `.proto` parsing, tonic handler binding                   | `plugin-api`              |
+| `reachgraph-fixture`           | the fixture plugin (ADR-0008)                             | `plugin-api`              |
+| `reachgraph-render-html`       | static HTML renderer (ADR-0006)                           | `plugin-api`              |
+| `reachgraph-cli`               | the binary; owns the registry and feature flags           | `core` + every plugin     |
 
 ### Dependency direction
 
@@ -53,7 +53,7 @@ A Cargo workspace, one crate per module.
 `reachgraph-core`.**
 
 This is load-bearing, and it is the same class of mechanism as ADR-0008's fixture plugin.
-A plugin that *cannot* write `use reachgraph_core::internals` cannot accidentally couple
+A plugin that _cannot_ write `use reachgraph_core::internals` cannot accidentally couple
 itself to waist internals, reach around a trait, or grow a dependency on how the graph
 happens to be built today. The compiler enforces what code review would otherwise have to
 enforce by vigilance.
@@ -418,8 +418,8 @@ pub trait EdgeProvider: LanguagePlugin {
 
 This matters more than any other signature in the document. `ra_ap_ide::Analysis::
 outgoing_calls` takes a `FilePosition`, because rust-analyzer's origin is an editor and
-the question it answers is "what is under the user's cursor". That shape is *inherited from
-LSP*, not intrinsic to call graphs.
+the question it answers is "what is under the user's cursor". That shape is _inherited from
+LSP_, not intrinsic to call graphs.
 
 A hand-written Go or Java resolver (ADR-0004: both must be written) naturally walks a
 function body and enumerates the call sites it contains. It has no cursor. Handing it a
@@ -466,7 +466,7 @@ MEASURED that `create_task` exists twice in one repo, so the plugin must disambi
 The disambiguation walk is the plugin's, not the core's: `by_name("create_task")` returns
 two symbols, the plugin follows each `container` through `SymbolIndex::get`, reads the
 container's `raw_kind` — `impl TaskService for TaskServer` versus `impl MockDb` — and picks.
-`raw_kind` is a display string the waist never matches on, which is why the *link* had to be
+`raw_kind` is a display string the waist never matches on, which is why the _link_ had to be
 a typed field rather than a naming convention: the join the contract depends on cannot rest
 on a string the waist is forbidden to read.
 
@@ -481,7 +481,7 @@ pub trait Classifier: Plugin {
 }
 ```
 
-**Classifier at n=1.** Folding the *implementation* into `reachgraph-lang-rust` for v0.1 is
+**Classifier at n=1.** Folding the _implementation_ into `reachgraph-lang-rust` for v0.1 is
 acceptable — one crate, two `impl` blocks. But **the trait lives in `plugin-api` and the
 core invokes it through the trait object**, never by calling a Rust-specific function.
 
@@ -491,7 +491,7 @@ adding Go means editing the core. The trait boundary is what keeps the fold reve
 
 Categories live in the waist. Prefixes — `src/`, `target/*/out/`,
 `/nix/store/…rust-lib-src/`, the cargo registry path — live in the plugin, because
-design.md §8 MEASURED that they are Rust-specific *and* machine-specific.
+design.md §8 MEASURED that they are Rust-specific _and_ machine-specific.
 
 ### 3.6 Renderer
 
@@ -542,26 +542,26 @@ repository.
 
 ## 4. The eight leaks, method by method
 
-ADR-0008's anti-leak test — *could `ra_ap`'s return value be substituted verbatim here?* —
+ADR-0008's anti-leak test — _could `ra_ap`'s return value be substituted verbatim here?_ —
 applied to every signature above.
 
-| # | leak | how the API avoids it |
-|---|---|---|
-| 1 | position-based queries | `edges_in(&Unit)` / `edges_from(&NodeId)`. No position type appears anywhere in `plugin-api`. `lang-rust` converts internally. |
-| 2 | `FileId` | `SourceRange` carries a `PathBuf`. No interned integer crosses the boundary. |
-| 3 | `TextSize` u32 byte offsets | `Span` is still u32, but `PositionEncoding` is declared per plugin and the core normalises. The offsets are not assumed to be bytes. |
-| 4 | Cargo workspace assumption | `discover_units(root) -> Vec<Unit>`. No `Cargo.toml`, manifest or workspace concept in `plugin-api`. |
-| 5 | salsa snapshot lifecycle | No database, snapshot, or handle type is exposed. `lang-rust` owns its salsa lifecycle behind `&self`. |
-| 6 | `SymbolKind` | Neutral six-variant enum plus `raw_kind: String`. `Trait`, `Impl`, `Macro` and `Static` map to `Type`/`Other` with the Rust term preserved for display. |
-| 7 | `Documentation` type | `doc: Option<String>` + `doc_format: DocFormat`. |
-| 8 | classifier prefixes | `Category` in the waist; `Classifier` trait in `plugin-api`; prefix strings only inside the plugin. |
+| #   | leak                        | how the API avoids it                                                                                                                                   |
+| --- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | position-based queries      | `edges_in(&Unit)` / `edges_from(&NodeId)`. No position type appears anywhere in `plugin-api`. `lang-rust` converts internally.                          |
+| 2   | `FileId`                    | `SourceRange` carries a `PathBuf`. No interned integer crosses the boundary.                                                                            |
+| 3   | `TextSize` u32 byte offsets | `Span` is still u32, but `PositionEncoding` is declared per plugin and the core normalises. The offsets are not assumed to be bytes.                    |
+| 4   | Cargo workspace assumption  | `discover_units(root) -> Vec<Unit>`. No `Cargo.toml`, manifest or workspace concept in `plugin-api`.                                                    |
+| 5   | salsa snapshot lifecycle    | No database, snapshot, or handle type is exposed. `lang-rust` owns its salsa lifecycle behind `&self`.                                                  |
+| 6   | `SymbolKind`                | Neutral six-variant enum plus `raw_kind: String`. `Trait`, `Impl`, `Macro` and `Static` map to `Type`/`Other` with the Rust term preserved for display. |
+| 7   | `Documentation` type        | `doc: Option<String>` + `doc_format: DocFormat`.                                                                                                        |
+| 8   | classifier prefixes         | `Category` in the waist; `Classifier` trait in `plugin-api`; prefix strings only inside the plugin.                                                     |
 
 Note on leak 3: keeping `u32` offsets is a conscious choice, not an oversight, and
-`SourceRange::span` being `Option` does not soften it — an offset that *is* reported is
+`SourceRange::span` being `Option` does not soften it — an offset that _is_ reported is
 still a raw offset in the plugin's declared encoding. The
 alternative — line/column pairs — would force every plugin to compute them, and ra_ap,
 tree-sitter and SCIP are all offset-based. The neutrality guarantee comes from declaring
-the *encoding*, not from changing the *representation*.
+the _encoding_, not from changing the _representation_.
 
 ---
 
@@ -599,16 +599,16 @@ guarantee is structural, not a special case in `detect`.
 
 Selection is explicit, by one of two routes:
 
-| caller | route |
-|---|---|
-| tests | `Index::build(root, &[&fixture], opts)` — plan-01 §4.2 takes an explicit plugin slice, so a test injects the fixture directly and never consults the registry at all |
-| a developer, manually | `--plugin fixture`, a hidden flag gated on the same Cargo feature as the crate, resolving through `Registry::select` |
+| caller                | route                                                                                                                                                                |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| tests                 | `Index::build(root, &[&fixture], opts)` — plan-01 §4.2 takes an explicit plugin slice, so a test injects the fixture directly and never consults the registry at all |
+| a developer, manually | `--plugin fixture`, a hidden flag gated on the same Cargo feature as the crate, resolving through `Registry::select`                                                 |
 
 The flag is hidden and feature-gated because it is a development affordance, not a
 product feature: a release build has no fixture crate compiled in, so the flag does not
 exist to be typed (§1, Features).
 
-The reason this matters beyond tidiness: a fixture that could be *detected* would, on any
+The reason this matters beyond tidiness: a fixture that could be _detected_ would, on any
 repository that happened to contain a `reachgraph.fixture.json`, quietly replace the real
 analysis with hand-written JSON — producing a complete, plausible, entirely fictional call
 graph. Explicit selection means fixture data can only ever appear because somebody asked
@@ -623,12 +623,12 @@ the traits compile, and they are the acceptance criteria for this plan.
 
 ### 6.1 Neutrality tests — the mechanical guards
 
-| test | asserts | fails when |
-|---|---|---|
-| `fixture_implements_every_trait` | `reachgraph-fixture` implements `Plugin`, `LanguagePlugin`, `SymbolProvider`, `EdgeProvider`, `RootProvider`, `Classifier`. Compile-level, via `assert_impl_all!`. | a signature requires something only a real language engine can produce |
-| `no_plugin_depends_on_core` | parse `cargo metadata`; assert `reachgraph-core` is absent from the dependency graph of every `reachgraph-*` crate whose name is not `core` or `cli` | someone reaches into waist internals |
-| `plugin_api_has_no_ra_ap_dependency` | `cargo metadata`: `ra_ap_*` absent from `plugin-api`'s dependency graph | a Rust type leaks into the contract |
-| `public_api_snapshot_matches` | a checked-in snapshot of `plugin-api`'s complete public surface (`cargo public-api` or equivalent), asserted in CI | **any** type, field or signature in the contract changes without a reviewed diff |
+| test                                 | asserts                                                                                                                                                            | fails when                                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `fixture_implements_every_trait`     | `reachgraph-fixture` implements `Plugin`, `LanguagePlugin`, `SymbolProvider`, `EdgeProvider`, `RootProvider`, `Classifier`. Compile-level, via `assert_impl_all!`. | a signature requires something only a real language engine can produce           |
+| `no_plugin_depends_on_core`          | parse `cargo metadata`; assert `reachgraph-core` is absent from the dependency graph of every `reachgraph-*` crate whose name is not `core` or `cli`               | someone reaches into waist internals                                             |
+| `plugin_api_has_no_ra_ap_dependency` | `cargo metadata`: `ra_ap_*` absent from `plugin-api`'s dependency graph                                                                                            | a Rust type leaks into the contract                                              |
+| `public_api_snapshot_matches`        | a checked-in snapshot of `plugin-api`'s complete public surface (`cargo public-api` or equivalent), asserted in CI                                                 | **any** type, field or signature in the contract changes without a reviewed diff |
 
 The first two are the load-bearing pair. `fixture_implements_every_trait` is ADR-0008's
 mechanism made executable; `no_plugin_depends_on_core` is §1's rule made executable.
@@ -677,16 +677,16 @@ ships traits, shared types, the registry and the test harness — no language en
 
 ## 7. Roadmap
 
-| plan | title | depends on |
-|---|---|---|
-| **00** | workspace and plugin API contract | — |
-| 01 | core waist: graph, reachability, sharding | 00 |
-| 02 | fixture plugin | 00 |
-| 03 | `lang-rust` via `ra_ap_*` | 00, 01, 02 |
-| 04 | `roots-proto-tonic` | 00, 01, 02 |
-| 05 | `render-html` (Cytoscape, root-sharded) | 00, 01 |
-| 06 | CLI and `serve` | 01, 05 |
-| 07 | PyPI packaging | 06 |
+| plan   | title                                     | depends on |
+| ------ | ----------------------------------------- | ---------- |
+| **00** | workspace and plugin API contract         | —          |
+| 01     | core waist: graph, reachability, sharding | 00         |
+| 02     | fixture plugin                            | 00         |
+| 03     | `lang-rust` via `ra_ap_*`                 | 00, 01, 02 |
+| 04     | `roots-proto-tonic`                       | 00, 01, 02 |
+| 05     | `render-html` (Cytoscape, root-sharded)   | 00, 01     |
+| 06     | CLI and `serve`                           | 01, 05     |
+| 07     | PyPI packaging                            | 06         |
 
 **01 and 02 proceed in parallel** once this plan lands — the waist and its test double have
 no dependency on each other beyond the traits defined here. Building them together is
@@ -735,8 +735,8 @@ recorded in place, rather than deleted.
    real, in one repository, today; the disambiguation it requires is the enclosing `impl`
    block's trait.
 
-   `container`, not `parent`: *parent* is ambiguous across languages — parent module,
-   parent scope, parent frame. *Container* names one thing, the enclosing definition, and
+   `container`, not `parent`: _parent_ is ambiguous across languages — parent module,
+   parent scope, parent frame. _Container_ names one thing, the enclosing definition, and
    is language-neutral: Rust `impl` block, Go receiver type, Java class, Python class.
 
    The field is a `NodeId`, so the waist can carry it while remaining unable to read it —
@@ -772,7 +772,7 @@ recorded in place, rather than deleted.
    problem — an unbound root means a real handler may read as unreachable, so the gap has
    to reach the artifact rather than a log line.
 
-   Note the field this does *not* touch: `Edge::inference_mode` stays an enum. An edge's
+   Note the field this does _not_ touch: `Edge::inference_mode` stays an enum. An edge's
    strength is a real property of how it was derived (ADR-0003 field 4); a root's binding
    is a yes or a no.
 
@@ -780,11 +780,11 @@ recorded in place, rather than deleted.
    `Span { start: u32, end: u32 }`, offsets in the declaring plugin's `PositionEncoding`,
    and nothing else. What was considered and left out, each with the reason:
 
-   | candidate | left out because |
-   |---|---|
+   | candidate                                 | left out because                                                                                                                                                                                                                                                   |
+   | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
    | a `PositionEncoding` on the `Span` itself | it is declared per plugin (ADR-0003 field 2) and a node knows its plugin. Duplicating it per span creates two places to disagree, and invites a consumer to compare two offsets without checking they share an encoding — the failure the field exists to prevent. |
-   | line and column | §4's note: ra_ap, tree-sitter and SCIP are all offset-based, so every plugin would have to compute them. Neutrality comes from declaring the encoding, not from changing the representation. |
-   | a separate name / selection range | LSP's `DocumentSymbol` carries `range` *and* `selectionRange`, and ra_ap distinguishes a focus range from a full range. `Span` is the definition's full extent only. |
+   | line and column                           | §4's note: ra_ap, tree-sitter and SCIP are all offset-based, so every plugin would have to compute them. Neutrality comes from declaring the encoding, not from changing the representation.                                                                       |
+   | a separate name / selection range         | LSP's `DocumentSymbol` carries `range` _and_ `selectionRange`, and ra_ap distinguishes a focus range from a full range. `Span` is the definition's full extent only.                                                                                               |
 
    The last one is the live residual, and it is a real question rather than a closed one:
    a renderer that deep-links "jump to the name of this function" wants the name range,

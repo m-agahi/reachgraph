@@ -25,11 +25,11 @@ That path is nevertheless rejected. Its cost is an acquisition problem: every us
 end up with the right server, at the right version, without installing anything by hand.
 MEASURED 2026-09-17, the cheapest concrete instance of that cost — Python:
 
-| package | self-contained? | evidence |
-|---|---|---|
-| `pyright` (PyPI) | **No.** Third-party wrapper (`RobertCraigie/pyright-python`, not Microsoft). Prefers a global `node` on PATH, else downloads Node via `nodeenv` at first run | source read of `src/pyright/node.py` |
-| `basedpyright` (PyPI) | **Yes.** Hard-depends on `nodejs-wheel-binaries`, no fallback path | source read of `basedpyright/run_node.py` |
-| `nodejs-wheel-binaries` | Real per-platform wheels with an embedded Node binary | PyPI JSON: 61.1 MB manylinux x86_64, 63.3 MB musllinux, 56.0 MB macOS arm64, 42.4 MB win_amd64 |
+| package                 | self-contained?                                                                                                                                              | evidence                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `pyright` (PyPI)        | **No.** Third-party wrapper (`RobertCraigie/pyright-python`, not Microsoft). Prefers a global `node` on PATH, else downloads Node via `nodeenv` at first run | source read of `src/pyright/node.py`                                                           |
+| `basedpyright` (PyPI)   | **Yes.** Hard-depends on `nodejs-wheel-binaries`, no fallback path                                                                                           | source read of `basedpyright/run_node.py`                                                      |
+| `nodejs-wheel-binaries` | Real per-platform wheels with an embedded Node binary                                                                                                        | PyPI JSON: 61.1 MB manylinux x86_64, 63.3 MB musllinux, 56.0 MB macOS arm64, 42.4 MB win_amd64 |
 
 So the only self-contained Python option drags a 56–63 MB third-party repackaging of
 Node.js into the dependency chain. npm and Node are the largest supply-chain surface in
@@ -51,7 +51,7 @@ For rust-analyzer specifically the engine is available as ordinary crates — ME
 with `ra_ap_ide::Analysis::{call_hierarchy, incoming_calls, outgoing_calls}` as public
 functions.
 
-"Copy the source and maintain it ourselves" is the wrong mechanism *here*: rust-analyzer
+"Copy the source and maintain it ourselves" is the wrong mechanism _here_: rust-analyzer
 is ~48 crates on a fast release cadence, and copying them means owning a fork of a
 moving project. That is Sourcetrail's failure mode in milder form — not writing indexers,
 but maintaining forks of them.
@@ -84,17 +84,17 @@ both are MIT and the licence text imposes no such limit.
 
 MEASURED 2026-09-17, licences of the candidate sources:
 
-| project | SPDX | copyable into an MIT/Apache tool? |
-|---|---|---|
-| rust-analyzer (`ra_ap_*`) | MIT OR Apache-2.0 | yes |
-| ruff (`ruff_python_semantic`) | MIT | yes |
-| ty (`ty_python_semantic`) | MIT | yes |
-| tree-sitter core + grammars | MIT | yes |
-| gopls (golang/tools) | BSD-3-Clause | yes |
-| pyright | MIT | yes |
-| clangd / LLVM | `Apache-2.0 WITH LLVM-exception` | yes |
-| Eclipse JDT LS | EPL-2.0 | file-level copyleft — avoid |
-| crabviz | AGPL-3.0 | **no — legally unavailable** |
+| project                       | SPDX                             | copyable into an MIT/Apache tool? |
+| ----------------------------- | -------------------------------- | --------------------------------- |
+| rust-analyzer (`ra_ap_*`)     | MIT OR Apache-2.0                | yes                               |
+| ruff (`ruff_python_semantic`) | MIT                              | yes                               |
+| ty (`ty_python_semantic`)     | MIT                              | yes                               |
+| tree-sitter core + grammars   | MIT                              | yes                               |
+| gopls (golang/tools)          | BSD-3-Clause                     | yes                               |
+| pyright                       | MIT                              | yes                               |
+| clangd / LLVM                 | `Apache-2.0 WITH LLVM-exception` | yes                               |
+| Eclipse JDT LS                | EPL-2.0                          | file-level copyleft — avoid       |
+| crabviz                       | AGPL-3.0                         | **no — legally unavailable**      |
 
 Two of these required reading the licence file rather than trusting metadata. MEASURED
 2026-09-17: GitHub's licence detector returns `NOASSERTION` for both `microsoft/pyright`
@@ -103,7 +103,7 @@ and `Apache-2.0 WITH LLVM-exception`.
 
 **crabviz is not merely "do not copy" — it is legally unavailable to this project.**
 INFERRED legal conclusion from a MEASURED SPDX identifier; not legal advice. Under
-ADR-0001 the product is a *single linked binary*. Vendoring any crabviz source into it
+ADR-0001 the product is a _single linked binary_. Vendoring any crabviz source into it
 would place the entire binary under AGPL-3.0, and AGPL extends the copyleft trigger to
 network and SaaS use, not only to distribution. That is incompatible with MIT OR
 Apache-2.0 distribution. The architecture may be borrowed — `docs/design.md` §3 openly
@@ -128,7 +128,7 @@ the absolute reading.
 
 **Still banned, unchanged:**
 
-- Analysis tooling that reachgraph would make a user install *for reachgraph's sake* —
+- Analysis tooling that reachgraph would make a user install _for reachgraph's sake_ —
   rust-analyzer, gopls, jdtls, pyright.
 - Runtime downloads.
 - npm and Node.
@@ -164,7 +164,7 @@ Whether rust-analyzer's proc-macro expansion needs a subprocess. MEASURED:
 is plausible — but unverified.
 
 A proc-macro server is **rust-analyzer's own component, not the target language's build
-toolchain**, so it is *not* covered by the carve-out as worded. If it turns out to require
+toolchain**, so it is _not_ covered by the carve-out as worded. If it turns out to require
 a subprocess, that is a separate ADR-level decision, not an extension of this one.
 
 The stakes are specific: `ProcMacroServerChoice::None` would kill expansion through
@@ -176,7 +176,7 @@ cross-repo mechanism rests on.
 Second user decision, 2026-09-17, recorded here because it bounds the carve-out above.
 
 **reachgraph does not build the repository.** No `cargo check`, no
-`load_out_dirs_from_check`-driven build, no invocation of the toolchain to *produce*
+`load_out_dirs_from_check`-driven build, no invocation of the toolchain to _produce_
 artifacts. The carve-out permits reading a workspace, not constructing one.
 
 When `target/*/out/` is absent, `preflight()` reports it and the run **degrades honestly**:
