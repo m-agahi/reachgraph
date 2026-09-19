@@ -27,13 +27,30 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
-# NO WORKFLOW-LEVEL `permissions:` BLOCK, for the reason `ci.yaml`'s comment
-# block records: a top-level block becomes a cap a later job has to fight, and
-# when it bites the symptom is a run with ZERO JOBS, no logs and no
-# annotations, whose only report is the word `failure`. Nothing in that points
-# at permissions. The permissions live on the job — and here one job needs
-# `id-token: write` for Trusted Publishing, which is exactly the grant a
-# read-only cap would silently refuse.
+# ONE RELEASE AT A TIME, and `cancel-in-progress: false` rather than true: a
+# run that has already reached the `publish` job must be allowed to finish,
+# because half a release is worse than a late one. The group is the ref, so two
+# pushes of the same tag queue instead of racing each other to PyPI.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+# NO WORKFLOW-LEVEL `permissions:` BLOCK. `ci.yaml`'s comment says the same
+# thing and its reason is worth stating precisely rather than carried over
+# whole, because the two files are not in the same position.
+#
+# A workflow-level block CAPS a job that is itself a reusable-workflow call
+# (`jobs.<id>.uses:`) — the caller cannot hand the callee more than it holds.
+# `ci.yaml` makes exactly such a call and that is why its block is absent.
+# THIS file makes none: every `uses:` here is a step inside a job, and a
+# job-level block replaces the workflow-level one rather than intersecting it.
+#
+# The block is still omitted, and on the narrower ground that it would be a
+# second place to state something every job already states. Each job below
+# declares its own — `gate` declares `{}` because it reads nothing — and the
+# one that matters, `publish`, needs `id-token: write` for Trusted Publishing.
+# zizmor flags the omission under `--persona=pedantic` only; the trade is
+# recorded here rather than suppressed.
 env:
   CARGO_TERM_COLOR: always
 
@@ -81,25 +98,38 @@ jobs:
             tier: "2"
             smoke: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # `actions/checkout` writes a credential into `.git/config` by
+          # default and leaves it there for every later step in the job.
+          # No job in this workflow pushes, so nothing needs it — and this
+          # is the workflow that holds `id-token: write`.
+          persist-credentials: false
 
       # THE CHANNEL IS READ, NEVER RESTATED. `rust-toolchain.toml` is the pin —
       # its own comment explains why a floating channel makes a green branch go
       # red without a commit — and maturin-action builds inside a container
       # where a host `rustup` has no say. Writing the version again here would
       # be a second place to forget.
+      # The matrix values reach the script through `env:`, never through `${{ }}`
+      # inside the `run:` body. These two are workflow-authored literals so
+      # nothing is injectable today; the habit is what matters, because the day
+      # one of them stops being a literal there is no diff to notice.
       - name: read the pinned toolchain
         id: toolchain
         shell: bash
+        env:
+          TIER: ${{ matrix.tier }}
+          TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
           channel=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
           test -n "$channel"
-          echo "tier ${{ matrix.tier }} target ${{ matrix.target }} on $channel" >> "$GITHUB_STEP_SUMMARY"
+          echo "tier $TIER target $TARGET on $channel" >> "$GITHUB_STEP_SUMMARY"
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
 
       - name: build the wheel
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           rust-toolchain: ${{ steps.toolchain.outputs.channel }}
           target: ${{ matrix.target }}
@@ -109,7 +139,13 @@ jobs:
           # declared ahead of it.
           manylinux: auto
           args: --release --locked --out dist
-          sccache: "true"
+          # NO `sccache`. It was here and it is removed: a cache entry poisoned
+          # from any other run on this repository can be linked into the binary
+          # this job publishes, and this is the workflow that holds
+          # `id-token: write`. Caching is a wall-clock convenience; on the job
+          # that produces the shipped artifact it is a supply-chain hole. The
+          # cost is MEASURED rather than feared — a cold fat-LTO build of this
+          # tree takes about 3 minutes, which a release can afford.
 
       - name: the wheel contains an executable and no Python
         shell: bash
@@ -159,11 +195,13 @@ jobs:
       - name: auditwheel reports the manylinux tag actually satisfied
         if: startsWith(matrix.target, 'x86_64-unknown-linux') || startsWith(matrix.target, 'aarch64-unknown-linux')
         shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
           pipx run auditwheel show dist/*.whl | tee "$RUNNER_TEMP/auditwheel.txt"
           {
-            echo "### manylinux tag for ${{ matrix.target }}"
+            echo "### manylinux tag for $TARGET"
             echo '```'
             cat "$RUNNER_TEMP/auditwheel.txt"
             echo '```'
@@ -218,7 +256,7 @@ jobs:
           curl -fsS -o /dev/null "http://127.0.0.1:8731/graph/$(basename "$shard")"
           curl -fsS -o /dev/null "http://127.0.0.1:8731/vendor/cytoscape.min.js"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: wheel-${{ matrix.target }}
           path: dist/*.whl
@@ -238,7 +276,13 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # `actions/checkout` writes a credential into `.git/config` by
+          # default and leaves it there for every later step in the job.
+          # No job in this workflow pushes, so nothing needs it — and this
+          # is the workflow that holds `id-token: write`.
+          persist-credentials: false
 
       - name: vendor the dependency tree
         run: |
@@ -248,7 +292,7 @@ jobs:
           echo "vendored $(find vendor -type f | wc -l) files, $(du -sb vendor | cut -f1) bytes"
 
       - name: build the sdist
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           command: sdist
           args: --out dist
@@ -311,7 +355,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sdist
           path: dist/*.tar.gz
@@ -325,7 +369,13 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # `actions/checkout` writes a credential into `.git/config` by
+          # default and leaves it there for every later step in the job.
+          # No job in this workflow pushes, so nothing needs it — and this
+          # is the workflow that holds `id-token: write`.
+          persist-credentials: false
 
       # BOTH TOOLS ARE PINNED BY VERSION, and the second one is the reason.
       # `cargo xtask third-party-licenses` byte-compares a generated file
@@ -365,15 +415,19 @@ jobs:
     permissions: {}
     steps:
       - name: tier-1 wheels, the sdist and the licence checks all succeeded
+        env:
+          SDIST: ${{ needs.sdist.result }}
+          LICENCES: ${{ needs.licences.result }}
+          WHEELS: ${{ needs.wheels.result }}
         run: |
           set -euo pipefail
-          if [ "${{ needs.sdist.result }}" != "success" ]; then
+          if [ "$SDIST" != "success" ]; then
             echo "::error::the sdist job did not succeed"; exit 1
           fi
-          if [ "${{ needs.licences.result }}" != "success" ]; then
+          if [ "$LICENCES" != "success" ]; then
             echo "::error::the licence jobs did not succeed"; exit 1
           fi
-          if [ "${{ needs.wheels.result }}" != "success" ]; then
+          if [ "$WHEELS" != "success" ]; then
             echo "::error::a wheel failed to build. Tier-2 failures are documented and the release proceeds, but that is a decision a human takes — re-run this job after recording which target failed."
             exit 1
           fi
@@ -394,15 +448,29 @@ jobs:
       name: pypi
       url: https://pypi.org/p/reachgraph
     permissions:
+      # `id-token: write` mints the short-lived OIDC credential PyPI Trusted
+      # Publishing exchanges for an upload token — it is the reason no
+      # long-lived API token exists in this repository's secrets.
+      # `attestations: write` signs each file under PEP 740 so it is
+      # verifiable against the workflow that built it.
+      #
+      # `contents: read` is kept deliberately, and zizmor flags it under
+      # `--persona=pedantic` as broad for a job that checks out no source.
+      # That is a fair reading and it is not taken: whether
+      # `download-artifact` needs the grant for a same-run artifact is not
+      # something this repository has MEASURED, and finding out by removing it
+      # would be found out during a release. `contents: read` is the
+      # read-only floor a repository with default-read workflow permissions
+      # already grants, so keeping it adds nothing a caller did not have.
       id-token: write
       attestations: write
       contents: read
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: dist
           merge-multiple: true
       - run: ls -l dist
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           attestations: true
