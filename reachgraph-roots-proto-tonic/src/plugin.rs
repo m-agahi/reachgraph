@@ -103,6 +103,23 @@ impl Plugin for ProtoTonicPlugin {
             },
         }
     }
+
+    /// Nothing, and the empty list is the finding rather than a stub.
+    ///
+    /// Every fact this plugin learns about its own run already has a
+    /// **structured** home in the contract: what it examined is
+    /// [`reachgraph_plugin_api::Coverage`], and an operation it could not bind
+    /// is a [`reachgraph_plugin_api::RootBinding::Unbound`] carrying the
+    /// provider's own reason. Restating either as free text would put one fact
+    /// in two shapes, and a consumer would then have to decide which spelling
+    /// to trust — the failure a plugin-authored note exists to avoid, not to
+    /// create.
+    ///
+    /// A note belongs here only for something the contract has no field for,
+    /// which is why `reachgraph-lang-rust` has three and this crate has none.
+    fn notes(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 impl RootProvider for ProtoTonicPlugin {

@@ -369,6 +369,12 @@ pub struct CoverageRow {
     pub traversal_terminal_categories: Vec<CategoryRow>,
     /// True when a provider failed and the run continued.
     pub partial: bool,
+    /// What each contributing plugin said about this run, verbatim.
+    ///
+    /// Plugin-authored free text the waist carries and never parses. Plan-03
+    /// §9 D-D's ruling lives here: a reader of this artifact can tell *not
+    /// indexed* from *not called* because the plugin said which it was.
+    pub notes: Vec<String>,
 }
 
 /// One version of one operation in the endpoint list.

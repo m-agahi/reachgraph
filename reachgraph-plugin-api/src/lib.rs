@@ -54,7 +54,7 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 // ---------------------------------------------------------------------------
 // Identity
@@ -516,6 +516,26 @@ pub struct IndexCoverage {
     /// True when any provider failed and the run continued anyway. A consumer
     /// must weaken every unreachability claim when this is set.
     pub partial: bool,
+    /// What the contributing plugins said about their own run, verbatim.
+    ///
+    /// One string per finding, collected from [`Plugin::notes`] after analysis
+    /// and **carried opaquely**: the waist never parses, splits, matches or
+    /// reorders a note, exactly as with [`NodeId::raw`] and [`Root::join_key`].
+    ///
+    /// # Why the channel is a string list rather than fields
+    ///
+    /// `reachgraph-lang-rust` knows facts a reader needs — that generated code
+    /// was not indexed for N members, that proc-macro expansion is off — and
+    /// plan-03 §9 D-D rules that the artifact must **say so**, because a reader
+    /// otherwise cannot tell *not indexed* from *not called*. Widening this
+    /// struct with `out_dir_loaded` or `proc_macro_expansion` would put one
+    /// language's vocabulary in the waist, which is the ADR-0003 violation the
+    /// fixture plugin exists to catch. A note the waist cannot read is the
+    /// shape that carries the fact without learning the language.
+    ///
+    /// Empty means every contributing plugin had nothing to add, which is a
+    /// statement rather than a gap.
+    pub notes: Vec<String>,
 }
 
 /// The lookups [`GraphView`] answers, built once on first use.
@@ -949,6 +969,26 @@ pub trait Plugin: Send + Sync {
 
     /// ADR-0003 field 5.
     fn preflight(&self, root: &Path) -> Preflight;
+
+    /// What this plugin has to say about the run it just took part in.
+    ///
+    /// Collected by the core **after** analysis — a plugin that learns what it
+    /// could not see by loading a workspace has nothing to report before it
+    /// loads one — and carried into the artifact as
+    /// [`IndexCoverage::notes`], verbatim and unparsed.
+    ///
+    /// This is not [`Preflight`] and does not replace it. Preflight is a
+    /// prerequisite check with a fatal case, answered before a run; a note is a
+    /// fact about what the finished index contains. Plan-03 §9 D-D's ruling —
+    /// generated code goes unindexed **and the artifact says so** — has its
+    /// second half here.
+    ///
+    /// **Required rather than defaulted.** A provided `Vec::new()` would make
+    /// "this plugin considered the question and has nothing to add"
+    /// indistinguishable from "this plugin never considered it", which is the
+    /// honest-absence rule ADR-0003 states. Returning an empty list is a fine
+    /// answer; not being asked is not.
+    fn notes(&self) -> Vec<String>;
 }
 
 /// Unit discovery.
@@ -1078,12 +1118,242 @@ pub trait OutputSink {
 // Registry
 // ---------------------------------------------------------------------------
 
+/// Why a registration was refused.
+///
+/// Registration returns a `Result` rather than panicking because the caller
+/// wiring a registry is the binary, and a binary that mis-wires its own plugins
+/// should say so on stderr with an exit code rather than abort.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum RegistryError {
+    /// Two registrations share one [`PluginId`].
+    ///
+    /// [`Registry::select`] could then not answer, and the core counts
+    /// providers by `PluginId` when it pairs symbols with edges — so a
+    /// duplicate is a mis-wiring with graph-shaped consequences rather than a
+    /// tidiness complaint.
+    DuplicateId {
+        /// The id registered twice.
+        plugin: PluginId,
+    },
+    /// A capability view was registered that the plugin's [`Plugin::provides`]
+    /// does not declare.
+    CapabilityNotDeclared {
+        /// The plugin registered.
+        plugin: PluginId,
+        /// The capability the view implies.
+        capability: Capability,
+    },
+    /// A capability was declared by [`Plugin::provides`] and no view for it was
+    /// registered.
+    ///
+    /// **The silent one.** A plugin declaring [`Capability::Roots`] whose root
+    /// view never reaches the core produces an index with no roots, and then
+    /// every symbol in the repository reads as not reachable from any endpoint
+    /// — ADR-0007's correctness problem, arriving through a wiring mistake
+    /// nothing would otherwise report.
+    CapabilityNotProvided {
+        /// The plugin registered.
+        plugin: PluginId,
+        /// The capability it declared and did not hand over.
+        capability: Capability,
+    },
+}
+
+impl fmt::Display for RegistryError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RegistryError::DuplicateId { plugin } => {
+                write!(f, "{} is registered twice", plugin.0)
+            }
+            RegistryError::CapabilityNotDeclared { plugin, capability } => write!(
+                f,
+                "{} was registered for {capability:?}, which it does not declare",
+                plugin.0
+            ),
+            RegistryError::CapabilityNotProvided { plugin, capability } => write!(
+                f,
+                "{} declares {capability:?} and registered no view for it",
+                plugin.0
+            ),
+        }
+    }
+}
+
+impl std::error::Error for RegistryError {}
+
+/// One plugin, and the capability views it was registered with.
+///
+/// # Why the views are carried rather than recovered
+///
+/// MEASURED while building the core: a `&dyn Plugin` **cannot** be narrowed to
+/// a `&dyn SymbolProvider`. Rust has no downcast from a supertrait object to a
+/// subtrait object, and `BuildInputs` takes one typed slice per capability —
+/// so a registry that stored `Box<dyn Plugin>` could detect a plugin and then
+/// had no way to hand it to a build. Detection could not drive a run at all.
+///
+/// The fix is to keep the views from the one place that still has the concrete
+/// type: [`Registration`], built where the plugin is constructed. ADR-0002
+/// makes plugins compile-time, so that place always exists.
+///
+/// # Why [`Arc`] and not [`Box`]
+///
+/// One instance, several views. `RustPlugin` owns a loaded workspace behind a
+/// `Mutex`, and loading it is the expensive half of a run; a registry holding
+/// one box per capability would hold three instances of it and load three
+/// times. Cloning an `Arc` into each view keeps one instance with no
+/// self-referential borrow and no `unsafe` — which this crate forbids outright.
+pub struct Registered {
+    plugin: Arc<dyn Plugin>,
+    symbols: Option<Arc<dyn SymbolProvider>>,
+    edges: Option<Arc<dyn EdgeProvider>>,
+    roots: Option<Arc<dyn RootProvider>>,
+    classifier: Option<Arc<dyn Classifier>>,
+}
+
+impl Registered {
+    /// The plugin itself: identity, capabilities, detection, preflight.
+    pub fn plugin(&self) -> &dyn Plugin {
+        self.plugin.as_ref()
+    }
+
+    /// The symbol view, or `None` when this plugin provides no symbols.
+    pub fn symbols(&self) -> Option<&dyn SymbolProvider> {
+        self.symbols.as_deref()
+    }
+
+    /// The edge view, or `None` when this plugin provides no edges.
+    pub fn edges(&self) -> Option<&dyn EdgeProvider> {
+        self.edges.as_deref()
+    }
+
+    /// The root view, or `None` when this plugin provides no roots.
+    pub fn roots(&self) -> Option<&dyn RootProvider> {
+        self.roots.as_deref()
+    }
+
+    /// The classifier view, or `None` when this plugin classifies nothing.
+    pub fn classifier(&self) -> Option<&dyn Classifier> {
+        self.classifier.as_deref()
+    }
+
+    fn declared(&self, capability: Capability) -> bool {
+        self.plugin.provides().contains(&capability)
+    }
+
+    fn registered(&self, capability: Capability) -> bool {
+        match capability {
+            Capability::Symbols => self.symbols.is_some(),
+            Capability::Edges => self.edges.is_some(),
+            Capability::Roots => self.roots.is_some(),
+            Capability::Classify => self.classifier.is_some(),
+        }
+    }
+}
+
+impl fmt::Debug for Registered {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Registered")
+            .field("plugin", &self.plugin.id())
+            .field("symbols", &self.symbols.is_some())
+            .field("edges", &self.edges.is_some())
+            .field("roots", &self.roots.is_some())
+            .field("classifier", &self.classifier.is_some())
+            .finish()
+    }
+}
+
+/// A plugin plus the capability views it hands the core, built where the
+/// concrete type is still known.
+///
+/// Each method is bounded on the trait it registers, so a plugin that does not
+/// implement [`SymbolProvider`] cannot be registered as one — the miswiring is
+/// a compile error rather than a runtime check. Whether the plugin also
+/// *declares* the capability is checked by [`Registry::register`], in both
+/// directions, which is what keeps [`Plugin::provides`] load-bearing rather
+/// than decorative.
+///
+/// ```ignore
+/// registry.register(
+///     Registration::of(SomePlugin::new()).symbols().edges().classifier(),
+/// )?;
+/// ```
+pub struct Registration<P: Plugin + 'static> {
+    plugin: Arc<P>,
+    symbols: Option<Arc<dyn SymbolProvider>>,
+    edges: Option<Arc<dyn EdgeProvider>>,
+    roots: Option<Arc<dyn RootProvider>>,
+    classifier: Option<Arc<dyn Classifier>>,
+}
+
+impl<P: Plugin + 'static> Registration<P> {
+    /// A registration carrying no capability view yet.
+    ///
+    /// A plugin registered this way is detectable and preflightable and
+    /// contributes nothing to a build, which is a real configuration: a plugin
+    /// whose [`Plugin::provides`] is empty declares no capability to hand over.
+    pub fn of(plugin: P) -> Self {
+        Self {
+            plugin: Arc::new(plugin),
+            symbols: None,
+            edges: None,
+            roots: None,
+            classifier: None,
+        }
+    }
+
+    /// Hand over the [`SymbolProvider`] view.
+    pub fn symbols(mut self) -> Self
+    where
+        P: SymbolProvider,
+    {
+        self.symbols = Some(self.plugin.clone());
+        self
+    }
+
+    /// Hand over the [`EdgeProvider`] view.
+    pub fn edges(mut self) -> Self
+    where
+        P: EdgeProvider,
+    {
+        self.edges = Some(self.plugin.clone());
+        self
+    }
+
+    /// Hand over the [`RootProvider`] view.
+    pub fn roots(mut self) -> Self
+    where
+        P: RootProvider,
+    {
+        self.roots = Some(self.plugin.clone());
+        self
+    }
+
+    /// Hand over the [`Classifier`] view.
+    pub fn classifier(mut self) -> Self
+    where
+        P: Classifier,
+    {
+        self.classifier = Some(self.plugin.clone());
+        self
+    }
+
+    fn erase(self) -> Registered {
+        Registered {
+            plugin: self.plugin,
+            symbols: self.symbols,
+            edges: self.edges,
+            roots: self.roots,
+            classifier: self.classifier,
+        }
+    }
+}
+
 /// The plugin registry. Analysis plugins only — a renderer is not a [`Plugin`]
 /// (plan-00 §3.6) and is never detected.
 ///
-/// ADR-0008: in v0.1 this holds exactly one real plugin, plus the fixture in
-/// test builds. A registry with one entry costs nothing; a hardcoded language
-/// branch costs a core change per language.
+/// ADR-0008: in v0.1 this holds exactly one real language plugin, one root
+/// provider, plus the fixture in test builds. A registry with few entries costs
+/// nothing; a hardcoded language branch costs a core change per language.
 ///
 /// `Default` is not in plan-00 §5 and is here for a mechanical reason rather
 /// than a design one: clippy's `new_without_default` refuses a public
@@ -1092,7 +1362,7 @@ pub trait OutputSink {
 /// so it stays visible.
 #[derive(Default)]
 pub struct Registry {
-    plugins: Vec<Box<dyn Plugin>>,
+    plugins: Vec<Registered>,
 }
 
 impl Registry {
@@ -1101,20 +1371,66 @@ impl Registry {
         Self::default()
     }
 
-    /// Add a plugin. The only way in.
-    pub fn register(&mut self, plugin: Box<dyn Plugin>) {
-        self.plugins.push(plugin);
+    /// Add a plugin and its capability views. The only way in.
+    ///
+    /// Both directions of [`Plugin::provides`] are checked here, and that is
+    /// the whole of what makes the declaration load-bearing:
+    ///
+    /// - a view registered for a capability the plugin does not declare is
+    ///   [`RegistryError::CapabilityNotDeclared`];
+    /// - a capability declared with no view registered is
+    ///   [`RegistryError::CapabilityNotProvided`].
+    ///
+    /// The core re-checks the first direction over the slices it is handed
+    /// (`BuildError::CapabilityNotDeclared`), because a caller may assemble
+    /// those without a registry. The second direction has no other home: only
+    /// the registry sees the declaration and the wiring together.
+    pub fn register<P: Plugin + 'static>(
+        &mut self,
+        registration: Registration<P>,
+    ) -> Result<(), RegistryError> {
+        let entry = registration.erase();
+        let id = entry.plugin.id();
+
+        if self.plugins.iter().any(|held| held.plugin.id() == id) {
+            return Err(RegistryError::DuplicateId { plugin: id });
+        }
+
+        for capability in [
+            Capability::Symbols,
+            Capability::Edges,
+            Capability::Roots,
+            Capability::Classify,
+        ] {
+            match (entry.declared(capability), entry.registered(capability)) {
+                (true, false) => {
+                    return Err(RegistryError::CapabilityNotProvided {
+                        plugin: id,
+                        capability,
+                    })
+                }
+                (false, true) => {
+                    return Err(RegistryError::CapabilityNotDeclared {
+                        plugin: id,
+                        capability,
+                    })
+                }
+                _ => {}
+            }
+        }
+
+        self.plugins.push(entry);
+        Ok(())
     }
 
-    /// Every registered plugin, in registration order.
+    /// Every registration, in registration order.
     ///
-    /// PRIVATE, because plan-00 §5 gives `Registry` two methods and this is not
-    /// one of them. Plan-06 §3.1 wants to print what each registered plugin
-    /// looks for when detection finds nothing, which needs it public — and
-    /// that is plan-06's reviewed diff to make, not a surface this plan adds
-    /// on its behalf.
-    fn plugins(&self) -> impl Iterator<Item = &dyn Plugin> {
-        self.plugins.iter().map(AsRef::as_ref)
+    /// Public because plan-06 §3.1 prints what each registered plugin looks for
+    /// when detection finds nothing, so a repository the tool cannot handle
+    /// states what each plugin was looking for rather than "unsupported". Plan-
+    /// 00 §5 left it private and named that as the condition for publishing it.
+    pub fn plugins(&self) -> impl Iterator<Item = &Registered> {
+        self.plugins.iter()
     }
 
     /// Every plugin whose declared [`Detection`] claims `root`.
@@ -1133,10 +1449,11 @@ impl Registry {
     /// needs no such rule. `extensions` stays declared metadata: plan-06 §3.1
     /// prints it when detection finds nothing, so a repository the tool cannot
     /// handle says what each plugin was looking for.
-    pub fn detect(&self, root: &Path) -> Vec<&dyn Plugin> {
+    pub fn detect(&self, root: &Path) -> Vec<&Registered> {
         self.plugins()
-            .filter(|plugin| {
-                plugin
+            .filter(|entry| {
+                entry
+                    .plugin
                     .detection()
                     .marker_files
                     .iter()
@@ -1147,7 +1464,7 @@ impl Registry {
 
     /// Explicit selection by id, bypassing detection entirely. This is how the
     /// fixture plugin is chosen (plan-00 §5).
-    pub fn select(&self, id: PluginId) -> Option<&dyn Plugin> {
-        self.plugins().find(|plugin| plugin.id() == id)
+    pub fn select(&self, id: PluginId) -> Option<&Registered> {
+        self.plugins().find(|entry| entry.plugin.id() == id)
     }
 }

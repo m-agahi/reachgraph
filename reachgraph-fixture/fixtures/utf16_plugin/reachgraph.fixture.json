@@ -1,5 +1,5 @@
 {
-  "fixture_version": 1,
+  "fixture_version": 2,
   "plugin_id": "fixture16",
   "position_encoding": "utf16_code_units",
   "capabilities": ["symbols", "edges", "roots", "classify"],
@@ -83,5 +83,6 @@
       "category": "first_party"
     }
   ],
-  "classify_fallback": "third_party"
+  "classify_fallback": "third_party",
+  "notes": []
 }

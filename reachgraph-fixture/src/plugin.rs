@@ -265,6 +265,16 @@ impl Plugin for FixturePlugin {
             },
         }
     }
+
+    /// Whatever the case declares, carried through unaltered.
+    ///
+    /// A note is plugin-authored free text the waist never parses, so the
+    /// fixture's job here is the same as everywhere else: hand the contract
+    /// exactly what the document says and add nothing. A case declaring no note
+    /// produces an empty list, which is an answer rather than a gap.
+    fn notes(&self) -> Vec<String> {
+        self.doc.notes.clone()
+    }
 }
 
 impl LanguagePlugin for FixturePlugin {

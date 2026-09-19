@@ -93,6 +93,7 @@ pub struct IndexCoverage {
     pub plugins: Vec<PluginId>,
     pub traversal_terminal_categories: Vec<Category>,
     pub partial: bool,
+    pub notes: Vec<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -158,8 +159,19 @@ pub struct Provenance {
     pub engine: String,
 }
 
+pub struct Registered {}
+
+pub struct Registration<P: Plugin + 'static> {}
+
 #[derive(Default)]
 pub struct Registry {}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum RegistryError {
+    DuplicateId { plugin: PluginId },
+    CapabilityNotDeclared { plugin: PluginId, capability: Capability },
+    CapabilityNotProvided { plugin: PluginId, capability: Capability },
+}
 
 #[derive(Clone, Debug)]
 pub struct Root {
@@ -270,6 +282,7 @@ pub trait Plugin: Send + Sync {
     fn position_encoding(&self) -> PositionEncoding;
     fn detection(&self) -> Detection;
     fn preflight(&self, root: &Path) -> Preflight;
+    fn notes(&self) -> Vec<String>;
 }
 
 pub trait RootProvider: Plugin {
@@ -311,14 +324,54 @@ impl GraphView {
     pub fn in_edges(&self, id: &NodeId) -> Vec<&Edge> {}
 }
 
+impl Registered {
+    pub fn plugin(&self) -> &dyn Plugin {}
+    pub fn symbols(&self) -> Option<&dyn SymbolProvider> {}
+    pub fn edges(&self) -> Option<&dyn EdgeProvider> {}
+    pub fn roots(&self) -> Option<&dyn RootProvider> {}
+    pub fn classifier(&self) -> Option<&dyn Classifier> {}
+}
+
+impl<P: Plugin + 'static> Registration<P> {
+    pub fn of(plugin: P) -> Self {}
+    pub fn symbols(mut self) -> Self
+    where
+        P: SymbolProvider,
+    {}
+    pub fn edges(mut self) -> Self
+    where
+        P: EdgeProvider,
+    {}
+    pub fn roots(mut self) -> Self
+    where
+        P: RootProvider,
+    {}
+    pub fn classifier(mut self) -> Self
+    where
+        P: Classifier,
+    {}
+}
+
 impl Registry {
     pub fn new() -> Self {}
-    pub fn register(&mut self, plugin: Box<dyn Plugin>) {}
-    pub fn detect(&self, root: &Path) -> Vec<&dyn Plugin> {}
-    pub fn select(&self, id: PluginId) -> Option<&dyn Plugin> {}
+    pub fn register<P: Plugin + 'static>(
+        &mut self,
+        registration: Registration<P>,
+    ) -> Result<(), RegistryError> {}
+    pub fn plugins(&self) -> impl Iterator<Item = &Registered> {}
+    pub fn detect(&self, root: &Path) -> Vec<&Registered> {}
+    pub fn select(&self, id: PluginId) -> Option<&Registered> {}
+}
+
+impl fmt::Debug for Registered {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {}
 }
 
 impl fmt::Display for PluginError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {}
+}
+
+impl fmt::Display for RegistryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {}
 }
 

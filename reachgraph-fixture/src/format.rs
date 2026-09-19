@@ -99,6 +99,15 @@ pub struct FixtureDoc {
     pub classify: Vec<FixtureClassifyRule>,
     /// The category for a path no rule in `classify` matches.
     pub classify_fallback: FixtureCategory,
+    /// What this case's plugin reports about the run, carried verbatim into
+    /// `IndexCoverage::notes`.
+    ///
+    /// Required, and empty in nearly every case. `Plugin::notes` is required
+    /// for the reason ADR-0003's honest-absence rule gives — "nothing to add"
+    /// and "never asked" must not look alike — and a `#[serde(default)]` here
+    /// would put the silent default back one layer down, where a case author
+    /// cannot see it.
+    pub notes: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------
