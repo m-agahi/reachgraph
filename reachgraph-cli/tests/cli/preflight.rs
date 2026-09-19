@@ -184,3 +184,21 @@ fn a_plugin_note_is_written_into_the_artifact() {
         "generated code was not indexed for 1 of 2 members"
     );
 }
+
+/// Under `--json` the table is the caller's to render. Printing the human form
+/// beside it would put the same facts on two streams, and the analyse path
+/// gates its own table for the same reason.
+#[test]
+fn a_json_preflight_writes_nothing_to_stderr() {
+    let temp = TempDir::new("preflight-json-only");
+    let repo = repo_for("minimal", &temp);
+    let registry = registry_of(doc_of("minimal"), &repo);
+
+    let result = run(
+        &registry,
+        &["preflight", repo.to_str().expect("utf-8"), "--json"],
+    );
+
+    assert_eq!(result.code, 0);
+    assert!(result.err.is_empty(), "stderr: {}", result.err);
+}

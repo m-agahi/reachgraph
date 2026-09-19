@@ -170,7 +170,13 @@ pub fn subcommand(
         }
     }
 
-    render(&checks, streams.err);
+    // Under `--json` the table is the caller's to render: it has every row,
+    // every reason and every remediation on stdout. Printing the human form
+    // beside it would put the same facts on two streams, which is what the
+    // analyse path avoids by gating its own table.
+    if !json {
+        render(&checks, streams.err);
+    }
 
     if checks.iter().any(is_failure) {
         return EXIT_PREFLIGHT;

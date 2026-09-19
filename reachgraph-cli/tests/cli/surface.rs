@@ -352,3 +352,29 @@ fn the_plugins_subcommand_lists_every_registration_with_its_markers() {
         result.out
     );
 }
+
+/// `--json` and `-q` together: the machine report still goes to stdout and the
+/// human one is suppressed. The two flags address different readers, so
+/// collapsing them into one would silence a consumer that asked to be fed.
+#[test]
+fn quiet_suppresses_the_human_report_and_keeps_the_json_one() {
+    let temp = TempDir::new("quiet-json");
+    let repo = repo_for("minimal", &temp);
+    let registry = registry_of(doc_of("minimal"), &repo);
+
+    let result = run(
+        &registry,
+        &[
+            repo.to_str().expect("utf-8"),
+            "-o",
+            temp.join("out").to_str().expect("utf-8"),
+            "--json",
+            "-q",
+        ],
+    );
+
+    assert_eq!(result.code, 0, "stderr: {}", result.err);
+    assert!(result.err.is_empty(), "stderr: {}", result.err);
+    let parsed: serde_json::Value = serde_json::from_str(&result.out).expect("stdout is json");
+    assert_eq!(parsed["units"], 1);
+}
