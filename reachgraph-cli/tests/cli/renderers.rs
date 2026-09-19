@@ -3,7 +3,7 @@
 use std::fs;
 
 use reachgraph_cli::args::{self, Analyse, Command};
-use reachgraph_cli::renderers::{default_registry, renderer_registry};
+use reachgraph_cli::renderers::{default_registry, renderer_registry, Selection};
 use reachgraph_plugin_api::Registry;
 
 use crate::support::{self, TempDir};
@@ -275,15 +275,22 @@ fn the_registry_carries_the_runs_options() {
         no_overview: true,
         ..Analyse::default()
     });
-    let renderer = refused.select(None).expect("a default format");
-    assert_eq!(renderer.renderer().id().0, "html");
+    match refused.select(None) {
+        Selection::Chosen(entry) => assert_eq!(entry.renderer().id().0, "html"),
+        other => panic!("this build registers html: {other:?}"),
+    }
 
     let sized = renderer_registry(&Analyse {
         inline_threshold: Some(77),
         ..Analyse::default()
     });
-    assert!(sized.select(Some("html")).is_ok());
-    assert!(sized.select(Some("dot")).is_err());
+    assert!(matches!(sized.select(Some("html")), Selection::Chosen(_)));
+    // A name nobody registered is still a failure, and it names what is here
+    // rather than saying "unsupported".
+    match sized.select(Some("dot")) {
+        Selection::Unknown { available } => assert_eq!(available, vec!["html"]),
+        other => panic!("dot is not registered: {other:?}"),
+    }
 
     // The instance really did take the option, rather than the flag being
     // parsed and dropped.

@@ -205,20 +205,32 @@ fn analyse(registry: &Registry, options: &Analyse, streams: &mut Streams<'_>) ->
         &format!("detect: {} plugins", detected.len()),
     );
 
+    // An absent optional renderer is NOT an error. The waist writes the
+    // artifact either way (ADR-0727), and a page is an addition to it rather
+    // than a precondition for it — a build with the renderer feature off still
+    // analyses a repository and still emits every JSON document.
     let formats = renderers::renderer_registry(options);
-    let selected = match formats.select(options.renderer.as_deref()) {
-        Ok(entry) => entry,
-        Err(available) => {
-            let _ = writeln!(
-                streams.err,
-                "error: no output format named {}",
-                options.renderer.as_deref().unwrap_or("<default>")
-            );
-            let _ = writeln!(streams.err, "  available: {}", list(&available));
+    let renderer = match formats.select(options.renderer.as_deref()) {
+        renderers::Selection::Chosen(entry) => Some(entry.renderer()),
+        renderers::Selection::NoneAvailable => None,
+        renderers::Selection::Unknown { available } => {
+            let asked = options.renderer.as_deref().unwrap_or_default();
+            let _ = writeln!(streams.err, "error: no output format named {asked}");
+            if available.is_empty() {
+                // Never `available: none` — `none` is not a name anybody
+                // could pass, and offering it as one sends the reader to try
+                // it.
+                let _ = writeln!(
+                    streams.err,
+                    "  this build has no output format compiled in; it writes the artifact's \
+                     JSON and no page"
+                );
+            } else {
+                let _ = writeln!(streams.err, "  available: {}", list(&available));
+            }
             return EXIT_USAGE;
         }
     };
-    let renderer = selected.renderer();
     let owned = outdir::owned(renderer);
 
     if let Err(message) = outdir::check(&options.out, &owned, options.force) {
@@ -303,22 +315,26 @@ fn analyse(registry: &Registry, options: &Analyse, streams: &mut Streams<'_>) ->
         return EXIT_INTERNAL;
     }
 
-    // After `emit`, because the renderer reads what `emit` wrote.
-    let written = sink.recorded();
-    let render_input = RenderInput {
-        view: index.view(),
-        shards: index.shards(),
-        artifact: &written,
-    };
-    if let Err(error) = renderer.render(&render_input, &mut sink) {
-        let _ = writeln!(streams.err, "error: {}: {error}", renderer.id().0);
-        return EXIT_INTERNAL;
+    // After `emit`, because the renderer reads what `emit` wrote. Absent when
+    // this build has no output format, which is a configuration rather than a
+    // fault — nothing is said about it.
+    if let Some(renderer) = renderer {
+        let written = sink.recorded();
+        let render_input = RenderInput {
+            view: index.view(),
+            shards: index.shards(),
+            artifact: &written,
+        };
+        if let Err(error) = renderer.render(&render_input, &mut sink) {
+            let _ = writeln!(streams.err, "error: {}: {error}", renderer.id().0);
+            return EXIT_INTERNAL;
+        }
+        progress(
+            options,
+            streams,
+            &format!("rendered {} with {}", out, renderer.id().0),
+        );
     }
-    progress(
-        options,
-        streams,
-        &format!("rendered {} with {}", out, renderer.id().0),
-    );
 
     if options.json {
         match serde_json::to_string_pretty(&report) {

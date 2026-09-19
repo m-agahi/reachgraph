@@ -31,9 +31,19 @@ const WAIST_DIRECTORY: &str = "graph";
 /// A binary holding a hardcoded list of one renderer's paths would leave
 /// another renderer's files behind on a re-run, and the reader would open a
 /// page from the run before last with no sign that anything was stale.
-pub fn owned(renderer: &dyn Renderer) -> Vec<String> {
+///
+/// `None` is a build with no output format compiled in. The waist's own files
+/// are still owned and still regenerated — a page is an addition to the
+/// artifact, never a precondition for it. A page left by a build that HAD a
+/// renderer is deliberately not removed by one that does not: this run cannot
+/// know what that renderer owned, and deleting by guess is how a file nobody
+/// wrote gets removed.
+pub fn owned(renderer: Option<&dyn Renderer>) -> Vec<String> {
     let mut names: Vec<String> = WAIST_FILES.iter().map(|name| (*name).to_owned()).collect();
     names.push(WAIST_DIRECTORY.to_owned());
+    let Some(renderer) = renderer else {
+        return names;
+    };
     for name in renderer.owns() {
         let name = (*name).to_owned();
         if !names.contains(&name) {

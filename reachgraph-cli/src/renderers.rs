@@ -10,6 +10,8 @@
 //! [`Registry`]: reachgraph_plugin_api::Registry
 //! [`Registry::detect`]: reachgraph_plugin_api::Registry::detect
 
+use std::fmt;
+
 use reachgraph_plugin_api::Renderer;
 
 use crate::args::Analyse;
@@ -24,6 +26,45 @@ impl RegisteredRenderer {
     pub fn renderer(&self) -> &dyn Renderer {
         self.renderer.as_ref()
     }
+}
+
+impl fmt::Debug for RegisteredRenderer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RegisteredRenderer")
+            .field("id", &self.renderer.id())
+            .finish()
+    }
+}
+
+/// What a `--renderer` lookup answered.
+///
+/// **Three outcomes, not two, and the middle one is why this is an enum.**
+/// MEASURED 2026-09-19: modelling the answer as
+/// `Result<&RegisteredRenderer, _>` made "no format is compiled in" an error,
+/// and a build without the `render-html` feature then wrote no artifact at all
+/// — 19 test failures on `--no-default-features`, 17 of them in tests about
+/// preflight and plugin notes.
+///
+/// The waist writes `endpoints.json`, the shards, `unreachable.json` and
+/// `versions.json` whether or not a renderer exists (ADR-0727), and PR F
+/// shipped a working tool with none. A page is an **addition** to the
+/// artifact, never a precondition for it. So an absent optional renderer is an
+/// answer, and only a name nobody registered is a failure.
+#[derive(Debug)]
+pub enum Selection<'a> {
+    /// Render with this format.
+    Chosen(&'a RegisteredRenderer),
+    /// No format is compiled in and none was asked for. **Not an error, and
+    /// not a warning either** — nothing went wrong, so saying anything would
+    /// claim something had.
+    NoneAvailable,
+    /// A format was asked for by name and is not registered.
+    Unknown {
+        /// What this build does have. Empty when it has none, which the
+        /// caller reports in words rather than by printing `none` as though it
+        /// were a name somebody could pass.
+        available: Vec<&'static str>,
+    },
 }
 
 /// The output formats this build ships.
@@ -54,20 +95,31 @@ impl RendererRegistry {
         self.renderers.iter()
     }
 
-    /// Select by the name `--renderer` carries, or the default when none was
-    /// asked for.
+    /// Select by the name `--renderer` carries, or the first registered format
+    /// when none was asked for.
     ///
-    /// Returns the list of names on a miss rather than a bare error, for the
+    /// A miss carries the list of names rather than a bare error, for the
     /// reason plan-06 §3.1 gives for detection: a failure that says what was
     /// available is diagnostic, and one that says "unsupported" is not.
-    pub fn select(&self, name: Option<&str>) -> Result<&RegisteredRenderer, Vec<&'static str>> {
+    pub fn select(&self, name: Option<&str>) -> Selection<'_> {
         let Some(name) = name else {
-            return self.renderers.first().ok_or_else(|| self.names());
+            return match self.renderers.first() {
+                Some(entry) => Selection::Chosen(entry),
+                // Nothing compiled in and nothing asked for. The artifact is
+                // still written; there is simply no page.
+                None => Selection::NoneAvailable,
+            };
         };
-        self.renderers
+        match self
+            .renderers
             .iter()
             .find(|entry| entry.renderer.id().0 == name)
-            .ok_or_else(|| self.names())
+        {
+            Some(entry) => Selection::Chosen(entry),
+            None => Selection::Unknown {
+                available: self.names(),
+            },
+        }
     }
 
     fn names(&self) -> Vec<&'static str> {
