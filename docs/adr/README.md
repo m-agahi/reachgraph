@@ -38,3 +38,15 @@ alternatives` where something concrete was rejected.
   0005 is retained under its original filename for link stability and records the change
   in a `History` section.
 - A superseded ADR is marked `Superseded by ADR-NNNN` rather than deleted.
+
+## Records from the decision ledger
+
+Numbers in the 07xx range are not part of the sequence above. They are records in the yadgar
+decision ledger for project `m-agahi/reachgraph`. Source comments and docs cite them, and a
+citation is resolvable only when the record is exported here. Exported so far:
+
+- [ADR-0728](0728-proc-macro-expansion-disabled.md) — v0.1 disables proc-macro expansion,
+  because in-process expansion does not exist on a stable toolchain.
+
+Cited in this repository and **not yet exported**: ADR-0727, ADR-0729, ADR-0730, ADR-0731,
+ADR-0732, ADR-0738 and ADR-0743. Until each one is exported, read it in the ledger.
