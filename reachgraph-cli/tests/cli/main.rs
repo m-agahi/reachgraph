@@ -10,6 +10,7 @@
 mod build_output;
 mod formats;
 mod guards;
+mod merge;
 mod paths;
 mod preflight;
 #[cfg(feature = "render-html")]

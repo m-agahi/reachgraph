@@ -25,6 +25,7 @@
 #![deny(missing_docs)]
 
 pub mod args;
+mod merge;
 mod outdir;
 mod preflight;
 pub mod registry;
@@ -167,6 +168,7 @@ fn dispatch(registry: &Registry, args: &[String], streams: &mut Streams<'_>) -> 
             Err(code) => code,
         },
         Command::Serve { out, port } => serve_command(&out, port, streams),
+        Command::Merge { inputs, out, force } => merge::subcommand(&inputs, &out, force, streams),
     }
 }
 
