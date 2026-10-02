@@ -169,6 +169,23 @@ fn merge_joins_two_artifacts_and_writes_both_files() {
         html.contains("proc-macro expansion is disabled in this index"),
         "each repository's limits travel into the overview"
     );
+    let label = "client stub exists; call site not measured";
+    let traces =
+        &html[html.find("<h2>Traces</h2>").unwrap()..html.find("<h2>Join keys</h2>").unwrap()];
+    assert!(
+        traces.contains(label),
+        "every trace's consumed box carries the stub-only label"
+    );
+    let table =
+        &html[html.find("<h2>Join keys</h2>").unwrap()..html.find("<h2>Drill-down</h2>").unwrap()];
+    assert!(
+        table.contains(label),
+        "the key table's consumed column carries it too"
+    );
+    assert!(
+        put["consumed"][0]["call_site"] == "not_measured",
+        "estate.json carries it on every consumed side"
+    );
 }
 
 #[test]
@@ -230,4 +247,25 @@ fn merge_needs_at_least_two_inputs() {
         &["merge", consumer.to_str().unwrap(), "-o", "x"],
     );
     assert_eq!(result.code, reachgraph_cli::EXIT_USAGE, "{}", result.err);
+}
+
+/// Two inputs with one label would merge their reach sets under one name;
+/// the default label is the directory name, so two `…/out` collide.
+#[test]
+fn merge_refuses_duplicate_labels() {
+    let temp = TempDir::new("merge-dup");
+    let (consumer, server) = estate(&temp);
+    let result = run(
+        &registry(&temp),
+        &[
+            "merge",
+            &format!("x={}", consumer.display()),
+            &format!("x={}", server.display()),
+            "-o",
+            temp.join("estate").to_str().unwrap(),
+        ],
+    );
+    assert_eq!(result.code, reachgraph_cli::EXIT_USAGE, "{}", result.err);
+    assert!(result.err.contains("x"), "{}", result.err);
+    assert!(!temp.join("estate").join("estate.json").exists());
 }

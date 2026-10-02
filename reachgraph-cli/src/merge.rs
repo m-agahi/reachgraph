@@ -14,7 +14,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use reachgraph_core::estate::{
-    merge, EstateDocument, JoinRow, JoinStatus, NodeCard, RepoArtifact, SideRow,
+    merge, EstateDocument, JoinRow, JoinStatus, NodeCard, RepoArtifact, SideRow, STUB_ONLY_LABEL,
 };
 use reachgraph_core::schema::{EndpointsDocument, ShardDocument};
 
@@ -28,10 +28,24 @@ const TRACE_DEPTH: usize = 8;
 
 /// Run the subcommand.
 pub fn subcommand(inputs: &[String], out: &Path, force: bool, streams: &mut Streams<'_>) -> u8 {
-    let mut repos = Vec::new();
+    let mut repos: Vec<RepoArtifact> = Vec::new();
     for input in inputs {
         match read_input(input) {
-            Ok(repo) => repos.push(repo),
+            Ok(repo) => {
+                // One label per repository: the trace entries and reach sets
+                // are keyed on it, so two inputs under one label would merge.
+                // The default label is the directory name, so two `…/out`
+                // directories collide unless named.
+                if repos.iter().any(|seen| seen.label == repo.label) {
+                    let _ = writeln!(
+                        streams.err,
+                        "error: two inputs are labelled {}; name them with label=<path>",
+                        repo.label
+                    );
+                    return EXIT_USAGE;
+                }
+                repos.push(repo);
+            }
             Err(message) => {
                 let _ = writeln!(streams.err, "error: {message}");
                 return EXIT_USAGE;
@@ -184,13 +198,19 @@ fn status_label(join: &JoinRow) -> String {
             "served by {} repositories — not resolved by preference",
             join.served.len()
         ),
+        JoinStatus::ConsumerUnbound => {
+            "served — every consumer side is unbound, so nothing on the consuming side joins"
+                .to_owned()
+        }
     }
 }
 
 fn status_class(status: JoinStatus) -> &'static str {
     match status {
         JoinStatus::Joined => "ok",
-        JoinStatus::ConsumedNotServed | JoinStatus::ServedNotConsumed => "gap",
+        JoinStatus::ConsumedNotServed
+        | JoinStatus::ServedNotConsumed
+        | JoinStatus::ConsumerUnbound => "gap",
         JoinStatus::AmbiguousServed => "warn",
     }
 }
@@ -247,10 +267,18 @@ fn unbound_box(side: &SideRow) -> String {
 }
 
 fn side_box(side: &SideRow, borrowed: Option<(&str, &NodeCard)>) -> String {
-    match &side.node {
+    let mut html = match &side.node {
         Some(card) => node_box(&side.repo, card, borrowed),
         None => unbound_box(side),
+    };
+    if side.call_site.is_some() {
+        let _ = write!(
+            html,
+            "<div class=\"stub-only\">{}</div>",
+            escape(STUB_ONLY_LABEL)
+        );
     }
+    html
 }
 
 fn key_link(join: &JoinRow) -> String {
@@ -344,6 +372,7 @@ fn entry_sides(document: &EstateDocument) -> Vec<(&JoinRow, &SideRow)> {
         .iter()
         .filter(|join| join.status == JoinStatus::Joined)
         .flat_map(|join| join.consumed.iter().map(move |side| (join, side)))
+        .filter(|(_, side)| side.node.is_some())
         .filter(|(join, side)| !reached.contains(&(side.repo.as_str(), join.join_key.as_str())))
         .collect()
 }
@@ -385,7 +414,10 @@ fn render(document: &EstateDocument) -> String {
     html.push_str(
         "<h2>Traces</h2><p class=\"hint\">From each consumed RPC that no served handler \
          in its own repository reaches, through the handler that serves it, and on through \
-         every RPC that handler's recorded calls reach.</p>",
+         every RPC that handler's recorded calls reach. A consumed RPC is one whose contract \
+         the repository carries and does not serve: its box proves a generated client stub \
+         exists, not that anything calls it, and is labelled so. The hops between a served \
+         handler and the stubs it reaches are recorded calls.</p>",
     );
     let entries = entry_sides(document);
     if entries.is_empty() {
@@ -416,7 +448,14 @@ fn render(document: &EstateDocument) -> String {
         let repos = |sides: &[SideRow]| {
             sides
                 .iter()
-                .map(|side| escape(&side.repo))
+                .map(|side| match side.call_site {
+                    Some(_) => format!(
+                        "{} <span class=\"stub-only\">({})</span>",
+                        escape(&side.repo),
+                        escape(STUB_ONLY_LABEL)
+                    ),
+                    None => escape(&side.repo),
+                })
                 .collect::<Vec<_>>()
                 .join(", ")
         };
@@ -515,6 +554,7 @@ a.key{color:var(--accent);word-break:break-all}
 .status{font-size:.75rem;padding:.05rem .4rem;border-radius:3px;border:1px solid currentColor}
 .status.ok{color:var(--ok)}.status.gap{color:var(--gap)}.status.warn{color:var(--warn)}
 .limit{color:var(--gap);font-size:.85rem}
+.stub-only{color:var(--gap);font-size:.8rem;font-style:italic}
 details{border:1px solid var(--line);border-radius:6px;padding:.4rem .7rem;margin:.4rem 0}details>summary{cursor:pointer;font-family:ui-monospace,monospace;word-break:break-all}
 code{font-family:ui-monospace,monospace}
 </style></head><body><main>

@@ -17,6 +17,18 @@
 //! because a dropped one is indistinguishable from one that was never
 //! looked for — ADR-0007's partial-index problem, one level up.
 //!
+//! # A consumed side proves a client stub exists, not a call
+//!
+//! A per-repository run calls an operation **consumed** when the repository
+//! carries its contract and does not serve it. Bound, the root names the
+//! generated client method, which exists for every RPC of the contract whether
+//! or not anything calls it. MEASURED on the yadgarhq estate: gateway
+//! "consumes" all five `TaskDbService` RPCs and never names
+//! `TaskDbServiceClient`. So every consumed side carries
+//! [`CallSite::NotMeasured`], and the page says so wherever a consumed side is
+//! drawn. Nothing is suppressed: a repository that serves no gRPC (gateway) has
+//! no other place for a trace to start.
+//!
 //! # How a served handler's outgoing joins are found
 //!
 //! A served root's shard holds the nodes reachable from its handler. When
@@ -93,7 +105,22 @@ pub enum JoinStatus {
     ServedNotConsumed,
     /// Served by two or more repositories. Not resolved by preference.
     AmbiguousServed,
+    /// Served by exactly one repository, and every consumer side is unbound:
+    /// no node on the consuming side to join.
+    ConsumerUnbound,
 }
+
+/// What is known about the call sites behind a consumed side.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CallSite {
+    /// A client stub exists; whether first-party code calls it was not
+    /// measured. Every consumed side carries this today.
+    NotMeasured,
+}
+
+/// The sentence a rendered consumed side carries, beside [`CallSite::NotMeasured`].
+pub const STUB_ONLY_LABEL: &str = "client stub exists; call site not measured";
 
 /// One join key, both sides.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -125,6 +152,9 @@ pub struct SideRow {
     pub node: Option<NodeCard>,
     /// Why the root did not bind, when it did not.
     pub unbound_reason: Option<String>,
+    /// Consumed sides only: what is known about the calls behind the stub.
+    /// `None` on a served side, which is a handler rather than a stub.
+    pub call_site: Option<CallSite>,
     /// Served sides only: join keys the handler's shard reaches, with paths.
     pub reaches: Vec<ReachRow>,
     /// The first-party and generated nodes of the root's shard, for drill-down.
@@ -206,6 +236,10 @@ pub fn merge(repos: &[RepoArtifact]) -> EstateDocument {
                     version: version.version.clone(),
                     node,
                     unbound_reason,
+                    call_site: match operation.direction {
+                        DirectionRow::Consumed => Some(CallSite::NotMeasured),
+                        DirectionRow::Served => None,
+                    },
                     reaches,
                     shard_nodes: shard.map(drill_down).unwrap_or_default(),
                     depth_limit: shard.and_then(|shard| shard.depth_limit),
@@ -248,11 +282,13 @@ pub fn merge(repos: &[RepoArtifact]) -> EstateDocument {
 }
 
 fn status_of(served: &[SideRow], consumed: &[SideRow]) -> JoinStatus {
-    match (served.len(), consumed.is_empty()) {
-        (0, _) => JoinStatus::ConsumedNotServed,
-        (2.., _) => JoinStatus::AmbiguousServed,
-        (1, true) => JoinStatus::ServedNotConsumed,
-        (1, false) => JoinStatus::Joined,
+    let any_bound_consumer = consumed.iter().any(|side| side.node.is_some());
+    match (served.len(), consumed.is_empty(), any_bound_consumer) {
+        (0, _, _) => JoinStatus::ConsumedNotServed,
+        (2.., _, _) => JoinStatus::AmbiguousServed,
+        (1, true, _) => JoinStatus::ServedNotConsumed,
+        (1, false, false) => JoinStatus::ConsumerUnbound,
+        (1, false, true) => JoinStatus::Joined,
     }
 }
 

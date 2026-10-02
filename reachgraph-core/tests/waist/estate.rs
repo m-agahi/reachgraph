@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use reachgraph_core::estate::{merge, JoinStatus, RepoArtifact};
+use reachgraph_core::estate::{merge, CallSite, JoinStatus, RepoArtifact};
 use reachgraph_core::schema::{EndpointsDocument, ShardDocument};
 use serde_json::{json, Value};
 
@@ -372,4 +372,68 @@ fn every_repository_is_listed_with_its_own_notes() {
     let labels: Vec<&str> = merged.repos.iter().map(|r| r.label.as_str()).collect();
     assert_eq!(labels, ["gateway", "iam", "iam-db"]);
     assert_eq!(merged.repos[1].notes, ["a note from iam"]);
+}
+
+/// A served key whose only consumer side is UNBOUND has no node on the
+/// consuming side to join, so it is not `joined`. MEASURED as a defect on the
+/// iam + iam-db demo run without `--read-build-output`: 16 keys read `joined`
+/// with no consumer node.
+#[test]
+fn a_served_key_with_only_unbound_consumers_is_not_joined() {
+    let repos = vec![
+        repo(
+            "client",
+            vec![Root {
+                service: "IamDbService",
+                operation: "GetHash",
+                direction: "consumed",
+                join_key: GET_HASH,
+                bound: Err("the generated client stub is not in the index"),
+                shard: None,
+            }],
+        ),
+        repo(
+            "server",
+            vec![Root {
+                service: "IamDbService",
+                operation: "GetHash",
+                direction: "served",
+                join_key: GET_HASH,
+                bound: Ok("db:fn/get_hash"),
+                shard: None,
+            }],
+        ),
+    ];
+    let merged = merge(&repos);
+    assert_eq!(join(&merged, GET_HASH).status, JoinStatus::ConsumerUnbound);
+}
+
+/// Direction comes from contract presence, so a bound consumed side proves a
+/// generated client stub exists, not that anything calls it. Every consumed
+/// side says so in the data; nothing is suppressed.
+#[test]
+fn every_consumed_side_is_labelled_stub_only_and_kept() {
+    let merged = merge(&estate());
+    for join in &merged.joins {
+        for side in &join.consumed {
+            assert_eq!(
+                side.call_site,
+                Some(CallSite::NotMeasured),
+                "{} in {}",
+                join.join_key,
+                side.repo
+            );
+        }
+        for side in &join.served {
+            assert_eq!(
+                side.call_site, None,
+                "a served side is a handler, not a stub"
+            );
+        }
+    }
+    assert_eq!(
+        join(&merged, LOGIN).status,
+        JoinStatus::Joined,
+        "labelled, not suppressed"
+    );
 }

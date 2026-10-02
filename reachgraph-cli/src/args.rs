@@ -125,7 +125,7 @@ usage:
   reachgraph <repo> [-o|--out <dir>] [--force] [--json] [-q|--quiet]
                     [--renderer <name>] [--inline-threshold <bytes>]
                     [--no-overview] [--read-build-output <target-dir>]
-  reachgraph merge <artifact> <artifact>... [-o|--out <dir>] [--force]
+  reachgraph merge [label=]<artifact> [label=]<artifact>... [-o|--out <dir>] [--force]
   reachgraph serve <out> [--port <n>]
   reachgraph preflight <repo> [--json] [--read-build-output <target-dir>]
   reachgraph plugins
@@ -153,8 +153,9 @@ usage:
                   rust-src component
   <artifact>      for merge: a per-repository endpoints.json, or the output
                   directory holding it; prefix `label=` to name the repository
-                  (default: the directory's name). merge writes estate.json and
-                  estate.html, joining consumed and served RPCs on join_key
+                  (default: the directory's name; labels must be unique).
+                  merge writes estate.json and estate.html, joining consumed
+                  and served RPCs on join_key
       --port      loopback port for `serve`, or 0 for a free one (default: 0)
 
 exit codes: 0 analysed  1 internal error  2 preflight failed
