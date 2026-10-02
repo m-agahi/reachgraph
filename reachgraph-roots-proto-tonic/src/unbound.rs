@@ -31,6 +31,17 @@ pub enum UnboundReason {
         /// The fully-qualified key, which resolves in the serving repository.
         join_key: String,
     },
+    /// A consumed RPC in a run that DID read build output (ADR-0009), and no
+    /// generated client method for it is under a `target/**/out/` path.
+    ///
+    /// Kept apart from [`UnboundReason::GeneratedStubNotIndexed`] because the
+    /// remediation differs: advising `--read-build-output` to a run that had it
+    /// would be false. The likely causes are a build older than the contract,
+    /// or a target directory not under `target/`.
+    GeneratedStubNotInBuildOutput {
+        /// The fully-qualified key, which resolves in the serving repository.
+        join_key: String,
+    },
     /// A served RPC with no candidate of the expected handler name anywhere.
     NoCandidate {
         /// The proto service name.
@@ -73,6 +84,14 @@ impl fmt::Display for UnboundReason {
                  index either: this run read no build output, so `OUT_DIR` code is not in the \
                  crate graph. Re-run with `--read-build-output <target-dir>` pointing at an \
                  existing build (ADR-0009) to bind the stub"
+            ),
+            Self::GeneratedStubNotInBuildOutput { join_key } => write!(
+                f,
+                "consumed: no handler is expected in this repository; join key `{join_key}` \
+                 resolves in the serving repository. This run's build output was read, and no generated \
+                 client method for this RPC is in it under a `target/**/out/` path: the build \
+                 may predate the contract, or the target directory is not under `target/`. \
+                 The stub is not bound, so calls into it are unmeasured"
             ),
             Self::NoCandidate { service, handler } => write!(
                 f,

@@ -23,7 +23,7 @@ use reachgraph_plugin_api::{
     Symbol, SymbolKind, Unit, UnitId,
 };
 
-use crate::build_output::locate_out_dir;
+use crate::build_output::{locate_out_dirs, stale_inputs};
 use crate::classify::{classify_facts, CrateOrigin, PathFacts};
 use crate::coverage::{MemberCoverage, OutDirMechanism, ProcMacroExpansion, RustCoverage};
 use crate::ids::{node_id, RawParts};
@@ -31,8 +31,6 @@ use crate::kinds::{declared_trait_name, map_kind, render_impl_header, RustItem};
 use crate::preflight::{CargoProbe, PreflightFacts, WorkspaceProbe};
 use crate::{ENGINE, PLUGIN_ID};
 
-/// `ra_ap` reports cancellation and the call hierarchy reports nothing; both
-/// become this crate's own error at the boundary.
 /// Why a load failed, kept apart so preflight can name the right cause.
 ///
 /// ADR-0009: build output that was asked for and could not be read is not a
@@ -53,6 +51,8 @@ impl From<LoadError> for PluginError {
     }
 }
 
+/// `ra_ap` reports cancellation and the call hierarchy reports nothing; both
+/// become this crate's own error at the boundary.
 fn engine_error(detail: impl Into<String>) -> PluginError {
     PluginError::Engine {
         plugin: PLUGIN_ID,
@@ -259,25 +259,23 @@ pub(crate) fn load(root: &Path, build_output: Option<&Path>) -> Result<Loaded, L
     //
     // NOT `RustLibSource::Discover`. MEASURED 2026-10-02: `Sysroot::discover`
     // falls back to running `rustup component add rust-src` when the source
-    // is missing — a download and a change to the user's toolchain, which
-    // ADR-0001 forbids. `RustLibSource::Path` with the sysroot `rustc` reports
-    // looks for the source (honouring `RUST_SRC_PATH`) and installs nothing.
+    // is missing. `RustLibSource::Path` with the sysroot `rustc` reports looks
+    // for the source (honouring `RUST_SRC_PATH`) and never runs
+    // `rustup component add`. The rustc probe and every cargo/rustc call
+    // ra_ap makes also carry `RUSTUP_AUTO_INSTALL=0`, so a rustup proxy does
+    // not download a toolchain a `rust-toolchain.toml` names (see
+    // `cargo_config`).
     let sysroot = match build_output {
-        Some(target) => Some(RustLibSource::Path(sysroot_dir(root).map_err(
-            |detail| {
-                LoadError::BuildOutput(engine_error(format!(
-                    "reading build output from {} needs the toolchain's sysroot, and \
-                     `rustc --print sysroot` did not answer: {detail}",
-                    target.display()
-                )))
-            },
-        )?)),
+        Some(target) => Some(sysroot_dir(root).map_err(|detail| {
+            LoadError::BuildOutput(engine_error(format!(
+                "reading build output from {} needs the toolchain's sysroot, and \
+                 `rustc --print sysroot` did not answer: {detail}",
+                target.display()
+            )))
+        })?),
         None => None,
     };
-    let cargo_config = CargoConfig {
-        sysroot,
-        ..CargoConfig::default()
-    };
+    let cargo_config = cargo_config(build_output, sysroot);
 
     let manifest = ProjectManifest::discover_single(&abs_root).map_err(|error| {
         workspace_error(engine_error(format!(
@@ -366,9 +364,7 @@ pub(crate) fn load(root: &Path, build_output: Option<&Path>) -> Result<Loaded, L
 /// 2026-09-17 amendment makes for `cargo`; it is asked a question and builds
 /// nothing.
 fn sysroot_dir(root: &Path) -> Result<AbsPathBuf, String> {
-    let output = Command::new("rustc")
-        .args(["--print", "sysroot"])
-        .current_dir(root)
+    let output = sysroot_command(root)
         .output()
         .map_err(|error| error.to_string())?;
     if !output.status.success() {
@@ -380,6 +376,42 @@ fn sysroot_dir(root: &Path) -> Result<AbsPathBuf, String> {
     }
     let printed = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     absolute_utf8(Path::new(&printed)).map_err(|error| error.to_string())
+}
+
+/// The variable that stops a rustup proxy from installing anything.
+///
+/// MEASURED: rustup 1.29's `auto-install` defaults to enabled, so a `rustc` or
+/// `cargo` proxy run in a repository whose `rust-toolchain.toml` names a
+/// toolchain or component that is not installed downloads it. reachgraph
+/// installs nothing (ADR-0001), so every toolchain call it causes carries this.
+const NO_AUTO_INSTALL: (&str, &str) = ("RUSTUP_AUTO_INSTALL", "0");
+
+/// `rustc --print sysroot`, in `root`, with rustup auto-install off.
+fn sysroot_command(root: &Path) -> Command {
+    let mut command = Command::new("rustc");
+    command
+        .args(["--print", "sysroot"])
+        .current_dir(root)
+        .env(NO_AUTO_INSTALL.0, NO_AUTO_INSTALL.1);
+    command
+}
+
+/// The load's cargo configuration.
+///
+/// `extra_env` carries [`NO_AUTO_INSTALL`] in every mode: ra_ap runs
+/// `cargo metadata`, `rustc --print cfg` and, with a sysroot, `rustup which`
+/// and `cargo metadata` on the standard library, all through the toolchain
+/// proxies. The sysroot is requested only when build output is read.
+fn cargo_config(build_output: Option<&Path>, sysroot: Option<AbsPathBuf>) -> CargoConfig {
+    let mut config = CargoConfig {
+        sysroot: build_output.and(sysroot).map(RustLibSource::Path),
+        ..CargoConfig::default()
+    };
+    config.extra_env.insert(
+        NO_AUTO_INSTALL.0.to_owned(),
+        Some(NO_AUTO_INSTALL.1.to_owned()),
+    );
+    config
 }
 
 fn absolute_utf8(path: &Path) -> Result<AbsPathBuf, PluginError> {
@@ -420,10 +452,13 @@ fn read_build_output(
         else {
             continue;
         };
-        if let Some(out_dir) = locate_out_dir(target, name) {
+        let candidates = locate_out_dirs(target, name);
+        if let Some(out_dir) = candidates.first() {
             member.out_dir_loaded = true;
             member.out_dir_read = Some(out_dir.clone());
-            found.push((dir.clone(), out_dir));
+            member.out_dir_candidates = candidates.len();
+            member.out_dir_stale_input = stale_inputs(out_dir, dir);
+            found.push((dir.clone(), out_dir.clone()));
         }
     }
 
@@ -536,6 +571,8 @@ fn enumerate_units(
             out_dir_loaded: false,
             out_dir_on_disk,
             out_dir_read: None,
+            out_dir_candidates: 0,
+            out_dir_stale_input: None,
         });
 
         for &target in &data.targets {
@@ -1248,5 +1285,40 @@ impl Loaded {
             // rule in `classify` still catches the Cargo-shaped path.
             recorded_out_dirs: &[],
         })
+    }
+}
+
+/// The two places a rustup proxy can be reached from this crate's own setup:
+/// the sysroot probe this crate spawns, and every cargo/rustc call
+/// `ra_ap_project_model` makes with `CargoConfig::extra_env`. Both must carry
+/// `RUSTUP_AUTO_INSTALL=0` — MEASURED, rustup 1.29's `auto-install` defaults
+/// to enabled, so a `rust-toolchain.toml` naming a missing toolchain or
+/// component would otherwise be downloaded.
+#[cfg(test)]
+mod no_auto_install {
+    use std::ffi::OsStr;
+    use std::path::Path;
+
+    #[test]
+    fn the_sysroot_probe_disables_rustup_auto_install() {
+        let command = super::sysroot_command(Path::new("/"));
+        assert!(
+            command
+                .get_envs()
+                .any(|(key, value)| key == "RUSTUP_AUTO_INSTALL" && value == Some(OsStr::new("0"))),
+            "rustc --print sysroot must not let rustup install anything"
+        );
+    }
+
+    #[test]
+    fn engine_cargo_calls_disable_rustup_auto_install() {
+        for build_output in [None, Some(Path::new("/target"))] {
+            let config = super::cargo_config(build_output, None);
+            assert_eq!(
+                config.extra_env.get("RUSTUP_AUTO_INSTALL"),
+                Some(&Some("0".to_owned())),
+                "ra_ap's own cargo and rustc calls must not let rustup install anything"
+            );
+        }
     }
 }

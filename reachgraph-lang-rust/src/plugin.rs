@@ -239,11 +239,22 @@ impl Plugin for RustPlugin {
             for member in &coverage.members {
                 if let Some(out_dir) = &member.out_dir_read {
                     notes.push(format!(
-                        "read build-script output for {} from {} (in {}); reachgraph ran no \
-                         build, so this is as current as that build",
+                        "read build-script output for {} from {} (in {}; the most recently run \
+                         of {} found); reachgraph ran no build, so this is as current as that \
+                         build",
                         member.package,
                         out_dir.display(),
-                        target_dir.display()
+                        target_dir.display(),
+                        member.out_dir_candidates
+                    ));
+                }
+                if let Some(input) = &member.out_dir_stale_input {
+                    notes.push(format!(
+                        "WARNING: stale build output for {}: {} changed after the build script \
+                         last ran, so the generated code read may not match the source. \
+                         Rebuild, then re-run",
+                        member.package,
+                        input.display()
                     ));
                 }
             }

@@ -3,6 +3,10 @@
 **Status:** Accepted
 **Date:** 2026-10-02
 **Amends:** ADR-0001's "reachgraph never runs a build" section, and plan-03 §4 D-B and §9 D-D
+**Overtakes:** the OUT_DIR clause of [ADR-0728](0728-proc-macro-expansion-disabled.md)'s
+consequences ("the generated client-stub leaf stays unreachable … through the OUT_DIR
+path"). With this flag, the stub leaf is reachable through OUT_DIR. ADR-0728's
+proc-macro decision itself is unchanged.
 
 ## Context
 
@@ -42,10 +46,14 @@ All MEASURED on the `fx-macro` fixture and on yadgarhq/task, gateway, iam and ia
 2026-10-02:
 
 1. For each member that declares a build script, the output directory is the one cargo
-   recorded in `<target>/<profile>/build/<pkg>-<hash>/root-output`. That file is cargo's
-   own record of the `OUT_DIR` it gave the script, so it is read rather than
-   reconstructed. When a package has several, the most recently written record wins, and
-   the directory chosen is stated in the run's notes.
+   recorded in `<target>/<profile>/build/<pkg>-<hash>/root-output`. For a `--target`
+   build the path is `<target>/<triple>/<profile>/build/…`, and both layouts are scanned.
+   That file is cargo's own record of the `OUT_DIR` it gave the script, so it is read
+   rather than reconstructed. When the record is missing, the run directory's own `out/`
+   is used. MEASURED in a partly cleaned musl target directory: `out/` is present and
+   `root-output` is absent. When a package has several output directories, the one whose
+   build script ran most recently wins. The run's notes state the directory chosen and
+   how many there were.
 2. The output directory joins the VFS through `extra_includes`, which places it in the
    member's own source root. `include!` resolves a path only inside the source root of
    the file that calls it, so that placement matters.
@@ -62,7 +70,7 @@ With all four, the `fx-macro` edge from `caller` into `generated_leaf` resolves.
 yadgarhq/task, 5 of 5 consumed roots bind to their generated client methods and 6 of 6
 served roots still bind to their handlers.
 
-### The sysroot is found without installing anything
+### The sysroot is found without asking rustup to install anything
 
 `RustLibSource::Discover` is **not** used. MEASURED 2026-10-02: when the standard
 library's source is missing, `Sysroot::discover` runs `rustup component add rust-src`.
@@ -70,9 +78,21 @@ That is a download and a change to the user's toolchain, which ADR-0001 forbids.
 first measurement run of this change triggered it on the author's machine. reachgraph
 instead asks `rustc --print sysroot` in the repository, so a `rust-toolchain.toml` there
 selects the toolchain. It then passes that path as `RustLibSource::Path`, which looks for
-the source (honouring `RUST_SRC_PATH`) and installs nothing. `rustc` is the target
-language's own toolchain, the same carve-out ADR-0001's 2026-09-17 amendment makes for
-`cargo`. It is asked a question and builds nothing.
+the source (honouring `RUST_SRC_PATH`) and never runs `rustup component add`.
+
+That alone does not install nothing. On a rustup-managed machine `rustc` and `cargo`
+are rustup proxies, and rustup 1.29's `auto-install` is **enabled by default**
+(MEASURED, `rustup set auto-install --help`). So a proxy run in a repository whose
+`rust-toolchain.toml` names a toolchain or component that is missing downloads it. That
+exposure also existed before this ADR, through `cargo metadata`. So every toolchain call
+reachgraph causes carries `RUSTUP_AUTO_INSTALL=0`: the `rustc --print sysroot` spawn,
+and `CargoConfig::extra_env`, which ra_ap applies to its own `cargo` and `rustc` calls.
+A missing toolchain or component then fails the call instead of installing it.
+
+`rustc` is the target language's own toolchain, the same carve-out ADR-0001's
+2026-09-17 amendment makes for `cargo`. It is asked a question and builds nothing. It
+is the second spawn site in `engine.rs`, and the subprocess guard in
+`reachgraph-cli/tests/cli/guards.rs` now counts both sites by name.
 
 ### It fails loudly
 
@@ -99,9 +119,18 @@ a missing workspace, because the workspace loaded.
   on task, 13/13 on iam, 16/16 on iam-db.
 - The sysroot is loaded in this mode only. Standard-library nodes appear in shards as
   external targets, and the load is slower (about 9 s against 6 s on yadgarhq/task).
-- The run's notes state each output directory read and the target it came from. The index
-  is exactly as current as that build. reachgraph cannot tell a stale build from a
-  current one.
+- The run's notes state each output directory read, the target it came from, and how
+  many candidates there were. The index is exactly as current as that build.
+- **A stale build is warned about, loudly.** If an input that the build script declared
+  through `rerun-if-changed` changed after the script last ran (the mtime of cargo's
+  `output` record), the run's notes carry `WARNING: stale build output …` and name that
+  file. With no declared inputs, cargo reruns on any package change, so every package
+  file counts except `target/`. Freshness is judged against the build script's inputs,
+  not every source file, because cargo regenerates `OUT_DIR` only for those. An edit to
+  an unrelated file leaves the output current.
+- A consumed root whose stub is missing from build output that WAS read has its own
+  reason ("this run's build output was read, and no generated client method … is in it").
+  The "re-run with `--read-build-output`" advice is kept for runs without the flag.
 - The `rust-src` component is now a precondition of this mode, so `rust-toolchain.toml`
   lists it.
 

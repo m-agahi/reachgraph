@@ -116,6 +116,30 @@ fn bare_name_join_would_produce_phantom_root() {
     );
 }
 
+/// ADR-0009: when the run DID read build output, telling the user to re-run
+/// with `--read-build-output` is false. The reason says the output was read and
+/// the stub was not in it.
+#[test]
+fn consumed_rpc_reason_says_build_output_was_read_when_it_was() {
+    let plugin = ProtoTonicPlugin::reading_build_output();
+    let roots = plugin
+        .roots(&fixture("repo"), &repo_index())
+        .expect("roots");
+    let root = find(&roots, "WidgetDb", "CreateWidget");
+    let RootBinding::Unbound { reason } = &root.binding else {
+        panic!("no generated stub in the index: {root:?}");
+    };
+    assert!(
+        reason.contains("build output was read"),
+        "the reason says what this run did: {reason}"
+    );
+    assert!(
+        !reason.contains("Re-run with"),
+        "it does not advise the flag the run already had: {reason}"
+    );
+    assert!(reason.contains(&root.join_key), "{reason}");
+}
+
 /// The consumed half is asserted as a **pass** — plan-04 §9 row 1.
 #[test]
 fn consumed_rpc_is_unbound_with_reason() {

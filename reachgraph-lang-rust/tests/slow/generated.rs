@@ -193,6 +193,10 @@ fn reading_existing_build_output_indexes_the_generated_leaf() {
                 && note.contains(&root.join("target").display().to_string())),
         "the out dir read, and the target it came from, are in the notes: {notes:#?}"
     );
+    assert!(
+        !notes.iter().any(|note| note.contains("stale build output")),
+        "the harness just built it, so the output is current: {notes:#?}"
+    );
 }
 
 /// ADR-0009's loud failure: the build output named does not exist, or holds no

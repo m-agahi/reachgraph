@@ -276,7 +276,10 @@ being silently absent from the output.
 > output an earlier build left there and puts it into the crate graph. It asks
 > `rustc --print sysroot` for the sysroot. That is the target toolchain answering a
 > question, inside this section's carve-out. It never uses rust-analyzer's
-> `Sysroot::discover`, which can run `rustup component add`.
+> `Sysroot::discover`, which can run `rustup component add`. Every toolchain call
+> reachgraph causes carries `RUSTUP_AUTO_INSTALL=0`. On a rustup proxy, auto-install
+> defaults to on, and without that variable the proxy downloads a missing toolchain that
+> a `rust-toolchain.toml` names.
 
 This matches the second hard prerequisite already stated in `docs/design.md` §8 — MEASURED
 there that the client-stub edge resolved only because `target/debug/build/…/out/` existed,

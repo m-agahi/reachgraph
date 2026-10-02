@@ -124,6 +124,14 @@ pub struct MemberCoverage {
     /// because a target directory can hold several builds of one package, and
     /// which one was read is a fact about the index.
     pub out_dir_read: Option<std::path::PathBuf>,
+    /// How many build-script output directories the target held for this
+    /// member; the most recently run one is read. Zero when none was read.
+    pub out_dir_candidates: usize,
+    /// A declared input of the build script that changed after the output
+    /// read was produced — the build is stale, and generated code may not
+    /// match the source. `None` when the output is at least as new as every
+    /// input, or when none was read.
+    pub out_dir_stale_input: Option<std::path::PathBuf>,
 }
 
 /// What the whole run could not see.

@@ -43,7 +43,7 @@ pub fn analysis_registry_reading(
     build_output: Option<&std::path::Path>,
 ) -> Result<Registry, RegistryError> {
     let registry = with_language_plugins(Registry::new(), build_output)?;
-    with_root_providers(registry)
+    with_root_providers(registry, build_output.is_some())
 }
 
 #[cfg(feature = "lang-rust")]
@@ -68,14 +68,23 @@ fn with_language_plugins(
 }
 
 #[cfg(feature = "roots-proto-tonic")]
-fn with_root_providers(mut registry: Registry) -> Result<Registry, RegistryError> {
-    registry.register(
-        Registration::of(reachgraph_roots_proto_tonic::ProtoTonicPlugin::new()).roots(),
-    )?;
+fn with_root_providers(
+    mut registry: Registry,
+    build_output_read: bool,
+) -> Result<Registry, RegistryError> {
+    let plugin = if build_output_read {
+        reachgraph_roots_proto_tonic::ProtoTonicPlugin::reading_build_output()
+    } else {
+        reachgraph_roots_proto_tonic::ProtoTonicPlugin::new()
+    };
+    registry.register(Registration::of(plugin).roots())?;
     Ok(registry)
 }
 
 #[cfg(not(feature = "roots-proto-tonic"))]
-fn with_root_providers(registry: Registry) -> Result<Registry, RegistryError> {
+fn with_root_providers(
+    registry: Registry,
+    _build_output_read: bool,
+) -> Result<Registry, RegistryError> {
     Ok(registry)
 }
