@@ -5,7 +5,7 @@
 **Source:** exported verbatim from the yadgar decision ledger, project `m-agahi/reachgraph`,
 on 2026-10-02. Ten places in this repository cite ADR-0728, and until this export none of
 them could be resolved from the repository. The number is the ledger's own and is kept for
-that reason. It does not continue the 0001–0009 sequence of this directory.
+that reason. It is not part of the four-digit 00xx sequence of this directory.
 
 ## Context
 
