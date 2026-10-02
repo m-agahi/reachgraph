@@ -68,8 +68,26 @@ pub struct Streams<'a> {
 }
 
 /// Run against the registry this build ships.
+///
+/// The arguments are parsed **before** the registry is built, because
+/// `--read-build-output` (ADR-0009) configures a plugin rather than the run,
+/// and a plugin is fixed once registered.
 pub fn run(args: &[String], streams: &mut Streams<'_>) -> u8 {
-    let registry = match registry::analysis_registry() {
+    let build_output = match args::parse(args) {
+        Ok(Command::Analyse(Analyse { build_output, .. }))
+        | Ok(Command::Preflight { build_output, .. }) => build_output,
+        _ => None,
+    };
+    let build_output = match build_output.as_deref().map(absolute) {
+        Some(Ok(path)) => Some(path),
+        Some(Err(error)) => {
+            let _ = writeln!(streams.err, "error: {error}");
+            return EXIT_INTERNAL;
+        }
+        None => None,
+    };
+
+    let registry = match registry::analysis_registry_reading(build_output.as_deref()) {
         Ok(registry) => registry,
         Err(error) => {
             let _ = writeln!(
@@ -80,11 +98,50 @@ pub fn run(args: &[String], streams: &mut Streams<'_>) -> u8 {
         }
     };
 
-    run_with(&registry, args, streams)
+    dispatch(&registry, args, streams)
+}
+
+/// A path the user typed, made absolute against the current directory.
+///
+/// Not canonicalised and not checked for existence: whether the directory
+/// exists is the plugin's question, answered with the path the user can
+/// recognise, and a canonicalisation failure here would pre-empt that message
+/// with a worse one.
+fn absolute(path: &Path) -> std::io::Result<PathBuf> {
+    if path.is_absolute() {
+        Ok(path.to_path_buf())
+    } else {
+        Ok(std::env::current_dir()?.join(path))
+    }
 }
 
 /// Run against a caller-supplied registry.
+///
+/// `--read-build-output` is refused here rather than ignored. It configures
+/// the shipped Rust plugin at construction, which only [`run`] does; a
+/// caller-supplied registry was built before the flag was read, so accepting
+/// the flag would produce a run that silently read no build output.
 pub fn run_with(registry: &Registry, args: &[String], streams: &mut Streams<'_>) -> u8 {
+    if let Ok(Command::Analyse(Analyse {
+        build_output: Some(_),
+        ..
+    }))
+    | Ok(Command::Preflight {
+        build_output: Some(_),
+        ..
+    }) = args::parse(args)
+    {
+        let _ = writeln!(
+            streams.err,
+            "error: --read-build-output configures the shipped registry; this caller supplied \
+             its own, so the flag would be read by nothing"
+        );
+        return EXIT_USAGE;
+    }
+    dispatch(registry, args, streams)
+}
+
+fn dispatch(registry: &Registry, args: &[String], streams: &mut Streams<'_>) -> u8 {
     let command = match args::parse(args) {
         Ok(command) => command,
         Err(UsageError(message)) => {
@@ -101,7 +158,7 @@ pub fn run_with(registry: &Registry, args: &[String], streams: &mut Streams<'_>)
             &format!("reachgraph {}", env!("CARGO_PKG_VERSION")),
         ),
         Command::Plugins => plugins(registry, streams),
-        Command::Preflight { repo, json } => match resolved(&repo, streams) {
+        Command::Preflight { repo, json, .. } => match resolved(&repo, streams) {
             Ok(repo) => preflight::subcommand(registry, &repo, json, streams),
             Err(code) => code,
         },

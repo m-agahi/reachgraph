@@ -39,6 +39,11 @@ pub enum Command {
         repo: PathBuf,
         /// Emit the table as structured data on stdout.
         json: bool,
+        /// ADR-0009: an existing build's target directory to read
+        /// build-script output from. Preflight loads the workspace, so it
+        /// takes the flag too, or it would check a different load than the
+        /// run it precedes.
+        build_output: Option<PathBuf>,
     },
     /// List what is registered.
     Plugins,
@@ -76,6 +81,10 @@ pub struct Analyse {
     /// Never emit the single-file page. A different instruction from a small
     /// threshold, and the two are mutually exclusive.
     pub no_overview: bool,
+    /// ADR-0009: a cargo target directory an earlier build populated, read
+    /// for build-script output (`OUT_DIR`). `None` reads none. reachgraph
+    /// never runs the build itself.
+    pub build_output: Option<PathBuf>,
 }
 
 impl Default for Analyse {
@@ -91,6 +100,7 @@ impl Default for Analyse {
             renderer: None,
             inline_threshold: None,
             no_overview: false,
+            build_output: None,
         }
     }
 }
@@ -104,9 +114,9 @@ pub const USAGE: &str = "\
 usage:
   reachgraph <repo> [-o|--out <dir>] [--force] [--json] [-q|--quiet]
                     [--renderer <name>] [--inline-threshold <bytes>]
-                    [--no-overview]
+                    [--no-overview] [--read-build-output <target-dir>]
   reachgraph serve <out> [--port <n>]
-  reachgraph preflight <repo> [--json]
+  reachgraph preflight <repo> [--json] [--read-build-output <target-dir>]
   reachgraph plugins
   reachgraph --version | --help
 
@@ -124,6 +134,12 @@ usage:
       --no-overview
                   never emit overview.html. Not the same as a threshold of 0,
                   and the two may not be combined
+      --read-build-output
+                  read generated code (build-script OUT_DIR) from this cargo
+                  target directory, which an earlier `cargo build` populated.
+                  reachgraph never runs the build; with no build output
+                  there, the run fails and names the path. Needs the
+                  rust-src component
       --port      loopback port for `serve`, or 0 for a free one (default: 0)
 
 exit codes: 0 analysed  1 internal error  2 preflight failed
@@ -166,10 +182,18 @@ fn plugins(rest: &[String]) -> Result<Command, UsageError> {
 fn preflight(rest: &[String]) -> Result<Command, UsageError> {
     let mut repo: Option<PathBuf> = None;
     let mut json = false;
+    let mut build_output: Option<PathBuf> = None;
+    let mut expecting_build_output = false;
 
     for argument in rest {
+        if expecting_build_output {
+            build_output = Some(PathBuf::from(argument));
+            expecting_build_output = false;
+            continue;
+        }
         match argument.as_str() {
             "--json" => json = true,
+            "--read-build-output" => expecting_build_output = true,
             other if other.starts_with('-') => {
                 return Err(UsageError(format!("unknown flag: {other}")))
             }
@@ -177,8 +201,18 @@ fn preflight(rest: &[String]) -> Result<Command, UsageError> {
         }
     }
 
+    if expecting_build_output {
+        return Err(UsageError(
+            "--read-build-output takes a directory".to_owned(),
+        ));
+    }
+
     match repo {
-        Some(repo) => Ok(Command::Preflight { repo, json }),
+        Some(repo) => Ok(Command::Preflight {
+            repo,
+            json,
+            build_output,
+        }),
         None => Err(UsageError("preflight needs a repository".to_owned())),
     }
 }
@@ -222,6 +256,7 @@ enum Expecting {
     Out,
     Renderer,
     InlineThreshold,
+    BuildOutput,
 }
 
 fn analyse(args: &[String]) -> Result<Command, UsageError> {
@@ -233,6 +268,7 @@ fn analyse(args: &[String]) -> Result<Command, UsageError> {
     let mut renderer: Option<String> = None;
     let mut inline_threshold: Option<u64> = None;
     let mut no_overview = false;
+    let mut build_output: Option<PathBuf> = None;
     let mut expecting = Expecting::Nothing;
 
     for argument in args {
@@ -254,6 +290,11 @@ fn analyse(args: &[String]) -> Result<Command, UsageError> {
                 expecting = Expecting::Nothing;
                 continue;
             }
+            Expecting::BuildOutput => {
+                build_output = Some(PathBuf::from(argument));
+                expecting = Expecting::Nothing;
+                continue;
+            }
             Expecting::Nothing => {}
         }
 
@@ -262,6 +303,7 @@ fn analyse(args: &[String]) -> Result<Command, UsageError> {
             "--renderer" => expecting = Expecting::Renderer,
             "--inline-threshold" => expecting = Expecting::InlineThreshold,
             "--no-overview" => no_overview = true,
+            "--read-build-output" => expecting = Expecting::BuildOutput,
             "--force" => force = true,
             "--json" => json = true,
             "-q" | "--quiet" => quiet = true,
@@ -279,6 +321,11 @@ fn analyse(args: &[String]) -> Result<Command, UsageError> {
         Expecting::InlineThreshold => {
             return Err(UsageError(
                 "--inline-threshold takes a byte count".to_owned(),
+            ))
+        }
+        Expecting::BuildOutput => {
+            return Err(UsageError(
+                "--read-build-output takes a directory".to_owned(),
             ))
         }
         Expecting::Nothing => {}
@@ -306,6 +353,7 @@ fn analyse(args: &[String]) -> Result<Command, UsageError> {
         renderer,
         inline_threshold,
         no_overview,
+        build_output,
     }))
 }
 

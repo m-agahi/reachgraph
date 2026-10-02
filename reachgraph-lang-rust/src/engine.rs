@@ -14,7 +14,7 @@ use ra_ap_ide_db::ra_fixture::RaFixtureConfig;
 use ra_ap_load_cargo::{load_workspace, LoadCargoConfig, ProcMacroServerChoice};
 use ra_ap_paths::{AbsPathBuf, Utf8PathBuf};
 use ra_ap_project_model::{
-    CargoConfig, ProjectManifest, ProjectWorkspace, ProjectWorkspaceKind, TargetKind,
+    CargoConfig, ProjectManifest, ProjectWorkspace, ProjectWorkspaceKind, RustLibSource, TargetKind,
 };
 use ra_ap_syntax::{TextRange, TextSize};
 use ra_ap_vfs::{Vfs, VfsPath};
@@ -23,12 +23,33 @@ use reachgraph_plugin_api::{
     Symbol, SymbolKind, Unit, UnitId,
 };
 
+use crate::build_output::{locate_out_dirs, stale_inputs};
 use crate::classify::{classify_facts, CrateOrigin, PathFacts};
 use crate::coverage::{MemberCoverage, OutDirMechanism, ProcMacroExpansion, RustCoverage};
 use crate::ids::{node_id, RawParts};
 use crate::kinds::{declared_trait_name, map_kind, render_impl_header, RustItem};
 use crate::preflight::{CargoProbe, PreflightFacts, WorkspaceProbe};
 use crate::{ENGINE, PLUGIN_ID};
+
+/// Why a load failed, kept apart so preflight can name the right cause.
+///
+/// ADR-0009: build output that was asked for and could not be read is not a
+/// missing workspace, and reporting it as one sends the user after
+/// `Cargo.toml` when the problem is the target directory they named.
+pub(crate) enum LoadError {
+    /// The workspace itself did not load.
+    Workspace(PluginError),
+    /// The workspace loaded and the build output asked for could not be read.
+    BuildOutput(PluginError),
+}
+
+impl From<LoadError> for PluginError {
+    fn from(error: LoadError) -> Self {
+        match error {
+            LoadError::Workspace(error) | LoadError::BuildOutput(error) => error,
+        }
+    }
+}
 
 /// `ra_ap` reports cancellation and the call hierarchy reports nothing; both
 /// become this crate's own error at the boundary.
@@ -196,7 +217,8 @@ pub fn probe_program(program: &str) -> CargoProbe {
 /// a generated file VFS-resident and still does not make a call into it
 /// resolve; reporting a mechanism that changes nothing observable would claim
 /// coverage this crate does not have.
-pub(crate) fn load(root: &Path) -> Result<Loaded, PluginError> {
+pub(crate) fn load(root: &Path, build_output: Option<&Path>) -> Result<Loaded, LoadError> {
+    let workspace_error = LoadError::Workspace;
     // NOT `AbsPathBuf::assert` on an unchecked path. MEASURED 2026-09-19 by
     // the release workflow's smoke test (run 35457883578): `assert` refuses a
     // relative path by PANICKING — "expected absolute path, got ." — so
@@ -210,31 +232,94 @@ pub(crate) fn load(root: &Path) -> Result<Loaded, PluginError> {
     // that panics on bad input is a library whose contract is "do not get this
     // wrong", which is not a contract a plugin interface can carry.
     if !root.is_absolute() {
-        return Err(engine_error(format!(
+        return Err(workspace_error(engine_error(format!(
             "{} is not an absolute path, and the engine cannot resolve a relative one",
             root.display()
-        )));
+        ))));
     }
 
-    let abs_root = AbsPathBuf::assert(
-        Utf8PathBuf::from_path_buf(root.to_path_buf())
-            .map_err(|path| engine_error(format!("{} is not valid UTF-8", path.display())))?,
-    );
+    let abs_root = AbsPathBuf::assert(Utf8PathBuf::from_path_buf(root.to_path_buf()).map_err(
+        |path| {
+            workspace_error(engine_error(format!(
+                "{} is not valid UTF-8",
+                path.display()
+            )))
+        },
+    )?);
 
-    let cargo_config = CargoConfig::default();
+    // ADR-0009: reading build output needs the sysroot. `include!`, `env!`
+    // and `concat!` — the three macros every generated-code inclusion goes
+    // through — are declared in `core`, so without it the inclusion never
+    // expands and the generated file sits in the VFS belonging to nothing.
+    // MEASURED on `fx-macro`: with the out dir loaded and `OUT_DIR` set, the
+    // generated item is absent from its module until the sysroot is.
+    //
+    // Only in that mode. The default load requests no sysroot, as before, so
+    // a run without the flag indexes exactly what it did.
+    //
+    // NOT `RustLibSource::Discover`. MEASURED 2026-10-02: `Sysroot::discover`
+    // falls back to running `rustup component add rust-src` when the source
+    // is missing. `RustLibSource::Path` with the sysroot `rustc` reports looks
+    // for the source (honouring `RUST_SRC_PATH`) and never runs
+    // `rustup component add`. The rustc probe and every cargo/rustc call
+    // ra_ap makes also carry `RUSTUP_AUTO_INSTALL=0`, so a rustup proxy does
+    // not download a toolchain a `rust-toolchain.toml` names (see
+    // `cargo_config`).
+    let sysroot = match build_output {
+        Some(target) => Some(sysroot_dir(root).map_err(|detail| {
+            LoadError::BuildOutput(engine_error(format!(
+                "reading build output from {} needs the toolchain's sysroot, and \
+                 `rustc --print sysroot` did not answer: {detail}",
+                target.display()
+            )))
+        })?),
+        None => None,
+    };
+    let cargo_config = cargo_config(build_output, sysroot);
 
-    let manifest = ProjectManifest::discover_single(&abs_root)
-        .map_err(|error| engine_error(format!("no Cargo workspace at {root:?}: {error}")))?;
+    let manifest = ProjectManifest::discover_single(&abs_root).map_err(|error| {
+        workspace_error(engine_error(format!(
+            "no Cargo workspace at {root:?}: {error}"
+        )))
+    })?;
 
-    let workspace = ProjectWorkspace::load(manifest, &cargo_config, &|_| {})
-        .map_err(|error| engine_error(format!("could not load {root:?}: {error}")))?;
+    let mut workspace =
+        ProjectWorkspace::load(manifest, &cargo_config, &|_| {}).map_err(|error| {
+            workspace_error(engine_error(format!("could not load {root:?}: {error}")))
+        })?;
 
     let sysroot_src = workspace
         .sysroot
         .rust_lib_src_root()
         .map(|it| PathBuf::from(it.as_str()));
 
-    let enumerated = enumerate_units(root, &workspace)?;
+    let mut enumerated = enumerate_units(root, &workspace).map_err(workspace_error)?;
+
+    if let (Some(target), None) = (build_output, &sysroot_src) {
+        return Err(LoadError::BuildOutput(engine_error(format!(
+            "reading build output from {} needs the standard library's source, and it did not \
+             resolve: include!, env! and concat! are declared in core, so without it no \
+             generated file is ever included. Run `rustup component add rust-src`, or point \
+             RUST_SRC_PATH at a rust-src library directory",
+            target.display()
+        ))));
+    }
+
+    // ADR-0009: read a build that already happened, never run one. The
+    // generated files join the VFS through `extra_includes` — which puts them
+    // in the member's own source root, where `include!` resolves — and the
+    // `OUT_DIR` each crate's `env!` reads is set on the crate after the load.
+    let out_dirs = match build_output {
+        Some(target) => {
+            read_build_output(target, &mut enumerated).map_err(LoadError::BuildOutput)?
+        }
+        None => Vec::new(),
+    };
+    workspace.extra_includes = out_dirs
+        .iter()
+        .map(|(_, out_dir)| absolute_utf8(out_dir))
+        .collect::<Result<_, _>>()
+        .map_err(LoadError::BuildOutput)?;
 
     let load_config = LoadCargoConfig {
         load_out_dirs_from_check: false,
@@ -244,9 +329,12 @@ pub(crate) fn load(root: &Path) -> Result<Loaded, PluginError> {
         proc_macro_processes: 0,
     };
 
-    let (db, vfs, _proc_macro_client) =
-        load_workspace(workspace, &Default::default(), &load_config)
-            .map_err(|error| engine_error(format!("could not load {root:?}: {error}")))?;
+    let (mut db, vfs, _proc_macro_client) =
+        load_workspace(workspace, &Default::default(), &load_config).map_err(|error| {
+            workspace_error(engine_error(format!("could not load {root:?}: {error}")))
+        })?;
+
+    set_out_dirs(&mut db, &out_dirs);
 
     Ok(Loaded {
         root: enumerated.root,
@@ -258,9 +346,157 @@ pub(crate) fn load(root: &Path) -> Result<Loaded, PluginError> {
             members: enumerated.coverage,
             rust_src_available: sysroot_src.is_some(),
             proc_macro_expansion: ProcMacroExpansion::Disabled,
-            out_dir_mechanism: OutDirMechanism::Unloaded,
+            out_dir_mechanism: match build_output {
+                Some(target) => OutDirMechanism::ExistingBuildOutput {
+                    target_dir: target.to_path_buf(),
+                },
+                None => OutDirMechanism::Unloaded,
+            },
         },
     })
+}
+
+/// The toolchain's sysroot, as `rustc --print sysroot` run in `root` reports
+/// it — so a `rust-toolchain.toml` there selects the toolchain, as it does for
+/// the build being read.
+///
+/// `rustc` is the target language's own toolchain, the carve-out ADR-0001's
+/// 2026-09-17 amendment makes for `cargo`; it is asked a question and builds
+/// nothing.
+fn sysroot_dir(root: &Path) -> Result<AbsPathBuf, String> {
+    let output = sysroot_command(root)
+        .output()
+        .map_err(|error| error.to_string())?;
+    if !output.status.success() {
+        return Err(format!(
+            "exited with {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let printed = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    absolute_utf8(Path::new(&printed)).map_err(|error| error.to_string())
+}
+
+/// The variable that stops a rustup proxy from installing anything.
+///
+/// MEASURED: rustup 1.29's `auto-install` defaults to enabled, so a `rustc` or
+/// `cargo` proxy run in a repository whose `rust-toolchain.toml` names a
+/// toolchain or component that is not installed downloads it. reachgraph
+/// installs nothing (ADR-0001), so every toolchain call it causes carries this.
+const NO_AUTO_INSTALL: (&str, &str) = ("RUSTUP_AUTO_INSTALL", "0");
+
+/// `rustc --print sysroot`, in `root`, with rustup auto-install off.
+fn sysroot_command(root: &Path) -> Command {
+    let mut command = Command::new("rustc");
+    command
+        .args(["--print", "sysroot"])
+        .current_dir(root)
+        .env(NO_AUTO_INSTALL.0, NO_AUTO_INSTALL.1);
+    command
+}
+
+/// The load's cargo configuration.
+///
+/// `extra_env` carries [`NO_AUTO_INSTALL`] in every mode: ra_ap runs
+/// `cargo metadata`, `rustc --print cfg` and, with a sysroot, `rustup which`
+/// and `cargo metadata` on the standard library, all through the toolchain
+/// proxies. The sysroot is requested only when build output is read.
+fn cargo_config(build_output: Option<&Path>, sysroot: Option<AbsPathBuf>) -> CargoConfig {
+    let mut config = CargoConfig {
+        sysroot: build_output.and(sysroot).map(RustLibSource::Path),
+        ..CargoConfig::default()
+    };
+    config.extra_env.insert(
+        NO_AUTO_INSTALL.0.to_owned(),
+        Some(NO_AUTO_INSTALL.1.to_owned()),
+    );
+    config
+}
+
+fn absolute_utf8(path: &Path) -> Result<AbsPathBuf, PluginError> {
+    let utf8 = Utf8PathBuf::from_path_buf(path.to_path_buf())
+        .map_err(|path| engine_error(format!("{} is not valid UTF-8", path.display())))?;
+    AbsPathBuf::try_from(utf8)
+        .map_err(|path| engine_error(format!("{path} is not an absolute path")))
+}
+
+/// Find each build-script member's output under `target`, and mark the
+/// members whose output was found as loaded.
+///
+/// Fails, naming the path, when the caller asked for build output and there
+/// is none to read. A flag that was given and silently read nothing would
+/// produce an artifact indistinguishable from one run without it — the
+/// misleading-completeness failure plan-03 §9 D-D exists to prevent.
+fn read_build_output(
+    target: &Path,
+    enumerated: &mut EnumeratedUnits,
+) -> Result<Vec<(PathBuf, PathBuf)>, PluginError> {
+    if !target.is_dir() {
+        return Err(engine_error(format!(
+            "build output directory {} does not exist; reachgraph reads an existing build \
+             and never runs one, so build the workspace first or drop the flag",
+            target.display()
+        )));
+    }
+
+    let mut found = Vec::new();
+    for member in &mut enumerated.coverage {
+        if !member.has_build_script {
+            continue;
+        }
+        let Some((_, name, dir)) = enumerated
+            .manifest_dirs
+            .iter()
+            .find(|(package, _, _)| *package == member.package)
+        else {
+            continue;
+        };
+        let candidates = locate_out_dirs(target, name);
+        if let Some(out_dir) = candidates.first() {
+            member.out_dir_loaded = true;
+            member.out_dir_read = Some(out_dir.clone());
+            member.out_dir_candidates = candidates.len();
+            member.out_dir_stale_input = stale_inputs(out_dir, dir);
+            found.push((dir.clone(), out_dir.clone()));
+        }
+    }
+
+    if found.is_empty() {
+        return Err(engine_error(format!(
+            "no build-script output (OUT_DIR) for any workspace member under {}; reachgraph \
+             reads an existing build and never runs one, so build the workspace first or \
+             drop the flag",
+            target.display()
+        )));
+    }
+    Ok(found)
+}
+
+/// Give each member crate whose output was found the `OUT_DIR` cargo gave it.
+///
+/// A crate is matched to its package by `CARGO_MANIFEST_DIR`, which
+/// `ra_ap_project_model` sets on every crate it builds from cargo metadata.
+fn set_out_dirs(db: &mut RootDatabase, out_dirs: &[(PathBuf, PathBuf)]) {
+    use ra_ap_base_db::salsa::Setter as _;
+
+    if out_dirs.is_empty() {
+        return;
+    }
+    for krate in ra_ap_base_db::all_crates(db).iter().copied() {
+        let mut env = krate.env(db).clone();
+        let Some(manifest_dir) = env.get("CARGO_MANIFEST_DIR") else {
+            continue;
+        };
+        let Some((_, out_dir)) = out_dirs
+            .iter()
+            .find(|(dir, _)| dir.as_path() == Path::new(&manifest_dir))
+        else {
+            continue;
+        };
+        env.set("OUT_DIR", out_dir.to_string_lossy().into_owned());
+        krate.set_env(db).to(env);
+    }
 }
 
 /// What [`enumerate_units`] found, with each fact named.
@@ -278,6 +514,9 @@ struct EnumeratedUnits {
     units: Vec<UnitFacts>,
     /// One per workspace member package.
     coverage: Vec<MemberCoverage>,
+    /// `(package id, package name, manifest directory)` per member package —
+    /// what [`read_build_output`] needs to find and attach an `OUT_DIR`.
+    manifest_dirs: Vec<(String, String, PathBuf)>,
 }
 
 /// Plan-03 §7 — one `Unit` per workspace member target, and one coverage row
@@ -294,6 +533,7 @@ fn enumerate_units(
 
     let mut units = Vec::new();
     let mut members = Vec::new();
+    let mut manifest_dirs = Vec::new();
 
     for package in cargo.packages() {
         let data = &cargo[package];
@@ -316,6 +556,11 @@ fn enumerate_units(
             .any(|kind| matches!(kind, TargetKind::BuildScript));
         let out_dir_on_disk = out_dir_on_disk(root, &data.name);
 
+        manifest_dirs.push((
+            package_id.clone(),
+            data.name.clone(),
+            PathBuf::from(manifest_dir.as_str()),
+        ));
         members.push(MemberCoverage {
             package: package_id.clone(),
             has_build_script,
@@ -325,6 +570,9 @@ fn enumerate_units(
             // to load, and reporting "not loaded" there would read as a gap.
             out_dir_loaded: false,
             out_dir_on_disk,
+            out_dir_read: None,
+            out_dir_candidates: 0,
+            out_dir_stale_input: None,
         });
 
         for &target in &data.targets {
@@ -364,6 +612,7 @@ fn enumerate_units(
         root: PathBuf::from(cargo.workspace_root().as_str()),
         units,
         coverage: members,
+        manifest_dirs,
     })
 }
 
@@ -1036,5 +1285,40 @@ impl Loaded {
             // rule in `classify` still catches the Cargo-shaped path.
             recorded_out_dirs: &[],
         })
+    }
+}
+
+/// The two places a rustup proxy can be reached from this crate's own setup:
+/// the sysroot probe this crate spawns, and every cargo/rustc call
+/// `ra_ap_project_model` makes with `CargoConfig::extra_env`. Both must carry
+/// `RUSTUP_AUTO_INSTALL=0` — MEASURED, rustup 1.29's `auto-install` defaults
+/// to enabled, so a `rust-toolchain.toml` naming a missing toolchain or
+/// component would otherwise be downloaded.
+#[cfg(test)]
+mod no_auto_install {
+    use std::ffi::OsStr;
+    use std::path::Path;
+
+    #[test]
+    fn the_sysroot_probe_disables_rustup_auto_install() {
+        let command = super::sysroot_command(Path::new("/"));
+        assert!(
+            command
+                .get_envs()
+                .any(|(key, value)| key == "RUSTUP_AUTO_INSTALL" && value == Some(OsStr::new("0"))),
+            "rustc --print sysroot must not let rustup install anything"
+        );
+    }
+
+    #[test]
+    fn engine_cargo_calls_disable_rustup_auto_install() {
+        for build_output in [None, Some(Path::new("/target"))] {
+            let config = super::cargo_config(build_output, None);
+            assert_eq!(
+                config.extra_env.get("RUSTUP_AUTO_INSTALL"),
+                Some(&Some("0".to_owned())),
+                "ra_ap's own cargo and rustc calls must not let rustup install anything"
+            );
+        }
     }
 }

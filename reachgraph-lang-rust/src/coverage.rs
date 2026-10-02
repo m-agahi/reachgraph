@@ -76,11 +76,30 @@ pub enum ProcMacroExpansion {
 /// generated code is in the index while zero generated symbols and zero
 /// generated edges exist, which is the misleading-completeness failure §9 D-D
 /// exists to prevent. `build_script_data` requires running a build, which
-/// ADR-0001 forbids. One value is reachable, so one variant exists.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// ADR-0001 forbids.
+///
+/// # The second variant, and what the 2026-09-19 measurement missed
+///
+/// MEASURED 2026-10-02 (ADR-0009): stage 2 failed for two reasons, neither
+/// of which is the mechanism. `OUT_DIR` had been injected through
+/// `load_workspace`'s `extra_env`, which feeds the proc-macro server and not
+/// the crate's own env; and the load requested no sysroot, so `include!`,
+/// `env!` and `concat!` — declared in `core` — never expanded at all. With
+/// `OUT_DIR` set on the crate's env after the load, and the sysroot
+/// requested, the `fx-macro` edge into generated code resolves. So a second
+/// value is reachable, and it reads an existing build rather than running one.
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum OutDirMechanism {
     /// Nothing loaded generated code into the crate graph.
     Unloaded,
+    /// ADR-0009: the caller named a target directory a previous build
+    /// populated, and each member's recorded `OUT_DIR` in it was loaded —
+    /// the files through `extra_includes`, the variable on the crate's env.
+    /// reachgraph ran no build to obtain it.
+    ExistingBuildOutput {
+        /// The target directory the caller named.
+        target_dir: std::path::PathBuf,
+    },
 }
 
 /// What one workspace member's prerequisites looked like.
@@ -100,6 +119,19 @@ pub struct MemberCoverage {
     /// case plan-03 §9 says must not be softened: the artifacts are there and
     /// reachgraph never told the crate graph to look.
     pub out_dir_on_disk: bool,
+    /// ADR-0009: the build-script output directory this run read for the
+    /// member, when it was told to read build output and found one. Recorded
+    /// because a target directory can hold several builds of one package, and
+    /// which one was read is a fact about the index.
+    pub out_dir_read: Option<std::path::PathBuf>,
+    /// How many build-script output directories the target held for this
+    /// member; the most recently run one is read. Zero when none was read.
+    pub out_dir_candidates: usize,
+    /// A declared input of the build script that changed after the output
+    /// read was produced — the build is stale, and generated code may not
+    /// match the source. `None` when the output is at least as new as every
+    /// input, or when none was read.
+    pub out_dir_stale_input: Option<std::path::PathBuf>,
 }
 
 /// What the whole run could not see.

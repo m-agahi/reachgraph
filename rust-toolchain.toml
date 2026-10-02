@@ -9,10 +9,16 @@
 # "command not found" rather than installing anything, so the toolchain has to
 # carry them.
 #
+# `rust-src`, because ADR-0009's `--read-build-output` needs the standard library's
+# source: `include!`, `env!` and `concat!` are declared in `core`, and without it no
+# generated file is ever included. The slow suite asserts that mode, so CI needs the
+# component. reachgraph itself never asks rustup to install it, and runs its
+# toolchain calls with RUSTUP_AUTO_INSTALL=0 (ADR-0009).
+#
 # NO `targets` LINE. This repository builds for the machine it runs on. The
 # platform wheel matrix is plan-07's problem and it is unmeasured
 # (docs/plans/00-workspace-and-plugin-api.md §7), so nothing is pinned for it
 # here on speculation.
 [toolchain]
 channel = "1.98.0"
-components = ["rustfmt", "clippy"]
+components = ["rustfmt", "clippy", "rust-src"]

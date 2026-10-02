@@ -5,6 +5,7 @@
 //! cannot be tested here is a decision fused to the engine, and the fusion is
 //! what ADR-0008's eight leaks are each an instance of.
 
+mod build_output;
 mod classify;
 mod engine;
 mod ids;

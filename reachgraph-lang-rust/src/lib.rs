@@ -26,6 +26,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+pub mod build_output;
 mod engine;
 mod plugin;
 

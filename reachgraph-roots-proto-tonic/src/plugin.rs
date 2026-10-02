@@ -34,6 +34,10 @@ use crate::PLUGIN_ID;
 #[derive(Default)]
 pub struct ProtoTonicPlugin {
     examined: Mutex<Examined>,
+    /// ADR-0009: the language plugin was told to read build output, so a
+    /// consumed root's missing stub is a different fact — the output was read
+    /// and the stub is not in it — and its reason says so.
+    build_output_read: bool,
 }
 
 /// What the last completed run looked at, and what it found and could not
@@ -52,6 +56,28 @@ impl ProtoTonicPlugin {
     /// A plugin that has examined nothing yet.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// A plugin for a run that reads build output (`--read-build-output`,
+    /// ADR-0009). Binding is unchanged; only the reason on a consumed root
+    /// whose generated stub is missing changes, because "re-run reading the
+    /// build output" is false advice to a run that already did.
+    pub fn reading_build_output() -> Self {
+        Self {
+            build_output_read: true,
+            ..Self::default()
+        }
+    }
+
+    fn after_build_output(&self, binding: Binding) -> Binding {
+        match binding {
+            Binding::Unbound(UnboundReason::GeneratedStubNotIndexed { join_key })
+                if self.build_output_read =>
+            {
+                Binding::Unbound(UnboundReason::GeneratedStubNotInBuildOutput { join_key })
+            }
+            other => other,
+        }
     }
 }
 
@@ -147,7 +173,7 @@ impl RootProvider for ProtoTonicPlugin {
                     let binding = match call {
                         DirectionCall::Served => bind_handler(symbols, &operation),
                         DirectionCall::ConsumedWithClient => {
-                            bind_generated_client(symbols, &operation)
+                            self.after_build_output(bind_generated_client(symbols, &operation))
                         }
                         DirectionCall::NoEvidence => {
                             consumed_without_evidence(symbols, &operation, &service.name)

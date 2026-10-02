@@ -78,24 +78,32 @@ fn no_language_specific_tokens_in_core_or_cli() {
 
 /// ADR-0001's "no external binaries, no subprocesses", as a build failure.
 ///
-/// **An allowlist, not a scope narrowing.** Plan-06 §4.1 writes this guard as
-/// "`std::process::Command` appears in no first-party non-test source", and
-/// PR D falsified that: `reachgraph-lang-rust` probes `cargo --version`
-/// deliberately, because design.md §10 MEASURED that a name resolving on PATH
-/// proves nothing — `rust-analyzer` resolves there as a `rustup` proxy that
-/// loops and is not installed. Preflight has to *run* the program to learn
-/// anything, and ADR-0001's carve-out permits the target language's own
-/// toolchain.
+/// **An allowlist of spawn SITES, counted, not of files.** Plan-06 §4.1 writes
+/// this guard as "`std::process::Command` appears in no first-party non-test
+/// source", and PR D falsified that: `reachgraph-lang-rust` probes
+/// `cargo --version` deliberately, because design.md §10 MEASURED that a name
+/// resolving on PATH proves nothing. ADR-0009 added a second site in the same
+/// file, `rustc --print sysroot`, and the earlier form of this guard — which
+/// allowed the whole file by substring — stayed green through it. That is the
+/// defect this shape fixes: every `Command::new(` site is counted per file and
+/// must match the list below exactly, so a third spawn in `engine.rs` fails
+/// here as surely as a first spawn anywhere else.
 ///
-/// Narrowing the guard to core and cli would hide that site. Naming it makes
-/// the guard sharper instead: a **new** spawn anywhere in the workspace fails
-/// here, and moving the probe fails here too.
+/// The two allowed sites, both the target language's own toolchain under
+/// ADR-0001's carve-out, both asked a question and building nothing:
+///
+/// 1. `cargo --version` — preflight check 1a (`probe_program`).
+/// 2. `rustc --print sysroot` — ADR-0009's sysroot lookup (`sysroot_command`),
+///    run with `RUSTUP_AUTO_INSTALL=0`.
 #[test]
-fn no_process_spawn_in_workspace_outside_the_one_documented_probe() {
-    const ALLOWED: &str = "reachgraph-lang-rust/src/engine.rs";
+fn no_process_spawn_in_workspace_outside_the_documented_probes() {
+    const ALLOWED: [(&str, &[&str]); 1] = [(
+        "reachgraph-lang-rust/src/engine.rs",
+        &["Command::new(program)", "Command::new(\"rustc\")"],
+    )];
 
     let mut offenders: Vec<String> = Vec::new();
-    let mut allowed_site_found = false;
+    let mut seen_allowed: Vec<String> = Vec::new();
 
     for crate_name in [
         "reachgraph-plugin-api",
@@ -107,7 +115,17 @@ fn no_process_spawn_in_workspace_outside_the_one_documented_probe() {
     ] {
         for file in crate_sources(crate_name) {
             let text = std::fs::read_to_string(&file).expect("a source file is readable");
-            if !text.contains("process::Command") {
+            let sites: Vec<String> = text
+                .lines()
+                .filter(|line| !line.trim_start().starts_with("//"))
+                .filter_map(|line| {
+                    let at = line.find("Command::new(")?;
+                    let rest = &line[at..];
+                    let close = rest.find(')')?;
+                    Some(rest[..=close].to_owned())
+                })
+                .collect();
+            if sites.is_empty() && !text.contains("process::Command") {
                 continue;
             }
             let relative = file
@@ -115,20 +133,33 @@ fn no_process_spawn_in_workspace_outside_the_one_documented_probe() {
                 .expect("the file is inside the workspace")
                 .to_string_lossy()
                 .replace('\\', "/");
-            if relative == ALLOWED {
-                allowed_site_found = true;
-            } else {
-                offenders.push(relative);
+            match ALLOWED.iter().find(|(path, _)| *path == relative) {
+                Some((_, expected)) => {
+                    seen_allowed.push(relative.clone());
+                    let expected: Vec<String> =
+                        expected.iter().map(|site| (*site).to_owned()).collect();
+                    if sites != expected {
+                        offenders.push(format!(
+                            "{relative}: spawn sites {sites:?}, allowed exactly {expected:?}"
+                        ));
+                    }
+                }
+                None => offenders.push(format!("{relative}: {sites:?}")),
             }
         }
     }
 
-    assert!(offenders.is_empty(), "a new subprocess site: {offenders:?}");
     assert!(
-        allowed_site_found,
-        "{ALLOWED} no longer spawns a process — delete the allowance rather than leaving it \
-         to excuse a future one"
+        offenders.is_empty(),
+        "an unlisted subprocess site: {offenders:#?}"
     );
+    for (path, _) in ALLOWED {
+        assert!(
+            seen_allowed.iter().any(|seen| seen == path),
+            "{path} no longer spawns a process — delete the allowance rather than leaving it \
+             to excuse a future one"
+        );
+    }
 }
 
 /// Plan-06 §3: a fixture plugin reachable from a shipped binary would let a
