@@ -30,23 +30,40 @@ use reachgraph_plugin_api::Registration;
 /// `#[allow]` in hand-written code — a lint suppression is how a real warning
 /// starts being invisible.
 pub fn analysis_registry() -> Result<Registry, RegistryError> {
-    let registry = with_language_plugins(Registry::new())?;
+    analysis_registry_reading(None)
+}
+
+/// The analysis registry, with the Rust plugin reading build-script output
+/// from `build_output` — ADR-0009. `None` is [`analysis_registry`].
+///
+/// The path reaches the plugin at construction because the plugin contract
+/// takes a repository root and nothing else; a per-run option has nowhere
+/// else to arrive.
+pub fn analysis_registry_reading(
+    build_output: Option<&std::path::Path>,
+) -> Result<Registry, RegistryError> {
+    let registry = with_language_plugins(Registry::new(), build_output)?;
     with_root_providers(registry)
 }
 
 #[cfg(feature = "lang-rust")]
-fn with_language_plugins(mut registry: Registry) -> Result<Registry, RegistryError> {
-    registry.register(
-        Registration::of(reachgraph_lang_rust::RustPlugin::new())
-            .symbols()
-            .edges()
-            .classifier(),
-    )?;
+fn with_language_plugins(
+    mut registry: Registry,
+    build_output: Option<&std::path::Path>,
+) -> Result<Registry, RegistryError> {
+    let plugin = match build_output {
+        Some(target) => reachgraph_lang_rust::RustPlugin::with_build_output(target),
+        None => reachgraph_lang_rust::RustPlugin::new(),
+    };
+    registry.register(Registration::of(plugin).symbols().edges().classifier())?;
     Ok(registry)
 }
 
 #[cfg(not(feature = "lang-rust"))]
-fn with_language_plugins(registry: Registry) -> Result<Registry, RegistryError> {
+fn with_language_plugins(
+    registry: Registry,
+    _build_output: Option<&std::path::Path>,
+) -> Result<Registry, RegistryError> {
     Ok(registry)
 }
 

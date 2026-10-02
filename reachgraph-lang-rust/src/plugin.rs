@@ -30,7 +30,7 @@
 //! fresh one are equally unshareable; what the lock kind decides is whether
 //! the crate compiles, not how long a snapshot lives.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use reachgraph_plugin_api::{
@@ -39,7 +39,7 @@ use reachgraph_plugin_api::{
 };
 
 use crate::coverage::RustCoverage;
-use crate::engine::{self, Loaded};
+use crate::engine::{self, LoadError, Loaded};
 use crate::preflight::{preflight_outcome, CargoProbe, PreflightFacts, WorkspaceProbe};
 use crate::PLUGIN_ID;
 
@@ -47,12 +47,30 @@ use crate::PLUGIN_ID;
 #[derive(Default)]
 pub struct RustPlugin {
     loaded: Mutex<Option<Loaded>>,
+    /// ADR-0009: a cargo target directory a previous build populated, whose
+    /// build-script output is read into the crate graph. `None` reads none.
+    build_output: Option<PathBuf>,
 }
 
 impl RustPlugin {
     /// A plugin that has loaded nothing yet.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// A plugin that reads build-script output (`OUT_DIR`) from `target`, a
+    /// cargo target directory an earlier `cargo build` or `cargo check`
+    /// populated.
+    ///
+    /// ADR-0009. reachgraph still runs no build: when `target` does not exist,
+    /// or holds no build-script output for any workspace member, the load
+    /// fails and names the path rather than producing an index that looks as
+    /// though it read something.
+    pub fn with_build_output(target: impl Into<PathBuf>) -> Self {
+        Self {
+            loaded: Mutex::default(),
+            build_output: Some(target.into()),
+        }
     }
 
     /// Load `root` if it is not the currently loaded root, then run `f`.
@@ -66,16 +84,30 @@ impl RustPlugin {
         root: &Path,
         f: impl FnOnce(&Loaded) -> Result<T, PluginError>,
     ) -> Result<T, PluginError> {
-        let mut guard = self.loaded.lock().map_err(|_| poisoned())?;
+        self.with_loaded_or(root, f).map_err(PluginError::from)
+    }
+
+    /// [`Self::with_loaded`], keeping a load failure's kind — preflight
+    /// reports an unreadable build output differently from a missing
+    /// workspace (ADR-0009).
+    fn with_loaded_or<T>(
+        &self,
+        root: &Path,
+        f: impl FnOnce(&Loaded) -> Result<T, PluginError>,
+    ) -> Result<T, LoadError> {
+        let mut guard = self
+            .loaded
+            .lock()
+            .map_err(|_| LoadError::Workspace(poisoned()))?;
         let stale = guard.as_ref().is_none_or(|loaded| !loaded.covers(root));
         if stale {
             // A different root invalidates the whole of `Loaded`, the `Vfs`
             // interning included (plan-03 §6's consistency rule). Nothing is
             // carried across.
-            *guard = Some(engine::load(root)?);
+            *guard = Some(engine::load(root, self.build_output.as_deref())?);
         }
         let loaded = guard.as_ref().expect("loaded above when stale");
-        f(loaded)
+        f(loaded).map_err(LoadError::Workspace)
     }
 
     /// The root a `Unit` belongs to.
@@ -151,9 +183,18 @@ impl Plugin for RustPlugin {
             });
         }
 
-        match self.with_loaded(root, |loaded| Ok(loaded.preflight_facts(cargo.clone()))) {
+        match self.with_loaded_or(root, |loaded| Ok(loaded.preflight_facts(cargo.clone()))) {
             Ok(facts) => preflight_outcome(&facts),
-            Err(error) => preflight_outcome(&PreflightFacts {
+            Err(LoadError::BuildOutput(error)) => preflight_outcome(&PreflightFacts {
+                cargo,
+                workspace: WorkspaceProbe::BuildOutputUnreadable {
+                    detail: error.to_string(),
+                },
+                members_with_unindexed_generated_code: Vec::new(),
+                rust_src_available: true,
+                proc_macro_expansion: crate::coverage::ProcMacroExpansion::Disabled,
+            }),
+            Err(LoadError::Workspace(error)) => preflight_outcome(&PreflightFacts {
                 cargo,
                 workspace: WorkspaceProbe::NotResolvable {
                     root: root.display().to_string(),
@@ -189,6 +230,23 @@ impl Plugin for RustPlugin {
         let mut notes = Vec::new();
         if let Some(statement) = coverage.generated_code_statement() {
             notes.push(statement);
+        }
+        // ADR-0009: which build output was read, per member. Never a silent
+        // choice — a target directory can hold several builds of a package.
+        if let crate::coverage::OutDirMechanism::ExistingBuildOutput { target_dir } =
+            &coverage.out_dir_mechanism
+        {
+            for member in &coverage.members {
+                if let Some(out_dir) = &member.out_dir_read {
+                    notes.push(format!(
+                        "read build-script output for {} from {} (in {}); reachgraph ran no \
+                         build, so this is as current as that build",
+                        member.package,
+                        out_dir.display(),
+                        target_dir.display()
+                    ));
+                }
+            }
         }
         match coverage.proc_macro_expansion {
             crate::coverage::ProcMacroExpansion::Disabled => notes.push(

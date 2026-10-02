@@ -96,6 +96,35 @@ fn preflight_outcome_messages_check_1b() {
     );
 }
 
+/// ADR-0009: build output that was asked for and cannot be read is its own
+/// failure, not a missing workspace. The workspace loaded; telling the user to
+/// point reachgraph at a `Cargo.toml` would send them after the wrong cause.
+#[test]
+fn preflight_outcome_messages_unreadable_build_output() {
+    let facts = PreflightFacts {
+        workspace: WorkspaceProbe::BuildOutputUnreadable {
+            detail: "build output directory /repo/target does not exist".to_owned(),
+        },
+        ..healthy()
+    };
+
+    let outcome = preflight_outcome(&facts);
+    let (reason, remediation) = failed(&outcome);
+
+    assert!(
+        reason.contains("/repo/target"),
+        "the path is named: {reason}"
+    );
+    assert!(
+        !remediation.contains("Cargo.toml"),
+        "the workspace is not the problem: {remediation}"
+    );
+    assert!(
+        remediation.contains("--read-build-output"),
+        "the remediation is about the flag that was given: {remediation}"
+    );
+}
+
 /// Check 1a runs before check 1b, because a workspace cannot be loaded without
 /// cargo and reporting the second failure would name a cause that is a symptom.
 #[test]
@@ -216,8 +245,13 @@ fn a_warning_states_its_finding_apart_from_its_fix() {
 /// that v0.1 **ships** with generated code unindexed and records the fact,
 /// which a refused run cannot do.
 ///
-/// So the remediation must not say "cargo build --workspace". A remediation
-/// that does not remediate is worse than none.
+/// So the remediation must not say "cargo build --workspace" ALONE. A
+/// remediation that does not remediate is worse than none.
+///
+/// ADR-0009 changed what does remediate it: a built workspace's out-dir IS
+/// loaded when the run is told where the build is. So the remediation now names
+/// that pair — build, then re-run reading the build output — and still never
+/// tells the user that building on its own changes anything.
 #[test]
 fn preflight_outcome_messages_check_2() {
     let facts = PreflightFacts {
@@ -239,8 +273,12 @@ fn preflight_outcome_messages_check_2() {
         "the consequence is named, not only the condition"
     );
     assert!(
-        !remediation.contains("cargo build"),
-        "plan-03 §11's remediation does not work and must not be shipped: {remediation:?}"
+        remediation.contains("--read-build-output"),
+        "ADR-0009: the remediation names the flag that makes a build visible: {remediation:?}"
+    );
+    assert!(
+        remediation.contains("building alone does not"),
+        "and it still says that a build without the flag changes nothing: {remediation:?}"
     );
     assert!(
         !matches!(outcome, Preflight::Failed { .. }),

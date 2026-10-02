@@ -270,6 +270,14 @@ When `target/*/out/` is absent, `preflight()` reports it and the run **degrades 
 cross-repo leaves are not indexed, and that fact is recorded in `coverage` rather than
 being silently absent from the output.
 
+> **Amended 2026-10-02 by [ADR-0009](0009-read-existing-build-output.md), citing yadgarhq
+> ADR-0842.** The never-runs-a-build half stands unchanged. The never-loads half is
+> reversed: given `--read-build-output <target-dir>`, reachgraph reads the build-script
+> output an earlier build left there and puts it into the crate graph. It asks
+> `rustc --print sysroot` for the sysroot. That is the target toolchain answering a
+> question, inside this section's carve-out. It never uses rust-analyzer's
+> `Sysroot::discover`, which can run `rustup component add`.
+
 This matches the second hard prerequisite already stated in `docs/design.md` §8 — MEASURED
 there that the client-stub edge resolved only because `target/debug/build/…/out/` existed,
 and that a fresh clone has no generated proto code and therefore no visible cross-repo

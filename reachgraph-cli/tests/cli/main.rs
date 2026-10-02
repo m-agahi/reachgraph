@@ -6,6 +6,8 @@
 //! `main` is three lines over this library, so a spawning harness would assert
 //! the same behaviour more slowly and would argue with §4.1's own guard.
 
+#[cfg(feature = "lang-rust")]
+mod build_output;
 mod formats;
 mod guards;
 mod paths;

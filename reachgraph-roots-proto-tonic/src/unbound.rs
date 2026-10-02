@@ -19,12 +19,14 @@ pub enum UnboundReason {
     ///
     /// Plan-04 §9 row 2 says to tell the user to "build the workspace once to
     /// make the cross-repo leaf visible". MEASURED by PR D
-    /// (`a_built_fixture_still_has_no_edge_into_generated_code`): building does
-    /// **not** make it visible. Nothing reachgraph is permitted to do puts
-    /// `OUT_DIR` code into the crate graph (plan-03 §9 D-D), so a built
-    /// repository and an unbuilt one produce the same answer here. Printing the
-    /// command anyway would ship a remediation that has been measured not to
-    /// work.
+    /// (`a_built_fixture_still_has_no_edge_into_generated_code`): building
+    /// alone does **not** make it visible — reachgraph does not go looking for
+    /// build output. Printing `cargo build` on its own would ship a remediation
+    /// measured not to work.
+    ///
+    /// ADR-0009 (2026-10-02) added what does work: a run given an existing
+    /// build's target directory loads its `OUT_DIR` code, and the consumed root
+    /// then binds to the generated stub. So the reason names that flag.
     GeneratedStubNotIndexed {
         /// The fully-qualified key, which resolves in the serving repository.
         join_key: String,
@@ -68,8 +70,9 @@ impl fmt::Display for UnboundReason {
                 f,
                 "consumed: no handler is expected in this repository; join key `{join_key}` \
                  resolves in the serving repository. The generated client stub is not in the \
-                 index either: reachgraph never asks the crate graph to load `OUT_DIR` code, so \
-                 building the workspace does not make the leaf visible"
+                 index either: this run read no build output, so `OUT_DIR` code is not in the \
+                 crate graph. Re-run with `--read-build-output <target-dir>` pointing at an \
+                 existing build (ADR-0009) to bind the stub"
             ),
             Self::NoCandidate { service, handler } => write!(
                 f,

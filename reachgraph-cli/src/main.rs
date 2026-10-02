@@ -16,15 +16,5 @@ fn main() -> ExitCode {
         err: &mut err,
     };
 
-    ExitCode::from(reachgraph_cli::run_with(
-        &match reachgraph_cli::registry::analysis_registry() {
-            Ok(registry) => registry,
-            Err(error) => {
-                eprintln!("error: the plugin registry is mis-wired: {error}");
-                return ExitCode::from(reachgraph_cli::EXIT_INTERNAL);
-            }
-        },
-        &args,
-        &mut streams,
-    ))
+    ExitCode::from(reachgraph_cli::run(&args, &mut streams))
 }

@@ -48,6 +48,14 @@ pub enum WorkspaceProbe {
         /// What went wrong.
         detail: String,
     },
+    /// ADR-0009: build output was asked for and could not be read — the
+    /// target directory is missing, holds no build-script output for any
+    /// member, or the standard library's source the inclusion needs did not
+    /// resolve. The workspace itself is not the problem.
+    BuildOutputUnreadable {
+        /// What went wrong, naming the path.
+        detail: String,
+    },
 }
 
 /// Everything [`preflight_outcome`] reads.
@@ -73,6 +81,13 @@ const CARGO_REMEDIATION: &str = "install a Rust toolchain (https://rustup.rs) an
 const WORKSPACE_REMEDIATION: &str =
     "point reachgraph at a directory containing Cargo.toml, or at any member of the \
      workspace you want indexed";
+
+/// ADR-0009's remediation, for build output that was asked for and is not
+/// there to read.
+const BUILD_OUTPUT_REMEDIATION: &str =
+    "build the workspace yourself and pass the target directory that build wrote to \
+     `--read-build-output`, or drop the flag; reachgraph reads an existing build and never \
+     runs one";
 
 /// Check 4's remediation.
 const RUST_SRC_REMEDIATION: &str = "rustup component add rust-src";
@@ -111,12 +126,18 @@ const PROC_MACRO_REMEDIATION: &str =
 /// check 2's remediation, builds the workspace and re-runs, gets the same empty
 /// result" — and §11 was written before that measurement.
 ///
-/// A remediation that does not remediate is worse than none. This one states
-/// what a reader can actually do: read the gap correctly.
+/// A remediation that does not remediate is worse than none.
+///
+/// ADR-0009 (2026-10-02) changed what remediates it. A build's out-dir **is**
+/// loaded when the run is told which target directory holds it, so the
+/// remediation names that pair. It keeps the measured half of the old text:
+/// building on its own still changes nothing, because reachgraph never looks
+/// for build output it was not pointed at, and never runs the build itself.
 const UNBUILT_REMEDIATION: &str =
-    "nothing on your side, and building the workspace does not help — reachgraph does not \
-     load generated code into the crate graph at all (plan-03 §9 D-D). Treat calls into \
-     generated code from these members as unmeasured rather than as absent";
+    "build the workspace yourself, then re-run with `--read-build-output <target-dir>` \
+     (ADR-0009); building alone does not change this index, because reachgraph reads build \
+     output only from a directory it is given and never runs the build. Until then, treat \
+     calls into generated code from these members as unmeasured rather than as absent";
 
 /// The outcome, from the facts.
 ///
@@ -150,6 +171,13 @@ pub fn preflight_outcome(facts: &PreflightFacts) -> Preflight {
         };
     }
 
+    if let WorkspaceProbe::BuildOutputUnreadable { detail } = &facts.workspace {
+        return Preflight::Failed {
+            reason: detail.clone(),
+            remediation: BUILD_OUTPUT_REMEDIATION.to_owned(),
+        };
+    }
+
     let mut findings: Vec<(String, &str)> = Vec::new();
 
     if !facts.members_with_unindexed_generated_code.is_empty() {
@@ -157,7 +185,7 @@ pub fn preflight_outcome(facts: &PreflightFacts) -> Preflight {
         findings.push((
             format!(
                 "{packages} declare a build script whose generated code is not in the index. \
-                 reachgraph does not run builds and does not load build-script output, so \
+                 reachgraph does not run builds, and this run read no build-script output, so \
                  generated code — tonic client stubs among it — is not indexed and \
                  cross-repo leaves do not appear in the graph."
             ),

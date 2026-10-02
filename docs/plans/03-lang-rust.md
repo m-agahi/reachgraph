@@ -212,6 +212,9 @@ ADR-0003 field 5, and the same discipline the rustup proxy loop taught.
 
 ### D-B. `load_out_dirs_from_check` — **DECIDED: reachgraph never runs a build**
 
+> **Amended 2026-10-02 by ADR-0009:** still never runs one. It may now **read** one the
+> user ran, given `--read-build-output`.
+
 **Decision 2026-09-17: reachgraph runs no build, ever.** No `cargo check`, no
 `cargo build`. `load_out_dirs_from_check` is **not** set to a value that builds.
 
@@ -821,6 +824,13 @@ plan-04 §11's consumed-root binding — both of which already depend on this an
 on it for a second, sharper reason.
 
 #### D-D. The fallback is decided: v0.1 ships without generated code indexed
+
+> **Amended 2026-10-02 by ADR-0009.** This is still the default. With
+> `--read-build-output <target-dir>`, an existing build's `OUT_DIR` is loaded and the edge
+> into generated code resolves. The 2026-09-19 measurement below missed two things: the
+> sysroot was never requested, so `include!` could not expand, and `OUT_DIR` went through
+> `load_workspace`'s `extra_env`, which does not reach a crate's env. ADR-0009 records
+> what was measured instead.
 
 **Decision 2026-09-17: if `extra_includes` does not load `OUT_DIR`, v0.1 ships with
 generated code unindexed and records the fact in coverage. §4 D-B is not revisited, and

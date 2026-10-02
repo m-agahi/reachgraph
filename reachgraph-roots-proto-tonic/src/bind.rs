@@ -122,14 +122,15 @@ pub fn bind_handler(symbols: &dyn SymbolIndex, operation: &Operation) -> Binding
 /// be a build script's output, which is what separates the generated leaf from
 /// a first-party wrapper of the same name.
 ///
-/// # This path is MEASURED not to fire against `reachgraph-lang-rust` today
+/// # When this path fires
 ///
-/// PR D measured that generated code is not in the crate graph at all, built or
-/// unbuilt (plan-03 §9 D-D), so no symbol with such a path reaches this
-/// function and every consumed root takes the unbound arm. The code path is
-/// written and tested anyway because the v0.2 join needs the data contract, and
-/// because the day `OUT_DIR` becomes loadable this is the binding that has to
-/// already be right.
+/// Only when the Rust plugin read an existing build's output (ADR-0009,
+/// `--read-build-output`). Without it, generated code is not in the crate
+/// graph (plan-03 §9 D-D), no symbol with such a path reaches this function,
+/// and every consumed root takes the unbound arm. MEASURED 2026-10-02 with it,
+/// on yadgarhq/task built at its default branch: all five consumed
+/// `TaskDbService` roots bind here, and all six served `TaskService` roots
+/// still bind through [`bind_handler`].
 pub fn bind_generated_client(symbols: &dyn SymbolIndex, operation: &Operation) -> Binding {
     let handler = operation.handler_name();
     let client_type = format!("{}Client", operation.service);

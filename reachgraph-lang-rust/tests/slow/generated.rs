@@ -9,10 +9,15 @@
 //! unindexed and **says so**. So the assertion is the D-D behaviour: the edge
 //! is absent, the absence is reported, and the control edge beside it is
 //! present so an absent edge cannot be confused with a broken fixture.
+//!
+//! ADR-0009 (2026-10-02) adds the other half: told where an existing build's
+//! target directory is, the plugin loads the generated code and the edge is
+//! **present**. Both halves are asserted, because the default — no flag, no
+//! generated code, and a statement saying so — is unchanged.
 
 use reachgraph_plugin_api::{EdgeTarget, Plugin, Preflight};
 
-use crate::support::{all_edges, all_symbols, build_fixture, load, named, unbuilt_copy};
+use crate::support::{all_edges, all_symbols, build_fixture, fixture, load, named, unbuilt_copy};
 
 /// Built, and the generated leaf is still not indexed.
 ///
@@ -115,8 +120,9 @@ fn an_unbuilt_fixture_warns_and_still_runs() {
         "{reason:?}"
     );
     assert!(
-        !remediation.contains("cargo build"),
-        "the remediation does not name a command that does not work: {remediation:?}"
+        remediation.contains("--read-build-output"),
+        "the remediation names what does work — reading an existing build, ADR-0009: \
+         {remediation:?}"
     );
 
     let coverage = plugin.coverage().expect("preflight loaded the workspace");
@@ -128,4 +134,93 @@ fn an_unbuilt_fixture_warns_and_still_runs() {
     use reachgraph_plugin_api::LanguagePlugin;
     let units = plugin.discover_units(&root).expect("a warned plugin runs");
     assert!(!units.is_empty());
+}
+
+/// ADR-0009: with an existing build's target directory named, the generated
+/// leaf **is** indexed and the edge into it exists.
+///
+/// The other half of `a_built_fixture_still_has_no_edge_into_generated_code`:
+/// same fixture, same build, and the only difference is the build output the
+/// plugin was told to read. The harness built it; the plugin ran nothing.
+#[test]
+fn reading_existing_build_output_indexes_the_generated_leaf() {
+    use reachgraph_plugin_api::LanguagePlugin;
+
+    build_fixture("fx-macro");
+    let root = fixture("fx-macro");
+
+    let plugin = reachgraph_lang_rust::RustPlugin::with_build_output(root.join("target"));
+    let units = plugin
+        .discover_units(&root)
+        .expect("the built fixture loads");
+    let symbols = all_symbols(&plugin, &units);
+    let edges = all_edges(&plugin, &units);
+
+    let caller = named(&symbols, "caller");
+    let generated = named(&symbols, "generated_leaf");
+    assert!(
+        generated.range.file.starts_with("target"),
+        "the generated leaf is located in the build output, not at the include! site: {:?}",
+        generated.range.file
+    );
+    assert_eq!(
+        generated.doc.as_deref().map(str::trim),
+        Some("The generated leaf."),
+        "the generated item carries its doc comment"
+    );
+    assert!(
+        edges.iter().any(|edge| edge.from == caller.id
+            && matches!(&edge.to, EdgeTarget::Resolved(id) if id.raw == generated.id.raw)),
+        "caller -> generated_leaf is an edge once the build output is read"
+    );
+
+    let coverage = plugin.coverage().expect("a load happened");
+    assert!(
+        coverage.members.iter().all(|member| member.out_dir_loaded),
+        "every build-script member is reported loaded: {coverage:#?}"
+    );
+    assert_eq!(coverage.generated_code_statement(), None);
+
+    // Which build output was read is part of the run record, never a silent
+    // choice: a target directory can hold several builds of one package.
+    use reachgraph_plugin_api::Plugin;
+    let notes = plugin.notes();
+    assert!(
+        notes
+            .iter()
+            .any(|note| note.contains("read build-script output")
+                && note.contains("/out")
+                && note.contains(&root.join("target").display().to_string())),
+        "the out dir read, and the target it came from, are in the notes: {notes:#?}"
+    );
+}
+
+/// ADR-0009's loud failure: the build output named does not exist, or holds no
+/// build-script output, so the load refuses and the message names the path.
+#[test]
+fn naming_a_target_without_build_output_fails_naming_the_path() {
+    use reachgraph_plugin_api::LanguagePlugin;
+
+    let root = unbuilt_copy("fx-macro");
+    let target = root.join("target");
+
+    let plugin = reachgraph_lang_rust::RustPlugin::with_build_output(&target);
+    let error = plugin
+        .discover_units(&root)
+        .expect_err("a missing target directory is a refusal, not an empty read");
+    assert!(
+        error.to_string().contains(&target.display().to_string()),
+        "the refusal names the path: {error}"
+    );
+
+    std::fs::create_dir_all(&target).expect("an empty target dir");
+    let plugin = reachgraph_lang_rust::RustPlugin::with_build_output(&target);
+    let message = plugin
+        .discover_units(&root)
+        .expect_err("an existing but empty target directory is refused too")
+        .to_string();
+    assert!(
+        message.contains(&target.display().to_string()) && message.contains("OUT_DIR"),
+        "the refusal names the path and what was missing: {message}"
+    );
 }

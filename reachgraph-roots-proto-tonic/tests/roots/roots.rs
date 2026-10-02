@@ -136,6 +136,10 @@ fn consumed_rpc_is_unbound_with_reason() {
             !reason.contains("cargo build"),
             "MEASURED by PR D: building does not make the generated leaf visible: {reason}"
         );
+        assert!(
+            reason.contains("--read-build-output"),
+            "ADR-0009: what does make it visible is named: {reason}"
+        );
     }
 }
 

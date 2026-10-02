@@ -63,8 +63,10 @@ rather than with the graph.
 An absent edge is not a proven absence. reachgraph reports the limits of each run — in
 the terminal, and inside the artifact — and the wording is deliberate throughout: code is
 described as **not reachable from any endpoint version in this index**, never as dead
-(ADR-0007). Proc-macro expansion is off in v0.1 (ADR-0728) and generated code is not
-loaded, so calls crossing either are unmeasured rather than absent.
+(ADR-0007). Proc-macro expansion is off in v0.1 (ADR-0728), so calls crossing a macro are
+unmeasured rather than absent. Generated code is not loaded unless you point
+`--read-build-output` at the target directory of a build you ran (ADR-0009); reachgraph
+never runs the build itself.
 
 ## Licence
 
