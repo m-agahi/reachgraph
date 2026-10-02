@@ -35,6 +35,17 @@ single-file `overview.html`, and the machine-readable `endpoints.json`,
 blocks `fetch()` for the sharded pages — `overview.html` opens straight from disk
 (ADR-0006).
 
+Several repositories' artifacts join into one estate view on each RPC's fully-qualified
+key, with a consumed RPC in one repository linked to the handler that serves it in
+another (ADR-0010):
+
+```console
+$ reachgraph merge gateway=./out-gateway iam=./out-iam iam-db=./out-iam-db -o ./estate
+```
+
+That writes `estate.json` and a script-free `estate.html`. Keys with no counterpart in
+the merge are labelled, not dropped.
+
 **The artifact is a structural map of your repository.** It carries file paths, function
 and method names, doc comment text and service topology. Treat it with the same care as
 the source, and read the warning the binary prints before publishing one anywhere.

@@ -12,6 +12,8 @@ mod support;
 
 mod doubles;
 
+mod estate;
+
 mod artifact;
 mod assemble;
 mod classify;

@@ -25,6 +25,7 @@ mod assemble;
 mod classify;
 mod diag;
 mod emit;
+pub mod estate;
 mod graph;
 mod intern;
 mod reach;

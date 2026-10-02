@@ -47,6 +47,16 @@ pub enum Command {
     },
     /// List what is registered.
     Plugins,
+    /// Join several repositories' artifacts on `join_key` — ADR-0010.
+    Merge {
+        /// Each input: an `endpoints.json`, or the directory holding one,
+        /// optionally prefixed `label=` to name the repository.
+        inputs: Vec<String>,
+        /// Where `estate.json` and `estate.html` go.
+        out: PathBuf,
+        /// Overwrite those two files when they already exist.
+        force: bool,
+    },
     /// Serve an output directory over loopback.
     Serve {
         /// The directory to serve.
@@ -115,6 +125,7 @@ usage:
   reachgraph <repo> [-o|--out <dir>] [--force] [--json] [-q|--quiet]
                     [--renderer <name>] [--inline-threshold <bytes>]
                     [--no-overview] [--read-build-output <target-dir>]
+  reachgraph merge <artifact> <artifact>... [-o|--out <dir>] [--force]
   reachgraph serve <out> [--port <n>]
   reachgraph preflight <repo> [--json] [--read-build-output <target-dir>]
   reachgraph plugins
@@ -140,6 +151,10 @@ usage:
                   reachgraph never runs the build; with no build output
                   there, the run fails and names the path. Needs the
                   rust-src component
+  <artifact>      for merge: a per-repository endpoints.json, or the output
+                  directory holding it; prefix `label=` to name the repository
+                  (default: the directory's name). merge writes estate.json and
+                  estate.html, joining consumed and served RPCs on join_key
       --port      loopback port for `serve`, or 0 for a free one (default: 0)
 
 exit codes: 0 analysed  1 internal error  2 preflight failed
@@ -164,6 +179,7 @@ pub fn parse(args: &[String]) -> Result<Command, UsageError> {
         "plugins" => return plugins(&args[1..]),
         "preflight" => return preflight(&args[1..]),
         "serve" => return serve(&args[1..]),
+        "merge" => return merge(&args[1..]),
         _ => {}
     }
 
@@ -247,6 +263,46 @@ fn serve(rest: &[String]) -> Result<Command, UsageError> {
         Some(out) => Ok(Command::Serve { out, port }),
         None => Err(UsageError("serve needs a directory to serve".to_owned())),
     }
+}
+
+fn merge(rest: &[String]) -> Result<Command, UsageError> {
+    let mut inputs: Vec<String> = Vec::new();
+    let mut out: Option<PathBuf> = None;
+    let mut force = false;
+    let mut expecting_out = false;
+
+    for argument in rest {
+        if expecting_out {
+            out = Some(PathBuf::from(argument));
+            expecting_out = false;
+            continue;
+        }
+        match argument.as_str() {
+            "-o" | "--out" => expecting_out = true,
+            "--force" => force = true,
+            other if other.starts_with('-') => {
+                return Err(UsageError(format!("unknown flag: {other}")))
+            }
+            other => inputs.push(other.to_owned()),
+        }
+    }
+
+    if expecting_out {
+        return Err(UsageError("--out takes a directory".to_owned()));
+    }
+    // One artifact joins with nothing. Accepting it would write an estate
+    // whose every key is unmatched, which reads as a finding about the code.
+    if inputs.len() < 2 {
+        return Err(UsageError(
+            "merge needs at least two artifacts to join".to_owned(),
+        ));
+    }
+
+    Ok(Command::Merge {
+        inputs,
+        out: out.unwrap_or_else(|| PathBuf::from(DEFAULT_OUT)),
+        force,
+    })
 }
 
 /// What the next argument is a value for.
@@ -358,8 +414,8 @@ fn analyse(args: &[String]) -> Result<Command, UsageError> {
 }
 
 /// Plan-06 §8 question 2: a single path, and the flag shape is not reserved.
-/// Cross-repository stitching is out of v0.1 (ADR-0008), and accepting several
-/// paths now would invite a half-implementation of it.
+/// Cross-repository stitching is not the analyse path's job: `reachgraph merge`
+/// (ADR-0010) joins artifacts that single-repository runs already wrote.
 fn set_once(slot: &mut Option<PathBuf>, value: &str, what: &str) -> Result<(), UsageError> {
     if slot.is_some() {
         return Err(UsageError(format!("one {what} at a time: {value}")));
