@@ -39,9 +39,10 @@ use static_assertions::assert_impl_all;
 // neither — an `Rc`, a `RefCell` — fails at the fixture rather than at
 // whichever caller first tries to share a registry.
 //
-// There is no `Renderer` row. A renderer is not a `Plugin` (plan-00 §3.6), it
-// takes a `&GraphView` that plan-01 has not defined yet, and `Capability`
-// has no `Render` variant for a case to declare.
+// There is no `Renderer` row. A renderer is not a `Plugin` (plan-00 §3.6): it
+// implements `Renderer`, reads a `RenderInput`, writes through an
+// `OutputSink`, and `Capability` has no `Render` variant for a case to
+// declare. Its neutrality is asserted in reachgraph-plugin-api/tests/renderer.rs.
 assert_impl_all!(
     FixturePlugin: Plugin,
     LanguagePlugin,

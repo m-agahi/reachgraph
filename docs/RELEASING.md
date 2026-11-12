@@ -147,11 +147,20 @@ build and fails if anything was added, or if anything but those two names was re
 
 ## 3. The manual browser check — step 9, and nothing else covers it
 
-**NOT PERFORMED FOR THIS RELEASE.** No browser has ever opened a reachgraph page. Plan-05
-§8.1 records that there is no browser harness, and `cargo test` asserts the emitted HTML
-by parsing it — which proves the document is well-formed and says nothing about whether
+**Record, 2026-11-12 — run after the 0.1.0 release, not before the tag.** The check ran
+against the published 0.1.0 wheel from PyPI in headless Chromium 153.0.8010.47, on real
+repositories rather than the golden artifact. It opened `overview.html` and `index.html`
+over `file://` and the emitted directory over `reachgraph serve`. Cytoscape, fcose and
+expand-collapse load and render. Item 3 could not be exercised: every versioned service in
+the tested repositories was ambiguous, so no root binds per version (task 2062). The console
+was not clean (item 6): a favicon 404 under `serve`, a duplicate `expandCollapse`
+registration warning, and `label` width/height deprecation warnings.
+
+Plan-05 §8.1 records that there is no browser harness, and `cargo test` asserts the emitted
+HTML by parsing it — which proves the document is well-formed and says nothing about whether
 Cytoscape, fcose or expand-collapse actually initialise. **This checklist item is the only
 thing in the project that would catch an integration failure in the vendored JavaScript.**
+The next release must re-run it before the tag.
 
 Open the golden artifact and verify, by eye:
 
