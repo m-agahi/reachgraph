@@ -177,12 +177,17 @@ produces, and it is not good enough to label a box with.
 | Nx / Turborepo                  | alive                                                    | stop at the package node                                                                                                                                                                                                                                                                                                                                                        |
 | Jaeger / Tempo service graphs   | alive                                                    | service-to-service only; no function-level aggregation exists in any OTel UI                                                                                                                                                                                                                                                                                                    |
 | Swimm, CodeBoarding, GitDiagram | alive                                                    | descriptions are LLM-authored by vendor documentation                                                                                                                                                                                                                                                                                                                           |
+| floorplan                       | alive, MIT, 3733 stars (verified 2026-11-12)             | A Claude Code / Codex skill plugin (Node scripts), not a standalone tool. File/module grain, not function grain. Edges are regex matches over imports and HTTP routes. Labels are LLM-written. No gRPC. No per-endpoint reachability.                                                                                                                                           |
 
 **crabviz is ~60–70% of this.** Its architecture is sound and worth copying. Its licence is
 AGPL-3.0, so deriving from the code makes this AGPL too; and its README states it "is
 better suited as an IDE/editor extension than a standalone command line tool", so a
 headless CLI argues with the author's stated position rather than filling a gap he wants
 filled. **Recommendation: borrow the architecture, not the code.**
+
+floorplan's UI string "Nothing uses this file" is a counterexample to the wording rule in
+§8: it asserts absence from a regex index that cannot see calls, which is the claim
+ADR-0007 forbids.
 
 ## 7. v0.1 scope
 
