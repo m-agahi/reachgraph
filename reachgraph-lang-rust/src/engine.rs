@@ -5,6 +5,8 @@
 //! all stop here (ADR-0008 leaks 1, 2 and 5); what leaves is
 //! `reachgraph-plugin-api` types and [`crate::coverage::RustCoverage`].
 
+use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -16,7 +18,7 @@ use ra_ap_paths::{AbsPathBuf, Utf8PathBuf};
 use ra_ap_project_model::{
     CargoConfig, ProjectManifest, ProjectWorkspace, ProjectWorkspaceKind, RustLibSource, TargetKind,
 };
-use ra_ap_syntax::{TextRange, TextSize};
+use ra_ap_syntax::{ast, AstNode as _, SyntaxKind, SyntaxNode, TextRange, TextSize};
 use ra_ap_vfs::{Vfs, VfsPath};
 use reachgraph_plugin_api::{
     Category, Edge, EdgeTarget, InferenceMode, NodeId, PluginError, Provenance, SourceRange, Span,
@@ -26,7 +28,8 @@ use reachgraph_plugin_api::{
 use crate::build_output::{locate_out_dirs, stale_inputs};
 use crate::classify::{classify_facts, CrateOrigin, PathFacts};
 use crate::coverage::{
-    MemberCoverage, OutDirMechanism, ProcMacroExpansion, RustCoverage, StdlibSource,
+    FunctionCallCounts, MemberCoverage, OutDirMechanism, ProcMacroExpansion, RustCoverage,
+    StdlibSource, UnitCallCounts,
 };
 use crate::ids::{node_id, RawParts};
 use crate::kinds::{declared_trait_name, map_kind, render_impl_header, RustItem};
@@ -120,6 +123,21 @@ pub(crate) struct Loaded {
     sysroot_src: Option<PathBuf>,
     units: Vec<UnitFacts>,
     coverage: RustCoverage,
+    /// Task 2068: one record per node `edges_from` answered, keyed by the
+    /// node's `raw`. Keyed rather than summed so that asking about a node
+    /// twice replaces its record instead of counting it twice, which keeps
+    /// the summed `edges` equal to the edges of one walk however often the
+    /// core asks. A `RefCell` because every caller already holds the plugin's
+    /// lock, and it lives here so a reload clears it with everything else.
+    call_records: RefCell<BTreeMap<String, CallRecord>>,
+}
+
+/// What one `edges_from` call saw — task 2068 phase 1.
+#[derive(Clone, Debug, Default)]
+struct CallRecord {
+    /// The unit half of the node's id.
+    unit: String,
+    counts: FunctionCallCounts,
 }
 
 impl Loaded {
@@ -355,6 +373,7 @@ pub(crate) fn load(root: &Path, build_output: Option<&Path>) -> Result<Loaded, L
         vfs,
         sysroot_src: sysroot_src.clone(),
         units: enumerated.units,
+        call_records: RefCell::default(),
         coverage: RustCoverage {
             members: enumerated.coverage,
             stdlib: match (&sysroot_src, sysroot) {
@@ -1102,6 +1121,14 @@ fn is_test(db: &RootDatabase, definition: ra_ap_ide_db::defs::Definition<'_>) ->
     }
 }
 
+/// Call and method-call expressions under `node`, `node` included — the two
+/// kinds `outgoing_calls` turns into call items (`ast::CallableExpr`).
+fn count_calls(node: &SyntaxNode) -> usize {
+    node.descendants()
+        .filter(|it| ast::CallExpr::can_cast(it.kind()) || ast::MethodCallExpr::can_cast(it.kind()))
+        .count()
+}
+
 impl Loaded {
     /// Plan-03 §9 — every call site in a unit, as an [`Edge`].
     ///
@@ -1173,10 +1200,23 @@ impl Loaded {
             .outgoing_calls(&config, position)
             .map_err(|_| engine_error("the engine cancelled outgoing_calls"))?;
 
+        let (call_sites, macro_call_sites) = self.call_sites_at(file_id, position.offset);
+        let mut record = CallRecord {
+            unit: parts.unit.0.clone(),
+            counts: FunctionCallCounts {
+                call_sites,
+                macro_call_sites,
+                ..FunctionCallCounts::default()
+            },
+        };
+
         // `Ok(None)` means "no call hierarchy at this position" and is not an
-        // error (plan-03 §9). It emits no edges and is counted, never guessed
-        // around.
+        // error (plan-03 §9). It emits no edges and is never guessed around;
+        // `FunctionCallCounts::no_hierarchy` counts it, and the call-counts
+        // note reports the total (task 2068).
         let Some(items) = items else {
+            record.counts.no_hierarchy = true;
+            self.record_calls(node, record);
             return Ok(Vec::new());
         };
 
@@ -1186,6 +1226,7 @@ impl Loaded {
                 // The target failed the VFS lookup, so it is located nowhere
                 // and is genuinely **external** in plan-01 §7.0's sense. No
                 // `Symbol` is emitted for it and no edge can name it.
+                record.counts.targets_dropped += 1;
                 continue;
             };
             let target_unit = self.unit_of_target(item.target.file_id);
@@ -1197,6 +1238,7 @@ impl Loaded {
 
             for range in item.ranges {
                 let Some(call_path) = self.path_of(range.file_id) else {
+                    record.counts.ranges_dropped += 1;
                     continue;
                 };
                 edges.push(Edge {
@@ -1224,7 +1266,76 @@ impl Loaded {
                 });
             }
         }
+        record.counts.edges = edges.len();
+        self.record_calls(node, record);
         Ok(edges)
+    }
+
+    /// Keep `record` as the one record for `node`, replacing any earlier one.
+    fn record_calls(&self, node: &NodeId, record: CallRecord) {
+        self.call_records
+            .borrow_mut()
+            .insert(node.raw.clone(), record);
+    }
+
+    /// Task 2068: the counts `edges_from` recorded, summed per unit and
+    /// sorted by unit id. Each function goes through
+    /// [`UnitCallCounts::add_function`], which takes the gap per function.
+    pub(crate) fn call_counts(&self) -> Vec<UnitCallCounts> {
+        let mut per_unit: BTreeMap<&str, UnitCallCounts> = BTreeMap::new();
+        let records = self.call_records.borrow();
+        for record in records.values() {
+            per_unit
+                .entry(record.unit.as_str())
+                .or_insert_with(|| UnitCallCounts::new(record.unit.clone()))
+                .add_function(&record.counts);
+        }
+        per_unit.into_values().collect()
+    }
+
+    /// Task 2068: the call sites in the body of the function at `offset`, as
+    /// `(outside macro calls, in one-level macro expansions)`.
+    ///
+    /// Picks the item the way `outgoing_calls` does in ra_ap_ide 0.0.352
+    /// (`call_hierarchy.rs`): the identifier token at the offset, and the
+    /// item two levels above it. So the counted body is the body
+    /// `outgoing_calls` walked. No function there, or no body, is `(0, 0)`.
+    ///
+    /// The macro bucket is separate because `outgoing_calls` walks the
+    /// unexpanded body, where a macro call's arguments are a token tree with
+    /// no call expressions in it: MEASURED 2026-11-13, `twice!(helper_e(1))`
+    /// yields no edge to `helper_e`. Each macro call is expanded one level
+    /// and the call expressions in the expansion are counted; a macro call
+    /// the engine cannot expand adds 0.
+    fn call_sites_at(&self, file_id: ra_ap_vfs::FileId, offset: TextSize) -> (usize, usize) {
+        let db = self.host.raw_database();
+        let sema = ra_ap_hir::Semantics::new(db);
+        let file = sema.parse_guess_edition(file_id);
+        let Some(token) = file
+            .syntax()
+            .token_at_offset(offset)
+            .find(|token| token.kind() == SyntaxKind::IDENT)
+        else {
+            return (0, 0);
+        };
+        let Some(body) = token
+            .parent_ancestors()
+            .nth(1)
+            .and_then(ast::Fn::cast)
+            .and_then(|function| function.body())
+        else {
+            return (0, 0);
+        };
+
+        let call_sites = count_calls(body.syntax());
+        let macro_call_sites = body
+            .syntax()
+            .descendants()
+            .filter_map(ast::MacroCall::cast)
+            .filter_map(|call| sema.expand_macro_call(&call))
+            .map(|expansion| count_calls(&expansion.value))
+            .sum();
+        (call_sites, macro_call_sites)
     }
 
     /// Turn a `raw`'s path back into something the VFS can look up.

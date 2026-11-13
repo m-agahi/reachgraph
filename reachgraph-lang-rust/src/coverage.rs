@@ -224,3 +224,192 @@ impl RustCoverage {
         ))
     }
 }
+
+/// Calls in the source against edges produced, for one unit — task 2068.
+///
+/// # Why these counters exist
+///
+/// Plan-03 §12 promised them for v0.1 and they were never built. Without
+/// them a call `ra_ap` cannot resolve leaves no trace at all: it yields no
+/// `CallItem`, so it yields no edge, and the index cannot tell a function
+/// that calls nothing from one whose calls all went unresolved. MEASURED
+/// 2026-11-12: a fn item passed by value (`map(helper)`) and a call through a
+/// fn pointer (`f(1)`) both produce no edge today.
+///
+/// `call_sites` and `macro_call_sites` are counted from the syntax tree, so
+/// they do not depend on name resolution. Read in ra_ap_ide 0.0.352's
+/// `call_hierarchy.rs`: `outgoing_calls` walks the call and method-call
+/// expressions of the same body, so for a function written in the source
+/// `call_sites - edges` approximates the call sites it could not resolve.
+///
+/// # The gap is taken per function, and a surplus is reported apart
+///
+/// A function can have more edges than call sites. Read in source, not
+/// measured: a function a macro generates is found by `outgoing_calls`
+/// through `descend_into_macros_exact`, while this count does not descend and
+/// sees no call sites; and a call to a function a macro defines can give two
+/// edges, one per navigation target (def site and call site). Summing
+/// `call_sites` and `edges` first would let that surplus cancel calls without
+/// an edge in other functions. So [`UnitCallCounts::add_function`] floors each
+/// function's difference at 0 in both directions and sums the two halves
+/// apart: `calls_without_edge` and `edges_beyond_call_sites`. It is a count,
+/// not a list: which call sites lost their edge is not recorded.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct UnitCallCounts {
+    /// The unit id.
+    pub unit: String,
+    /// Functions and methods `outgoing_calls` was asked about.
+    pub queried: usize,
+    /// Of those, how many had no call hierarchy at all — `outgoing_calls`
+    /// returned none. MEASURED 2026-11-13 in ra_ap_ide 0.0.352: that happens
+    /// only when the file has no token at the offset, so on real code this
+    /// is 0. It is reported so that a non-zero value is seen rather than
+    /// assumed away.
+    pub no_hierarchy: usize,
+    /// Call targets skipped because their file failed the VFS lookup.
+    pub targets_dropped: usize,
+    /// Call ranges skipped because their file failed the VFS lookup.
+    pub ranges_dropped: usize,
+    /// Edges produced.
+    pub edges: usize,
+    /// `CallExpr` and `MethodCallExpr` nodes in the function bodies, outside
+    /// macro calls.
+    pub call_sites: usize,
+    /// `CallExpr` and `MethodCallExpr` nodes in the one-level expansion of
+    /// each macro call in the function bodies — the calls the expansion
+    /// holds, so `twice!(helper_e(1))` with `$e + $e` counts 2, not the
+    /// one call written in the source. `outgoing_calls` walks the
+    /// unexpanded body, so these calls get no edge (MEASURED 2026-11-13 with
+    /// `twice!(helper_e(1))`). A macro call the engine cannot expand adds 0,
+    /// and a macro call inside an expansion is not expanded again.
+    pub macro_call_sites: usize,
+    /// Sum over functions of `call_sites - edges`, each floored at 0.
+    pub calls_without_edge: usize,
+    /// Sum over functions of `edges - call_sites`, each floored at 0.
+    pub edges_beyond_call_sites: usize,
+}
+
+/// What one `edges_from` call saw for one function or method — task 2068.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FunctionCallCounts {
+    /// `outgoing_calls` returned none.
+    pub no_hierarchy: bool,
+    /// Call targets skipped because their file failed the VFS lookup.
+    pub targets_dropped: usize,
+    /// Call ranges skipped because their file failed the VFS lookup.
+    pub ranges_dropped: usize,
+    /// Edges produced.
+    pub edges: usize,
+    /// See [`UnitCallCounts::call_sites`].
+    pub call_sites: usize,
+    /// See [`UnitCallCounts::macro_call_sites`].
+    pub macro_call_sites: usize,
+}
+
+impl UnitCallCounts {
+    /// An empty count for `unit`.
+    pub fn new(unit: impl Into<String>) -> Self {
+        Self {
+            unit: unit.into(),
+            ..Self::default()
+        }
+    }
+
+    /// Add one queried function.
+    pub fn add_function(&mut self, function: &FunctionCallCounts) {
+        self.queried += 1;
+        self.no_hierarchy += usize::from(function.no_hierarchy);
+        self.targets_dropped += function.targets_dropped;
+        self.ranges_dropped += function.ranges_dropped;
+        self.edges += function.edges;
+        self.call_sites += function.call_sites;
+        self.macro_call_sites += function.macro_call_sites;
+        self.calls_without_edge += function.call_sites.saturating_sub(function.edges);
+        self.edges_beyond_call_sites += function.edges.saturating_sub(function.call_sites);
+    }
+}
+
+/// Units with fewer call sites than this are never listed by name.
+const LISTED_MIN_CALL_SITES: usize = 20;
+/// At most this many units are listed by name.
+const LISTED_MAX_UNITS: usize = 5;
+
+/// The one aggregated call-counts note — task 2068 phase 1.
+///
+/// Index-wide totals, then at most five units with 20 or more call sites
+/// where at least half of those have no edge, highest share first. One note
+/// rather than one per unit: a repository such as tonic has about 130 units,
+/// and a note per unit would bury every other note, the stale-build warnings
+/// of ADR-0009 among them.
+///
+/// `None` when nothing was queried — there is then nothing to count, and a
+/// line of zeros would read as a finding.
+pub fn call_counts_note(units: &[UnitCallCounts]) -> Option<String> {
+    let mut total = UnitCallCounts::default();
+    for unit in units {
+        total.queried += unit.queried;
+        total.no_hierarchy += unit.no_hierarchy;
+        total.targets_dropped += unit.targets_dropped;
+        total.ranges_dropped += unit.ranges_dropped;
+        total.edges += unit.edges;
+        total.call_sites += unit.call_sites;
+        total.macro_call_sites += unit.macro_call_sites;
+        total.calls_without_edge += unit.calls_without_edge;
+        total.edges_beyond_call_sites += unit.edges_beyond_call_sites;
+    }
+    if total.queried == 0 {
+        return None;
+    }
+
+    let mut note = format!(
+        "reachgraph-lang-rust call counts: {} functions and methods queried, {} with no call \
+         hierarchy (outgoing_calls returned none), {} call targets dropped at the file lookup, \
+         {} call ranges dropped at the file lookup, {} edges produced, {} call sites in the \
+         source outside macro calls, {} calls in one-level macro expansions; {} calls in the \
+         source with no edge in this index; {} edges in functions that have more edges than \
+         call sites",
+        total.queried,
+        total.no_hierarchy,
+        total.targets_dropped,
+        total.ranges_dropped,
+        total.edges,
+        total.call_sites,
+        total.macro_call_sites,
+        total.calls_without_edge,
+        total.edges_beyond_call_sites,
+    );
+
+    let mut listed: Vec<&UnitCallCounts> = units
+        .iter()
+        .filter(|unit| {
+            unit.call_sites >= LISTED_MIN_CALL_SITES
+                && 2 * unit.calls_without_edge >= unit.call_sites
+        })
+        .collect();
+    // calls_without_edge / call_sites descending, compared by
+    // cross-multiplication so no float rounds two shares together; ties by
+    // unit name.
+    listed.sort_by(|a, b| {
+        (b.calls_without_edge * a.call_sites)
+            .cmp(&(a.calls_without_edge * b.call_sites))
+            .then_with(|| a.unit.cmp(&b.unit))
+    });
+    listed.truncate(LISTED_MAX_UNITS);
+    if !listed.is_empty() {
+        let entries: Vec<String> = listed
+            .iter()
+            .map(|unit| {
+                format!(
+                    "{} ({} call sites, {} with no edge)",
+                    unit.unit, unit.call_sites, unit.calls_without_edge
+                )
+            })
+            .collect();
+        note.push_str(&format!(
+            "; units with {LISTED_MIN_CALL_SITES} or more call sites where at least half have no \
+             edge: {}",
+            entries.join(", ")
+        ));
+    }
+    Some(note)
+}

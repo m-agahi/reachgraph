@@ -14,6 +14,7 @@
 #![cfg(feature = "slow-tests")]
 
 mod attrs;
+mod call_counts;
 mod docs;
 mod generated;
 mod generics;

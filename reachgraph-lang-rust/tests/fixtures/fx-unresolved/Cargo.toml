@@ -1,0 +1,5 @@
+# fx-unresolved — task 2068 phase 1. Four callback shapes, a macro call and an
+# empty module. No dependencies, no build script.
+[workspace]
+resolver = "2"
+members = ["u"]
