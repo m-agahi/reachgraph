@@ -6,6 +6,7 @@
 //! what ADR-0008's eight leaks are each an instance of.
 
 mod build_output;
+mod call_counts;
 mod classify;
 mod engine;
 mod ids;

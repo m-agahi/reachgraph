@@ -38,7 +38,7 @@ use reachgraph_plugin_api::{
     Plugin, PluginError, PluginId, PositionEncoding, Preflight, Symbol, SymbolProvider, Unit,
 };
 
-use crate::coverage::RustCoverage;
+use crate::coverage::{call_counts_note, RustCoverage, UnitCallCounts};
 use crate::engine::{self, LoadError, Loaded};
 use crate::preflight::{preflight_outcome, CargoProbe, PreflightFacts, WorkspaceProbe};
 use crate::PLUGIN_ID;
@@ -134,6 +134,23 @@ impl RustPlugin {
     pub fn coverage(&self) -> Option<RustCoverage> {
         let guard = self.loaded.lock().ok()?;
         guard.as_ref().map(|loaded| loaded.coverage().clone())
+    }
+
+    /// Calls in the source against edges produced, per unit, sorted by unit
+    /// id — task 2068 phase 1.
+    ///
+    /// One entry per unit holding at least one node `edges_in` or
+    /// `edges_from` answered since the last load. Asking about a node again
+    /// replaces its counts rather than adding to them, so the summed `edges`
+    /// equal the edges one walk returns. Empty before the first load.
+    pub fn call_counts(&self) -> Vec<UnitCallCounts> {
+        let Ok(guard) = self.loaded.lock() else {
+            return Vec::new();
+        };
+        guard
+            .as_ref()
+            .map(|loaded| loaded.call_counts())
+            .unwrap_or_default()
     }
 }
 
@@ -286,6 +303,13 @@ impl Plugin for RustPlugin {
                  first-party calls among them — are absent from it rather than proven absent \
                  from the code"
             ));
+        }
+        // Task 2068: calls in the source against edges produced, as ONE note
+        // and LAST, so it never sits above a stale-build warning. The text
+        // names this crate itself, because the cli labels every plugin note
+        // alike in run.json's limits.
+        if let Some(note) = call_counts_note(&self.call_counts()) {
+            notes.push(note);
         }
         notes
     }
