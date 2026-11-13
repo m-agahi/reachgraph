@@ -9,7 +9,7 @@ use reachgraph_plugin_api::{NodeId, Symbol, SymbolIndex, SymbolKind};
 use crate::direction::{is_generated_out_path, is_test_context};
 use crate::keys::join_key;
 use crate::names::{camel_to_snake, impl_header_names_self_type, impl_header_names_trait};
-use crate::unbound::UnboundReason;
+use crate::unbound::{Candidate, UnboundReason};
 
 /// One RPC, as this crate refers to it everywhere downstream of parsing.
 ///
@@ -106,10 +106,7 @@ pub fn bind_handler(symbols: &dyn SymbolIndex, operation: &Operation) -> Binding
             handler,
             named: candidates.len(),
         }),
-        many => Binding::Unbound(UnboundReason::Ambiguous {
-            handler,
-            count: many.len(),
-        }),
+        many => Binding::Unbound(ambiguous(symbols, operation, handler, many)),
     }
 }
 
@@ -153,10 +150,42 @@ pub fn bind_generated_client(symbols: &dyn SymbolIndex, operation: &Operation) -
         // or two versions of one service. Reporting them as "the stub is not in
         // the index" would be false. The same rule as `bind_handler`: an
         // ambiguous binding is a reported gap, never a pick.
-        many => Binding::Unbound(UnboundReason::Ambiguous {
-            handler,
-            count: many.len(),
-        }),
+        many => Binding::Unbound(ambiguous(symbols, operation, handler, many)),
+    }
+}
+
+/// The reason for two or more survivors, with each survivor's location.
+///
+/// The packages and the lines are left for the plugin to fill in: it holds the
+/// contracts and the repository root, and this function holds neither.
+fn ambiguous(
+    symbols: &dyn SymbolIndex,
+    operation: &Operation,
+    handler: String,
+    many: &[&Symbol],
+) -> UnboundReason {
+    let mut candidates: Vec<Candidate> = many
+        .iter()
+        .map(|symbol| Candidate {
+            file: symbol.range.file.clone(),
+            offset: symbol.range.span.map(|span| span.start),
+            line: None,
+            container: symbol
+                .container
+                .as_ref()
+                .and_then(|container| symbols.get(container))
+                .map(|container| container.raw_kind.clone()),
+        })
+        .collect();
+    // `by_name` promises no order, and a reason that reorders between runs
+    // would read as a change.
+    candidates.sort_by(|a, b| (&a.file, a.offset).cmp(&(&b.file, b.offset)));
+    UnboundReason::Ambiguous {
+        service: operation.service.clone(),
+        handler,
+        count: many.len(),
+        packages: Vec::new(),
+        candidates,
     }
 }
 
