@@ -1,0 +1,9 @@
+#!/bin/sh
+# A cargo-shaped program that reports the rustup auto-install setting it was
+# started with, inside its version line, so a test can read what the probe
+# passed to it (ledger 2085, ADR-1222).
+#
+# CHECKED IN rather than written by the test, for the ETXTBSY reason recorded
+# in proxy-loop.
+echo "cargo 0.0.0 (RUSTUP_AUTO_INSTALL=${RUSTUP_AUTO_INSTALL-unset})"
+exit 0

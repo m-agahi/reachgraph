@@ -9,7 +9,7 @@
 //! `IndexCoverage` holds root and unit coverage rather than plugin findings.
 //!
 //! Widening `IndexCoverage` to fit is the wrong fix and not merely a large one.
-//! `out_dir_loaded`, `rust_src_available` and `proc_macro_expansion` are Rust
+//! `out_dir_loaded`, `stdlib` and `proc_macro_expansion` are Rust
 //! vocabulary; a waist field only one language can fill is the ADR-0003
 //! violation the fixture plugin exists to catch.
 //!
@@ -134,15 +134,57 @@ pub struct MemberCoverage {
     pub out_dir_stale_input: Option<std::path::PathBuf>,
 }
 
+/// Whether the standard library's source was loaded — ADR-1222.
+///
+/// Every run asks `rustc --print sysroot` and hands that path to ra_ap. The
+/// answer is one of three facts, and the two misses are kept apart because
+/// what fixes them differs.
+///
+/// What a miss costs, MEASURED 2026-11-12: a first-party call whose result
+/// goes through `?` has **no edge**, while the same call written plainly has
+/// one. INFERRED mechanism: without `core` the `Try` and `Future` lang items
+/// are unknown, so any call whose resolution depends on a type through `?`,
+/// `.await`, an operator or a std trait is dropped. And in every state, standard-library call
+/// targets are **external** in plan-01 §7.0's sense: no symbol is emitted for
+/// them, so none is classified, even when the source resolved.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum StdlibSource {
+    /// The source resolved and `core`, `alloc` and `std` were loaded.
+    Resolved,
+    /// `rustc` named a sysroot and no library source was found under it or
+    /// at `RUST_SRC_PATH` — the `rust-src` component is not installed.
+    SourceMissing {
+        /// The sysroot `rustc --print sysroot` printed.
+        sysroot: std::path::PathBuf,
+    },
+    /// `rustc --print sysroot` did not answer, so there was nowhere to look.
+    SysrootUnknown {
+        /// What went wrong, in the probe's words.
+        detail: String,
+    },
+}
+
+impl StdlibSource {
+    /// The toolchain name, as the last segment of the sysroot path — what
+    /// `rustup component add --toolchain` takes. `None` when no sysroot is
+    /// known.
+    pub fn toolchain(&self) -> Option<String> {
+        match self {
+            StdlibSource::SourceMissing { sysroot } => sysroot
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned()),
+            _ => None,
+        }
+    }
+}
+
 /// What the whole run could not see.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RustCoverage {
     /// One row per workspace member.
     pub members: Vec<MemberCoverage>,
-    /// The sysroot source root resolved, so stdlib targets are locatable and
-    /// classifiable. False means every stdlib call target is **external** in
-    /// plan-01 §7.0's sense.
-    pub rust_src_available: bool,
+    /// See [`StdlibSource`].
+    pub stdlib: StdlibSource,
     /// See [`ProcMacroExpansion`].
     pub proc_macro_expansion: ProcMacroExpansion,
     /// See [`OutDirMechanism`].

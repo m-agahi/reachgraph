@@ -77,6 +77,24 @@ fn a_program_that_resolves_and_fails_did_not_respond() {
     assert!(detail.contains("no toolchain installed"), "{detail:?}");
 }
 
+/// The probe must not let a rustup proxy install anything (ADR-1222, ledger
+/// 2085). rustup 1.29's `auto-install` defaults to enabled, so
+/// `cargo --version` run where a `rust-toolchain.toml` names a toolchain that
+/// is not installed would otherwise download it. The shim reports the setting
+/// it was started with.
+#[test]
+fn the_probe_disables_rustup_auto_install() {
+    let probe = probe_shim("env-echo");
+
+    let CargoProbe::Responded { version } = &probe else {
+        panic!("the shim prints a version line, got {probe:?}");
+    };
+    assert!(
+        version.contains("RUSTUP_AUTO_INSTALL=0"),
+        "cargo --version must run with rustup auto-install off: {version:?}"
+    );
+}
+
 /// A name that resolves to nothing at all.
 #[test]
 fn a_program_that_does_not_exist_did_not_respond() {

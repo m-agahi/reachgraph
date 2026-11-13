@@ -9,11 +9,11 @@
 # "command not found" rather than installing anything, so the toolchain has to
 # carry them.
 #
-# `rust-src`, because ADR-0009's `--read-build-output` needs the standard library's
-# source: `include!`, `env!` and `concat!` are declared in `core`, and without it no
-# generated file is ever included. The slow suite asserts that mode, so CI needs the
-# component. reachgraph itself never asks rustup to install it, and runs its
-# toolchain calls with RUSTUP_AUTO_INSTALL=0 (ADR-0009).
+# `rust-src`, because every run loads the standard library's source (ADR-1222): without
+# `core`, calls through `?` and `.await` have no edge. ADR-0009's `--read-build-output`
+# needs it too: `include!`, `env!` and `concat!` are declared in `core`. The slow suite
+# asserts both, so CI needs the component. reachgraph itself never asks rustup to
+# install it, and runs its toolchain calls with RUSTUP_AUTO_INSTALL=0 (ADR-1222).
 #
 # NO `targets` LINE. This repository builds for the machine it runs on. The
 # platform wheel matrix is plan-07's problem and it is unmeasured

@@ -7,6 +7,9 @@
 consequences ("the generated client-stub leaf stays unreachable … through the OUT_DIR
 path"). With this flag, the stub leaf is reachable through OUT_DIR. ADR-0728's
 proc-macro decision itself is unchanged.
+**Amended 2026-11-12 by:** [ADR-1222](1222-sysroot-on-every-run.md). The sysroot is now
+requested on every run, not in this mode only. The statements below that a run without the
+flag requests no sysroot are history, kept as written and marked where they stand.
 
 ## Context
 
@@ -35,6 +38,11 @@ reachgraph reads each workspace member's build-script output from it.** The flag
 `--read-build-output <target-dir>`, on `reachgraph <repo>` and on `reachgraph preflight`.
 Without the flag nothing changes: no build output is read, no sysroot is requested, and
 the index and its coverage statement are what they were.
+
+> **Amended 2026-11-12 by [ADR-1222](1222-sysroot-on-every-run.md):** "no sysroot is
+> requested" no longer holds. Every run requests the sysroot `rustc --print sysroot`
+> reports, because without `core` calls through `?` and `.await` have no edge. Without the
+> flag, no build output is read, as before.
 
 reachgraph still **runs no build**. No `cargo build`, no `cargo check`, and
 `load_out_dirs_from_check` stays `false`. What is read is what a build the user ran left
@@ -119,6 +127,9 @@ a missing workspace, because the workspace loaded.
   on task, 13/13 on iam, 16/16 on iam-db.
 - The sysroot is loaded in this mode only. Standard-library nodes appear in shards as
   external targets, and the load is slower (about 9 s against 6 s on yadgarhq/task).
+  **Amended 2026-11-12 by [ADR-1222](1222-sysroot-on-every-run.md):** the sysroot is
+  loaded on every run. What stays specific to this mode is that a sysroot which does not
+  resolve refuses the run; without the flag the run continues and records the limit.
 - The run's notes state each output directory read, the target it came from, and how
   many candidates there were. The index is exactly as current as that build.
 - **A stale build is warned about, loudly.** If an input that the build script declared
