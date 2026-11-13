@@ -8,6 +8,7 @@
 
 mod fake;
 
+mod ambiguity;
 mod binding;
 mod contracts;
 mod direction;

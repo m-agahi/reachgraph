@@ -12,6 +12,7 @@
 //! mutability. It is written once per `roots()` call and read afterwards, which
 //! is the same shape `RustPlugin` uses for its loaded workspace.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -27,7 +28,7 @@ use crate::direction::{
     direction_of, is_served_signal, is_test_target_path, mentions_client, DirectionCall,
     ServiceEvidence,
 };
-use crate::unbound::UnboundReason;
+use crate::unbound::{UnboundReason, NO_PACKAGE};
 use crate::PLUGIN_ID;
 
 /// The gRPC roots plugin.
@@ -165,6 +166,7 @@ impl RootProvider for ProtoTonicPlugin {
         let sources = read_first_party_sources(repo_root)?;
 
         let mut roots = Vec::new();
+        let mut texts = FileTexts::new(repo_root);
         for contract in &read.contracts {
             for service in &contract.services {
                 let call = direction_of(evidence_for(&service.name, &sources, symbols));
@@ -179,6 +181,7 @@ impl RootProvider for ProtoTonicPlugin {
                             consumed_without_evidence(symbols, &operation, &service.name)
                         }
                     };
+                    let binding = locate_ambiguity(binding, &read.contracts, &mut texts);
                     roots.push(root_of(contract, &operation, call.direction(), binding));
                 }
             }
@@ -431,6 +434,92 @@ fn consumed_without_evidence(
             service: service.to_owned(),
             join_key: operation.join_key.clone(),
         }),
+    }
+}
+
+/// Fill an ambiguous reason with what only this scope holds — task 2062.
+///
+/// That is every package in this run that declares a service of the same
+/// name, and each candidate's line. Every other binding passes through
+/// unchanged, so which candidate binds, and every other reason, stay as they
+/// were.
+fn locate_ambiguity(
+    binding: Binding,
+    contracts: &[ProtoContract],
+    texts: &mut FileTexts<'_>,
+) -> Binding {
+    let Binding::Unbound(UnboundReason::Ambiguous {
+        service,
+        handler,
+        count,
+        packages: _,
+        mut candidates,
+    }) = binding
+    else {
+        return binding;
+    };
+
+    let mut packages: Vec<String> = contracts
+        .iter()
+        .filter(|contract| contract.services.iter().any(|other| other.name == service))
+        .map(|contract| {
+            contract
+                .package
+                .clone()
+                .unwrap_or_else(|| NO_PACKAGE.to_owned())
+        })
+        .collect();
+    packages.sort();
+    packages.dedup();
+
+    for candidate in &mut candidates {
+        if let Some(offset) = candidate.offset {
+            candidate.line = texts.line_of(&candidate.file, offset);
+        }
+    }
+
+    Binding::Unbound(UnboundReason::Ambiguous {
+        service,
+        handler,
+        count,
+        packages,
+        candidates,
+    })
+}
+
+/// The bytes of the files that candidates point into, each read at most once.
+///
+/// Many candidates can share one file: task 2064 expects twenty impls of one
+/// service in tonic's `examples`, and every RPC of that service names them
+/// again.
+struct FileTexts<'a> {
+    repo_root: &'a Path,
+    read: HashMap<PathBuf, Option<Vec<u8>>>,
+}
+
+impl<'a> FileTexts<'a> {
+    fn new(repo_root: &'a Path) -> Self {
+        Self {
+            repo_root,
+            read: HashMap::new(),
+        }
+    }
+
+    /// The 1-based line that holds byte `offset` of `file`, or `None` when the
+    /// file cannot be read or is shorter than the offset.
+    ///
+    /// `file` is joined to the repository root, which keeps an absolute path
+    /// as it is. The count is over bytes, never over a `str` slice, so an
+    /// offset that is not a char boundary cannot panic.
+    fn line_of(&mut self, file: &Path, offset: u32) -> Option<usize> {
+        let repo_root = self.repo_root;
+        let bytes = self
+            .read
+            .entry(file.to_path_buf())
+            .or_insert_with(|| std::fs::read(repo_root.join(file)).ok())
+            .as_deref()?;
+        let before = bytes.get(..usize::try_from(offset).ok()?)?;
+        Some(before.iter().filter(|byte| **byte == b'\n').count() + 1)
     }
 }
 
