@@ -28,7 +28,8 @@ use reachgraph_plugin_api::{
 use crate::build_output::{locate_out_dirs, stale_inputs};
 use crate::classify::{classify_facts, CrateOrigin, PathFacts};
 use crate::coverage::{
-    MemberCoverage, OutDirMechanism, ProcMacroExpansion, RustCoverage, StdlibSource, UnitCallCounts,
+    FunctionCallCounts, MemberCoverage, OutDirMechanism, ProcMacroExpansion, RustCoverage,
+    StdlibSource, UnitCallCounts,
 };
 use crate::ids::{node_id, RawParts};
 use crate::kinds::{declared_trait_name, map_kind, render_impl_header, RustItem};
@@ -136,12 +137,7 @@ pub(crate) struct Loaded {
 struct CallRecord {
     /// The unit half of the node's id.
     unit: String,
-    no_hierarchy: bool,
-    targets_dropped: usize,
-    ranges_dropped: usize,
-    edges: usize,
-    call_sites: usize,
-    macro_call_sites: usize,
+    counts: FunctionCallCounts,
 }
 
 impl Loaded {
@@ -1207,17 +1203,19 @@ impl Loaded {
         let (call_sites, macro_call_sites) = self.call_sites_at(file_id, position.offset);
         let mut record = CallRecord {
             unit: parts.unit.0.clone(),
-            call_sites,
-            macro_call_sites,
-            ..CallRecord::default()
+            counts: FunctionCallCounts {
+                call_sites,
+                macro_call_sites,
+                ..FunctionCallCounts::default()
+            },
         };
 
         // `Ok(None)` means "no call hierarchy at this position" and is not an
         // error (plan-03 §9). It emits no edges and is never guessed around;
-        // `CallRecord::no_hierarchy` counts it, and the call-counts note
-        // reports the total (task 2068).
+        // `FunctionCallCounts::no_hierarchy` counts it, and the call-counts
+        // note reports the total (task 2068).
         let Some(items) = items else {
-            record.no_hierarchy = true;
+            record.counts.no_hierarchy = true;
             self.record_calls(node, record);
             return Ok(Vec::new());
         };
@@ -1228,7 +1226,7 @@ impl Loaded {
                 // The target failed the VFS lookup, so it is located nowhere
                 // and is genuinely **external** in plan-01 §7.0's sense. No
                 // `Symbol` is emitted for it and no edge can name it.
-                record.targets_dropped += 1;
+                record.counts.targets_dropped += 1;
                 continue;
             };
             let target_unit = self.unit_of_target(item.target.file_id);
@@ -1240,7 +1238,7 @@ impl Loaded {
 
             for range in item.ranges {
                 let Some(call_path) = self.path_of(range.file_id) else {
-                    record.ranges_dropped += 1;
+                    record.counts.ranges_dropped += 1;
                     continue;
                 };
                 edges.push(Edge {
@@ -1268,7 +1266,7 @@ impl Loaded {
                 });
             }
         }
-        record.edges = edges.len();
+        record.counts.edges = edges.len();
         self.record_calls(node, record);
         Ok(edges)
     }
@@ -1281,30 +1279,22 @@ impl Loaded {
     }
 
     /// Task 2068: the counts `edges_from` recorded, summed per unit and
-    /// sorted by unit id.
+    /// sorted by unit id. Each function goes through
+    /// [`UnitCallCounts::add_function`], which takes the gap per function.
     pub(crate) fn call_counts(&self) -> Vec<UnitCallCounts> {
         let mut per_unit: BTreeMap<&str, UnitCallCounts> = BTreeMap::new();
         let records = self.call_records.borrow();
         for record in records.values() {
-            let counts = per_unit
+            per_unit
                 .entry(record.unit.as_str())
-                .or_insert_with(|| UnitCallCounts {
-                    unit: record.unit.clone(),
-                    ..UnitCallCounts::default()
-                });
-            counts.queried += 1;
-            counts.no_hierarchy += usize::from(record.no_hierarchy);
-            counts.targets_dropped += record.targets_dropped;
-            counts.ranges_dropped += record.ranges_dropped;
-            counts.edges += record.edges;
-            counts.call_sites += record.call_sites;
-            counts.macro_call_sites += record.macro_call_sites;
+                .or_insert_with(|| UnitCallCounts::new(record.unit.clone()))
+                .add_function(&record.counts);
         }
         per_unit.into_values().collect()
     }
 
     /// Task 2068: the call sites in the body of the function at `offset`, as
-    /// `(outside macro calls, inside macro calls)`.
+    /// `(outside macro calls, in one-level macro expansions)`.
     ///
     /// Picks the item the way `outgoing_calls` does in ra_ap_ide 0.0.352
     /// (`call_hierarchy.rs`): the identifier token at the offset, and the

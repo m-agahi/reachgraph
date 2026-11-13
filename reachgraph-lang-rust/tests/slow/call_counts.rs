@@ -78,11 +78,12 @@ fn the_note_counts_calls_against_edges() {
         "0 call ranges dropped at the file lookup".to_owned(),
         format!("{produced} edges produced"),
         "12 call sites in the source outside macro calls".to_owned(),
-        "2 call sites inside macro calls".to_owned(),
+        "2 calls in one-level macro expansions".to_owned(),
         format!(
             "{} calls in the source with no edge in this index",
             12 - produced
         ),
+        "0 edges in functions that have more edges than call sites".to_owned(),
     ] {
         assert!(note.contains(&fragment), "{fragment:?} missing from {note}");
     }
@@ -95,6 +96,20 @@ fn the_note_counts_calls_against_edges() {
     let counts = plugin.call_counts();
     let summed: usize = counts.iter().map(|unit| unit.edges).sum();
     assert_eq!(summed, produced, "the counters drifted from the emit path");
+
+    // The plan's Tier C property, edges <= call sites + macro sites, holds
+    // only where no function has more edges than call sites. It is not an
+    // invariant (a function a macro generates, or a call to a function a
+    // macro defines, breaks it), so it is asserted here, on a fixture with
+    // neither, together with the surplus counter that reports the cases
+    // where it does not hold.
+    for unit in &counts {
+        assert_eq!(unit.edges_beyond_call_sites, 0, "{unit:?}");
+        assert!(
+            unit.edges <= unit.call_sites + unit.macro_call_sites,
+            "{unit:?}"
+        );
+    }
 
     let _ = all_edges(&plugin, &units);
     assert_eq!(
