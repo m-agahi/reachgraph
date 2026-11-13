@@ -19,7 +19,7 @@
 
 use reachgraph_plugin_api::Preflight;
 
-use crate::coverage::ProcMacroExpansion;
+use crate::coverage::{ProcMacroExpansion, StdlibSource};
 
 /// Whether `cargo` **responded** — not whether its name resolved.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -68,8 +68,8 @@ pub struct PreflightFacts {
     /// Check 2 — members declaring a build script whose generated code is not
     /// in the crate graph, by package id.
     pub members_with_unindexed_generated_code: Vec<String>,
-    /// Check 4.
-    pub rust_src_available: bool,
+    /// Check 4 — ADR-1222.
+    pub stdlib: StdlibSource,
     /// Check 3.
     pub proc_macro_expansion: ProcMacroExpansion,
 }
@@ -89,14 +89,49 @@ const BUILD_OUTPUT_REMEDIATION: &str =
      `--read-build-output`, or drop the flag; reachgraph reads an existing build and never \
      runs one";
 
-/// Check 4's remediation.
-const RUST_SRC_REMEDIATION: &str = "rustup component add rust-src";
+/// Check 4's consequence, shared by both of its findings — ADR-1222, MEASURED
+/// 2026-11-12. The loss is not confined to calls into the standard library:
+/// without `core`, a first-party call whose result goes through `?` had no
+/// edge while the same call written plainly did. Standard-library targets are
+/// external in every state, so the sentence does not promise that installing
+/// the source classifies them.
+const STDLIB_CONSEQUENCE: &str =
+    "the standard library is not loaded: calls whose resolution depends on it — \
+     through `?`, `.await`, operators and std traits, first-party calls among them — are \
+     absent from this index, not proven absent from the code";
 
-/// Check 4's finding.
-const RUST_SRC_REASON: &str =
-    "the rust-src component is not installed, so the sysroot source root did not resolve \
-     and calls into the standard library cannot be located; they are reported as external \
-     rather than classified as stdlib";
+/// Check 4's finding, the component missing.
+fn rust_src_missing_reason(sysroot: &std::path::Path) -> String {
+    format!(
+        "the rust-src component is not installed for the toolchain at {}, so {STDLIB_CONSEQUENCE}",
+        sysroot.display()
+    )
+}
+
+/// Check 4's remediation, the component missing. It names the toolchain
+/// `rustc` resolved in the repository, because that is the one whose source
+/// the run looks for. reachgraph never runs this itself (ADR-1222).
+fn rust_src_missing_remediation(toolchain: Option<&str>) -> String {
+    let command = match toolchain {
+        Some(name) => format!("rustup component add rust-src --toolchain {name}"),
+        None => "rustup component add rust-src".to_owned(),
+    };
+    format!(
+        "{command}, or point RUST_SRC_PATH at a rust-src library directory; reachgraph \
+         never installs it"
+    )
+}
+
+/// Check 4's finding, `rustc --print sysroot` unanswered.
+fn sysroot_unknown_reason(detail: &str) -> String {
+    format!("`rustc --print sysroot` did not answer ({detail}), so {STDLIB_CONSEQUENCE}")
+}
+
+/// Check 4's remediation, `rustc --print sysroot` unanswered. No rustup
+/// advice: nothing says rustup manages this toolchain.
+const SYSROOT_UNKNOWN_REMEDIATION: &str =
+    "make `rustc --print sysroot` succeed when run in the repository, or point \
+     RUST_SRC_PATH at a rust-src library directory";
 
 /// Check 3's finding.
 const PROC_MACRO_REASON: &str =
@@ -178,7 +213,7 @@ pub fn preflight_outcome(facts: &PreflightFacts) -> Preflight {
         };
     }
 
-    let mut findings: Vec<(String, &str)> = Vec::new();
+    let mut findings: Vec<(String, String)> = Vec::new();
 
     if !facts.members_with_unindexed_generated_code.is_empty() {
         let packages = facts.members_with_unindexed_generated_code.join(", ");
@@ -189,18 +224,29 @@ pub fn preflight_outcome(facts: &PreflightFacts) -> Preflight {
                  generated code — tonic client stubs among it — is not indexed and \
                  cross-repo leaves do not appear in the graph."
             ),
-            UNBUILT_REMEDIATION,
+            UNBUILT_REMEDIATION.to_owned(),
         ));
     }
 
     match facts.proc_macro_expansion {
         ProcMacroExpansion::Disabled => {
-            findings.push((PROC_MACRO_REASON.to_owned(), PROC_MACRO_REMEDIATION));
+            findings.push((
+                PROC_MACRO_REASON.to_owned(),
+                PROC_MACRO_REMEDIATION.to_owned(),
+            ));
         }
     }
 
-    if !facts.rust_src_available {
-        findings.push((RUST_SRC_REASON.to_owned(), RUST_SRC_REMEDIATION));
+    match &facts.stdlib {
+        StdlibSource::Resolved => {}
+        StdlibSource::SourceMissing { sysroot } => findings.push((
+            rust_src_missing_reason(sysroot),
+            rust_src_missing_remediation(facts.stdlib.toolchain().as_deref()),
+        )),
+        StdlibSource::SysrootUnknown { detail } => findings.push((
+            sysroot_unknown_reason(detail),
+            SYSROOT_UNKNOWN_REMEDIATION.to_owned(),
+        )),
     }
 
     if findings.is_empty() {
@@ -219,7 +265,7 @@ pub fn preflight_outcome(facts: &PreflightFacts) -> Preflight {
             .join("\n"),
         remediation: findings
             .iter()
-            .map(|(_, remediation)| *remediation)
+            .map(|(_, remediation)| remediation.as_str())
             .collect::<Vec<_>>()
             .join("\n"),
     }

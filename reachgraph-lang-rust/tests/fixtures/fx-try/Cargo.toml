@@ -1,0 +1,6 @@
+# fx-try — ADR-1222's discriminator. A call wrapped in `?` and the same call
+# without it. Without the standard library loaded the `?` call lost its edge;
+# with it both have one. No dependencies, no build script, no macros.
+[workspace]
+resolver = "2"
+members = ["t"]

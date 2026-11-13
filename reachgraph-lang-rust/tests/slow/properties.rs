@@ -139,28 +139,24 @@ fn edge_targets_are_symbols_or_outside_the_enumerated_units() {
 /// standard library.
 ///
 /// `fx-plain`'s `b` is a path dependency of `a` and is also a member, so the
-/// interesting case here is the stdlib one. It is **skipped with an explicit
-/// message** when `rust-src` is unavailable: §9 measured that as a real
+/// interesting case here is the stdlib one. When `rust-src` is unavailable it
+/// asserts that the condition is reported instead: §9 measured that as a real
 /// conditional, and a test that silently passed on a machine without it would
-/// hide the condition rather than report it.
+/// hide the condition rather than report it. Until ADR-1222 the sysroot never
+/// resolved on a default run, so only that branch ever ran.
 #[test]
 fn stdlib_targets_are_located_when_rust_src_is_available() {
     let (plugin, units) = load("fx-docs");
     let coverage = plugin.coverage().expect("a load happened");
 
-    if !coverage.rust_src_available {
-        println!(
-            "SKIPPED on purpose: rust-src is not installed, so the sysroot source root did \
-             not resolve and every stdlib target is external (plan-03 §9, §11 check 4). \
-             `rustup component add rust-src` makes this assert."
-        );
+    if coverage.stdlib != reachgraph_lang_rust::coverage::StdlibSource::Resolved {
         let outcome = plugin.preflight(&crate::support::fixture("fx-docs"));
         let reason = match &outcome {
             reachgraph_plugin_api::Preflight::Warned { reason, .. } => reason.clone(),
             other => panic!("a missing rust-src warns: {other:?}"),
         };
         assert!(
-            reason.contains("rust-src component is not installed"),
+            reason.contains("standard library is not loaded"),
             "the condition is reported rather than silent: {reason:?}"
         );
         return;

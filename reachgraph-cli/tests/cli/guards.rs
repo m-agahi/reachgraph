@@ -90,13 +90,16 @@ fn no_language_specific_tokens_in_core_or_cli() {
 /// here as surely as a first spawn anywhere else.
 ///
 /// The two allowed sites, both the target language's own toolchain under
-/// ADR-0001's carve-out, both asked a question and building nothing:
+/// ADR-0001's carve-out, both asked a question and building nothing, and both
+/// run with `RUSTUP_AUTO_INSTALL=0` so a rustup proxy installs nothing:
 ///
 /// 1. `cargo --version` — preflight check 1a (`probe_program`).
-/// 2. `rustc --print sysroot` — ADR-0009's sysroot lookup (`sysroot_command`),
-///    run with `RUSTUP_AUTO_INSTALL=0`.
+/// 2. `rustc --print sysroot` — the sysroot lookup (`sysroot_command`). Added
+///    by ADR-0009 for `--read-build-output` only; since ADR-1222 it runs on
+///    **every** run, because without the standard library calls through `?`
+///    and `.await` have no edge.
 #[test]
-fn no_process_spawn_in_workspace_outside_the_documented_probes() {
+fn no_process_spawn_outside_the_two_toolchain_probes_every_run_makes() {
     const ALLOWED: [(&str, &[&str]); 1] = [(
         "reachgraph-lang-rust/src/engine.rs",
         &["Command::new(program)", "Command::new(\"rustc\")"],

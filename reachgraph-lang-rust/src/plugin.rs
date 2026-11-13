@@ -178,7 +178,7 @@ impl Plugin for RustPlugin {
                 cargo,
                 workspace: WorkspaceProbe::Loaded,
                 members_with_unindexed_generated_code: Vec::new(),
-                rust_src_available: true,
+                stdlib: crate::coverage::StdlibSource::Resolved,
                 proc_macro_expansion: crate::coverage::ProcMacroExpansion::Disabled,
             });
         }
@@ -191,7 +191,7 @@ impl Plugin for RustPlugin {
                     detail: error.to_string(),
                 },
                 members_with_unindexed_generated_code: Vec::new(),
-                rust_src_available: true,
+                stdlib: crate::coverage::StdlibSource::Resolved,
                 proc_macro_expansion: crate::coverage::ProcMacroExpansion::Disabled,
             }),
             Err(LoadError::Workspace(error)) => preflight_outcome(&PreflightFacts {
@@ -201,7 +201,7 @@ impl Plugin for RustPlugin {
                     detail: error.to_string(),
                 },
                 members_with_unindexed_generated_code: Vec::new(),
-                rust_src_available: true,
+                stdlib: crate::coverage::StdlibSource::Resolved,
                 proc_macro_expansion: crate::coverage::ProcMacroExpansion::Disabled,
             }),
         }
@@ -267,12 +267,25 @@ impl Plugin for RustPlugin {
                     .to_owned(),
             ),
         }
-        if !coverage.rust_src_available {
-            notes.push(
-                "the sysroot source root did not resolve for this index, so standard-library \
-                 call targets are recorded as external rather than classified"
-                    .to_owned(),
-            );
+        // ADR-1222: what a missing standard library cost this index. MEASURED,
+        // the loss reaches first-party calls through `?` and `.await`.
+        let stdlib_missing = match &coverage.stdlib {
+            crate::coverage::StdlibSource::Resolved => None,
+            crate::coverage::StdlibSource::SourceMissing { sysroot } => Some(format!(
+                "the standard library's source (rust-src) was not found for the toolchain at {}",
+                sysroot.display()
+            )),
+            crate::coverage::StdlibSource::SysrootUnknown { detail } => {
+                Some(format!("`rustc --print sysroot` did not answer ({detail})"))
+            }
+        };
+        if let Some(cause) = stdlib_missing {
+            notes.push(format!(
+                "{cause}, so the standard library is not loaded in this index: calls whose \
+                 resolution depends on it — through `?`, `.await`, operators and std traits, \
+                 first-party calls among them — are absent from it rather than proven absent \
+                 from the code"
+            ));
         }
         notes
     }

@@ -4,7 +4,7 @@
 //! reviewed: a `Warned` check that returns `Ok`, or a `Failed` for a non-fatal
 //! finding, fails here rather than shipping.
 
-use reachgraph_lang_rust::coverage::ProcMacroExpansion;
+use reachgraph_lang_rust::coverage::{ProcMacroExpansion, StdlibSource};
 use reachgraph_lang_rust::preflight::{
     preflight_outcome, CargoProbe, PreflightFacts, WorkspaceProbe,
 };
@@ -17,7 +17,7 @@ fn healthy() -> PreflightFacts {
         },
         workspace: WorkspaceProbe::Loaded,
         members_with_unindexed_generated_code: Vec::new(),
-        rust_src_available: true,
+        stdlib: StdlibSource::Resolved,
         proc_macro_expansion: ProcMacroExpansion::Disabled,
     }
 }
@@ -172,17 +172,24 @@ fn preflight_outcome_messages_check_3() {
     );
 }
 
-/// Check 4 — `rust-src` is reported and **never fatal**.
+/// A toolchain whose rust-src is not installed — `stable` as rustup lays it
+/// out.
+fn source_missing() -> StdlibSource {
+    StdlibSource::SourceMissing {
+        sysroot: "/home/u/.rustup/toolchains/stable-x86_64-unknown-linux-gnu".into(),
+    }
+}
+
+/// Check 4 — a missing standard library is reported and **never fatal**.
 ///
-/// MEASURED, design.md §8's edge-noise table: stdlib targets are in the `drop`
-/// column. Refusing to run over a component whose contribution is dropped
-/// anyway would be strictly worse for the user than running. What is lost is
-/// the ability to classify those targets as `Stdlib` and drop them
-/// deliberately rather than by absence.
+/// ADR-1222, MEASURED 2026-11-12: what is lost is not only the classification
+/// of stdlib targets. Without `core`, a first-party call through `?` had no
+/// edge. The finding says so, and it does not claim that the source would get
+/// stdlib targets classified — they stay external in every state.
 #[test]
 fn preflight_outcome_messages_check_4() {
     let facts = PreflightFacts {
-        rust_src_available: false,
+        stdlib: source_missing(),
         ..healthy()
     };
 
@@ -191,19 +198,66 @@ fn preflight_outcome_messages_check_4() {
 
     assert!(
         reason.contains(
-            "the rust-src component is not installed, so the sysroot source root did not \
-             resolve and calls into the standard library cannot be located; they are \
-             reported as external rather than classified as stdlib"
+            "the rust-src component is not installed for the toolchain at \
+             /home/u/.rustup/toolchains/stable-x86_64-unknown-linux-gnu"
         ),
-        "reason was {reason:?}"
+        "the finding names the toolchain it looked in: {reason:?}"
     );
     assert!(
-        remediation.contains("rustup component add rust-src"),
-        "remediation was {remediation:?}"
+        reason.contains("through `?`, `.await`, operators and std traits"),
+        "the consequence is the measured one: {reason:?}"
+    );
+    assert!(
+        reason.contains("first-party calls among them"),
+        "and it is not confined to the standard library: {reason:?}"
+    );
+    assert!(
+        !reason.contains("classified"),
+        "installing rust-src does not classify stdlib targets: {reason:?}"
+    );
+    assert!(
+        remediation
+            .contains("rustup component add rust-src --toolchain stable-x86_64-unknown-linux-gnu"),
+        "the remediation names the toolchain rustc resolved: {remediation:?}"
+    );
+    assert!(
+        remediation.contains("reachgraph never installs it"),
+        "ADR-1222: the run installs nothing: {remediation:?}"
     );
     assert!(
         !matches!(outcome, Preflight::Failed { .. }),
         "a missing rust-src never refuses the run"
+    );
+}
+
+/// Check 4's other miss: `rustc --print sysroot` did not answer. Nothing says
+/// rustup manages that toolchain, so no rustup advice is given.
+#[test]
+fn preflight_outcome_messages_check_4_without_a_sysroot() {
+    let facts = PreflightFacts {
+        stdlib: StdlibSource::SysrootUnknown {
+            detail: "No such file or directory (os error 2)".to_owned(),
+        },
+        ..healthy()
+    };
+
+    let outcome = preflight_outcome(&facts);
+    let (reason, remediation) = warned(&outcome);
+
+    assert!(
+        reason.contains(
+            "`rustc --print sysroot` did not answer (No such file or directory (os error 2))"
+        ),
+        "reason was {reason:?}"
+    );
+    assert!(reason.contains("first-party calls among them"));
+    assert!(
+        !remediation.contains("rustup"),
+        "no rustup advice for a toolchain rustup may not manage: {remediation:?}"
+    );
+    assert!(
+        !matches!(outcome, Preflight::Failed { .. }),
+        "an unanswered sysroot probe never refuses the run"
     );
 }
 
@@ -217,16 +271,16 @@ fn preflight_outcome_messages_check_4() {
 #[test]
 fn a_warning_states_its_finding_apart_from_its_fix() {
     let facts = PreflightFacts {
-        rust_src_available: false,
+        stdlib: source_missing(),
         ..healthy()
     };
 
     let outcome = preflight_outcome(&facts);
     let (reason, remediation) = warned(&outcome);
 
-    assert!(reason.contains("cannot be located"));
+    assert!(reason.contains("are absent from this index"));
     assert!(
-        !remediation.contains("cannot be located"),
+        !remediation.contains("absent from this index"),
         "the finding is not welded to the fix"
     );
     assert!(remediation.contains("rustup component add rust-src"));
@@ -291,7 +345,7 @@ fn preflight_outcome_messages_check_2() {
 fn every_finding_reaches_the_one_outcome() {
     let facts = PreflightFacts {
         members_with_unindexed_generated_code: vec!["a".to_owned(), "b".to_owned()],
-        rust_src_available: false,
+        stdlib: source_missing(),
         ..healthy()
     };
 
@@ -301,7 +355,7 @@ fn every_finding_reaches_the_one_outcome() {
     assert!(reason.contains("a, b"), "both members named: {reason:?}");
     assert!(reason.contains("proc-macro expansion is disabled"));
     assert!(reason.contains("rust-src component is not installed"));
-    assert!(remediation.contains("rustup component add rust-src"));
+    assert!(remediation.contains("rustup component add rust-src --toolchain"));
     assert_eq!(
         reason.lines().count(),
         3,

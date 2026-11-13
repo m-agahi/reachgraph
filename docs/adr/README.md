@@ -18,7 +18,7 @@ own premise: a derived claim must be traceable to its derivation.
 | [0006](0006-root-sharded-static-output.md)       | Root-sharded static output artifact                              | Accepted | A static directory, one shard per root. `serve` is a dumb static file server, present only because `file://` blocks `fetch()`. Single inlined file under ~5 MB. GitHub Pages is opt-in and open-source-only — a call graph of private code is a disclosure.                                                                                                                                                                                                                                                     |
 | [0007](0007-endpoint-version-is-first-class.md)  | Endpoint version is first-class in root identity                 | Accepted | `v1` and `v2` are separate roots; they may route to different code. Join key corrected to the fully-qualified operation name. A missing version is `None`, never `"v1"`. A partial root set makes live code look unreachable, so the index records its coverage and the wording extends to "not reachable from any endpoint version in this index".                                                                                                                                                             |
 | [0008](0008-rust-only-v01-fixture-plugin.md)     | Rust-only v0.1; language neutrality enforced by a fixture plugin | Accepted | v0.1 implements Rust alone. An interface cannot be proven neutral from n=1, so a fixture plugin reading hand-written JSON supplies a mechanical second implementation — a leaked rust-analyzer-ism becomes a compile error, not a month-nine discovery. Eight named `ra_ap` leaks the traits must guard against; detection is plugin-declared from the first commit.                                                                                                                                            |
-| [0009](0009-read-existing-build-output.md)       | Read an existing build's output; still never run a build         | Accepted | `--read-build-output <target-dir>` reads each member's build-script `OUT_DIR` from a build the user ran, so tonic client stubs enter the index and consumed roots bind. Amends ADR-0001's never-runs-a-build section and plan-03 D-B/D-D. Cites yadgarhq ADR-0842. Fails loudly, naming the path, when the flag reads nothing.                                                                                                                                                                                  |
+| [0009](0009-read-existing-build-output.md)       | Read an existing build's output; still never run a build         | Accepted | `--read-build-output <target-dir>` reads each member's build-script `OUT_DIR` from a build the user ran, so tonic client stubs enter the index and consumed roots bind. Amends ADR-0001's never-runs-a-build section and plan-03 D-B/D-D. Cites yadgarhq ADR-0842. Fails loudly, naming the path, when the flag reads nothing. **Amended 2026-11-12 by ADR-1222:** the sysroot is requested on every run, not in this mode only.                                                                                |
 | [0010](0010-estate-merge-on-join-key.md)         | `reachgraph merge` joins per-repository artifacts on `join_key`  | Accepted | A subcommand over artifacts runs already wrote: consumed and served roots are grouped by join key, a served handler's shard records the consumed keys it reaches, and `estate.json` plus a script-free `estate.html` show traces across repositories. Unmatched keys are labelled, never dropped. From yadgarhq ADR-0842.                                                                                                                                                                                       |
 
 ## Reading order
@@ -43,12 +43,15 @@ alternatives` where something concrete was rejected.
 
 ## Records from the decision ledger
 
-Numbers in the 07xx range are not part of the sequence above. They are records in the yadgar
-decision ledger for project `m-agahi/reachgraph`. Source comments and docs cite them, and a
-citation is resolvable only when the record is exported here. Exported so far:
+Numbers in the 07xx range and above are not part of the sequence above. They are records in
+the yadgar decision ledger for project `m-agahi/reachgraph`. Source comments and docs cite
+them, and a citation is resolvable only when the record is exported here. Exported so far:
 
 - [ADR-0728](0728-proc-macro-expansion-disabled.md) — v0.1 disables proc-macro expansion,
   because in-process expansion does not exist on a stable toolchain.
+- [ADR-1222](1222-sysroot-on-every-run.md) — every run resolves the sysroot from
+  `rustc --print sysroot` by path, never `RustLibSource::Discover`, and indexes with
+  cfg(test) on. A missing `rust-src` is a recorded limit. Amends ADR-0009.
 
 Cited in this repository and **not yet exported**: ADR-0727, ADR-0729, ADR-0730, ADR-0731,
 ADR-0732, ADR-0738 and ADR-0743. Until each one is exported, read it in the ledger.
