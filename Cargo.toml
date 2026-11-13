@@ -40,7 +40,7 @@ version = "0.1.0"
 # 2024; adopting it is a decision with no forcing reason behind it yet, and
 # this repository has enough of those already.
 edition = "2021"
-rust-version = "1.98"
+rust-version = "1.99.1"
 # ADR-0001. Both, not either: the Rust ecosystem's convention, and the licence
 # pair deny.toml's allow list is written around.
 license = "MIT OR Apache-2.0"

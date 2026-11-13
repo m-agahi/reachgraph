@@ -20,5 +20,5 @@
 # (docs/plans/00-workspace-and-plugin-api.md §7), so nothing is pinned for it
 # here on speculation.
 [toolchain]
-channel = "1.98.0"
+channel = "1.99.1"
 components = ["rustfmt", "clippy", "rust-src"]
