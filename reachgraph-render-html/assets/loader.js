@@ -1027,12 +1027,17 @@
            into third-party. */
         row.appendChild(text("td", node.category || "unclassified"));
         row.appendChild(text("td", node.is_test ? "yes" : ""));
+        /* ADR-1223: null means the plugin omits calls it cannot resolve, so
+           whether one reaches this node is not known. Tested before the
+           truthy branch, which would render null as the "no" of false. */
         row.appendChild(
           text(
             "td",
-            node.possibly_reachable_via_unresolved
-              ? "an unresolved call may reach this"
-              : "",
+            node.possibly_reachable_via_unresolved === null
+              ? "unknown — this plugin does not report unresolved calls"
+              : node.possibly_reachable_via_unresolved
+                ? "an unresolved call may reach this"
+                : "",
           ),
         );
         rows.appendChild(row);

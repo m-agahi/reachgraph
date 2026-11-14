@@ -52,6 +52,9 @@ them, and a citation is resolvable only when the record is exported here. Export
 - [ADR-1222](1222-sysroot-on-every-run.md) — every run resolves the sysroot from
   `rustc --print sysroot` by path, never `RustLibSource::Discover`, and indexes with
   cfg(test) on. A missing `rust-src` is a recorded limit. Amends ADR-0009.
+- [ADR-1223](1223-unresolved-count-absent-not-zero.md) — an unresolved-edge count is `null`,
+  not 0, when an edge provider declares it omits calls it cannot resolve. Artifact schema
+  version 2.
 
 Cited in this repository and **not yet exported**: ADR-0727, ADR-0729, ADR-0730, ADR-0731,
 ADR-0732, ADR-0738 and ADR-0743. Until each one is exported, read it in the ledger.

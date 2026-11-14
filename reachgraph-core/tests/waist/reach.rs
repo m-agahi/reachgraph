@@ -4,8 +4,9 @@
 use std::collections::BTreeSet;
 
 use reachgraph_core::{BuildOptions, Index};
-use reachgraph_plugin_api::Category;
+use reachgraph_plugin_api::{Category, Plugin};
 
+use crate::doubles::NotReportingUnresolved;
 use crate::support::{build, build_with, case, emit, raws, shards, unreachable};
 
 /// Every node the index-wide view holds that any bound root reaches.
@@ -237,7 +238,7 @@ fn unresolved_candidate_flagged_possibly_reachable() {
     let flagged: BTreeSet<&str> = document
         .nodes
         .iter()
-        .filter(|node| node.possibly_reachable_via_unresolved)
+        .filter(|node| node.possibly_reachable_via_unresolved == Some(true))
         .map(|node| node.id.raw.as_str())
         .collect();
 
@@ -266,7 +267,7 @@ fn possibly_reachable_annotation_does_not_filter_list() {
         BTreeSet::from(["fn:db/execute_pg", "fn:db/execute_sqlite"]),
         "every flagged node is still a row"
     );
-    assert_eq!(document.unresolved_edge_count, 1);
+    assert_eq!(document.unresolved_edge_count, Some(1));
 }
 
 /// Plan-00 §6.2. The edge is carried into the shard with its candidates
@@ -276,7 +277,7 @@ fn unresolved_edge_is_not_silently_resolved() {
     let sink = emit(&build(&case("unresolved_edge")));
     let (_, shard) = shards(&sink).remove(0);
 
-    assert_eq!(shard.stats.unresolved_edge_count, 1);
+    assert_eq!(shard.stats.unresolved_edge_count, Some(1));
     match &shard.edges[0].to {
         reachgraph_core::schema::EdgeTargetRow::Unresolved { name, candidates } => {
             assert_eq!(name, "execute");
@@ -335,4 +336,69 @@ fn traversal_does_not_filter_on_inference_mode() {
         .flat_map(|(_, shard)| shard.edges.into_iter().map(|edge| edge.inference_mode))
         .collect();
     assert!(modes.contains(&reachgraph_core::schema::InferenceModeRow::TypeInferred));
+}
+
+/// ADR-1223, behaviour B4. One edge provider that omits calls it cannot
+/// resolve makes the index-wide count unknown, even beside a provider that
+/// reports its own. The sum of a known count and an unknown one is unknown.
+///
+/// A node a reported unresolved call flagged stays `true`: that call was
+/// observed. Every other node is `null`, because the omitted calls could reach
+/// it and nobody can say they do not.
+#[test]
+fn one_provider_that_omits_unresolved_calls_makes_the_count_null() {
+    let reporting = case("unresolved_edge");
+    let omitting = case("two_plugins_b");
+    let wrapped = NotReportingUnresolved::new(&omitting);
+    assert_ne!(reporting.id(), omitting.id(), "two plugins, two ids");
+
+    let mut inputs = crate::support::inputs(&reporting);
+    inputs.symbols.push(&wrapped);
+    inputs.edges.push(&wrapped);
+
+    let index = Index::build(std::path::Path::new("."), &inputs, &BuildOptions::default())
+        .expect("both cases build");
+    let sink = emit(&index);
+
+    let document: serde_json::Value =
+        serde_json::from_slice(sink.bytes("unreachable.json")).expect("parses");
+    assert!(
+        document["unresolved_edge_count"].is_null(),
+        "unreachable.json: {}",
+        document["unresolved_edge_count"]
+    );
+
+    let mut flagged = BTreeSet::new();
+    for node in document["nodes"].as_array().expect("a node list") {
+        let raw = node["id"]["raw"].as_str().expect("a raw id");
+        match &node["possibly_reachable_via_unresolved"] {
+            serde_json::Value::Bool(true) => {
+                flagged.insert(raw.to_owned());
+            }
+            serde_json::Value::Null => {}
+            other => panic!("{raw}: {other} claims a fact nobody observed"),
+        }
+    }
+    assert_eq!(
+        flagged,
+        BTreeSet::from([
+            "fn:db/execute_pg".to_owned(),
+            "fn:db/execute_sqlite".to_owned()
+        ])
+    );
+
+    let paths: Vec<&str> = sink
+        .paths()
+        .into_iter()
+        .filter(|path| path.starts_with("graph/"))
+        .collect();
+    assert!(!paths.is_empty(), "the reporting case writes a shard");
+    for path in paths {
+        let shard: serde_json::Value = serde_json::from_slice(sink.bytes(path)).expect("parses");
+        assert!(
+            shard["stats"]["unresolved_edge_count"].is_null(),
+            "{path}: {}",
+            shard["stats"]
+        );
+    }
 }

@@ -293,6 +293,7 @@ pub trait Classifier: Plugin {
 pub trait EdgeProvider: LanguagePlugin {
     fn edges_in(&self, unit: &Unit) -> Result<Vec<Edge>, PluginError>;
     fn edges_from(&self, node: &NodeId) -> Result<Vec<Edge>, PluginError>;
+    fn reports_unresolved(&self) -> bool;
 }
 
 pub trait LanguagePlugin: Plugin {

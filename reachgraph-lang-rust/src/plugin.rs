@@ -357,6 +357,15 @@ impl EdgeProvider for RustPlugin {
         };
         loaded.edges_from(node)
     }
+
+    /// ADR-1223. `ra_ap_ide` returns no `CallItem` for a call it cannot
+    /// resolve, so such a call is omitted rather than emitted as
+    /// `EdgeTarget::Unresolved`, and the count of unresolved edges is not
+    /// known. Task 2068 phase 2 turns this to `true` once those calls become
+    /// `Unresolved` edges.
+    fn reports_unresolved(&self) -> bool {
+        false
+    }
 }
 
 impl Classifier for RustPlugin {

@@ -2,7 +2,10 @@
 
 use std::fs;
 
-use crate::support::{doc_of, registry_of, repo_for, run, TempDir};
+use crate::support::{
+    doc_of, registry_holding, registry_of, repo_for, run, DetectableFixture, TempDir,
+};
+use reachgraph_fixture::FixturePlugin;
 
 fn analyse(case: &str, label: &str) -> (crate::support::Run, TempDir, std::path::PathBuf) {
     let temp = TempDir::new(label);
@@ -120,6 +123,107 @@ fn the_report_surfaces_unresolved_edge_targets() {
         serde_json::from_str(&fs::read_to_string(out.join("run.json")).expect("written"))
             .expect("parses");
     assert!(report["unresolved_edge_targets"].as_u64().expect("a count") > 0);
+}
+
+/// ADR-1223, behaviour B1. An edge provider that omits calls it cannot resolve
+/// — `reachgraph-lang-rust` today — makes every unresolved count unknown, so
+/// each surface carries `null`, never a 0 that would read as "nothing missing".
+///
+/// `versioned_pair` has unreachable nodes and shards and no unresolved edge, so
+/// every field below would read 0 or `false` if absence were not carried.
+#[test]
+fn a_provider_that_omits_unresolved_calls_reports_null_on_every_surface() {
+    let (result, _temp, out) = analyse_not_reporting("versioned_pair", "null-surfaces");
+    assert_eq!(result.code, 0, "stderr: {}", result.err);
+
+    let read = |path: &std::path::Path| -> serde_json::Value {
+        serde_json::from_str(&fs::read_to_string(path).expect("written")).expect("parses")
+    };
+
+    let report = read(&out.join("run.json"));
+    assert!(
+        report["unresolved_edge_targets"].is_null(),
+        "run.json: {}",
+        report["unresolved_edge_targets"]
+    );
+
+    let unreachable = read(&out.join("unreachable.json"));
+    assert!(
+        unreachable["unresolved_edge_count"].is_null(),
+        "unreachable.json: {}",
+        unreachable["unresolved_edge_count"]
+    );
+    let nodes = unreachable["nodes"].as_array().expect("a node list");
+    assert!(!nodes.is_empty(), "the case has unreachable nodes to check");
+    for node in nodes {
+        assert!(
+            node["possibly_reachable_via_unresolved"].is_null(),
+            "{}: {}",
+            node["name"],
+            node["possibly_reachable_via_unresolved"]
+        );
+    }
+
+    let mut shards = 0;
+    for entry in fs::read_dir(out.join("graph")).expect("shards written") {
+        let shard = read(&entry.expect("an entry").path());
+        assert!(
+            shard["stats"]["unresolved_edge_count"].is_null(),
+            "shard stats: {}",
+            shard["stats"]
+        );
+        shards += 1;
+    }
+    assert!(shards > 0, "the case writes shards to check");
+}
+
+/// ADR-1223, behaviour B2, in Max's wording (2026-11-14). The plugin is named
+/// from its own declaration: nothing in the cli matches on a `PluginId`.
+#[test]
+fn the_report_says_not_reported_and_names_the_plugin() {
+    let (result, _temp, _out) = analyse_not_reporting("versioned_pair", "not-reported");
+    assert_eq!(result.code, 0, "stderr: {}", result.err);
+
+    let line = result
+        .err
+        .lines()
+        .find(|line| line.contains("unresolved edge targets"))
+        .unwrap_or_else(|| panic!("no unresolved line: {}", result.err));
+
+    assert_eq!(
+        line.trim(),
+        "unresolved edge targets: not reported \
+         (reachgraph-lang-rust omits calls it cannot resolve)"
+    );
+    assert!(
+        !line.chars().any(|c| c.is_ascii_digit()),
+        "a digit on this line would read as a count: {line}"
+    );
+}
+
+/// One case, analysed by a double that declares what `reachgraph-lang-rust`
+/// declares and carries its plugin id.
+fn analyse_not_reporting(
+    case: &str,
+    label: &str,
+) -> (crate::support::Run, TempDir, std::path::PathBuf) {
+    let temp = TempDir::new(label);
+    let repo = repo_for(case, &temp);
+    let mut doc = doc_of(case);
+    doc.plugin_id = "reachgraph-lang-rust".to_owned();
+    let registry = registry_holding(DetectableFixture::not_reporting_unresolved(
+        FixturePlugin::from_doc(&repo, doc),
+    ));
+    let out = temp.join("out");
+    let result = run(
+        &registry,
+        &[
+            repo.to_str().expect("utf-8"),
+            "-o",
+            out.to_str().expect("utf-8"),
+        ],
+    );
+    (result, temp, out)
 }
 
 /// Open question 3, DECIDED: `run.json` lives **inside** `out/`. A reviewer

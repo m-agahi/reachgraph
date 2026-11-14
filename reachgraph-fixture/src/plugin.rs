@@ -382,6 +382,12 @@ impl EdgeProvider for FixturePlugin {
             .map(|row| self.edge(row))
             .collect())
     }
+
+    /// A case writes an unresolved call as an `unresolved` edge target, and
+    /// the fixture hands it over as one, so the count is known (ADR-1223).
+    fn reports_unresolved(&self) -> bool {
+        true
+    }
 }
 
 impl RootProvider for FixturePlugin {

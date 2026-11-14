@@ -234,3 +234,12 @@ fn a_missing_document_is_an_io_error_attributed_to_the_crate() {
         other => panic!("a missing file is an Io error: {other}"),
     }
 }
+
+/// ADR-1223. A case writes an unresolved call as an edge, so the fixture's
+/// unresolved count is known, and it says so.
+#[test]
+fn the_fixture_declares_it_reports_unresolved_calls() {
+    for name in ["minimal", "unresolved_edge"] {
+        assert!(case(name).reports_unresolved(), "{name}");
+    }
+}
