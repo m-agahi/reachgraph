@@ -420,6 +420,10 @@ impl EdgeProvider for ProvidingPlugin {
     fn edges_from(&self, _node: &NodeId) -> Result<Vec<Edge>, PluginError> {
         Ok(Vec::new())
     }
+
+    fn reports_unresolved(&self) -> bool {
+        true
+    }
 }
 
 /// Plan-06 §3, the problem this shape exists to solve: a detected plugin has to

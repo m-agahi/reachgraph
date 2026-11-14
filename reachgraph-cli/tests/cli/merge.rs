@@ -8,6 +8,7 @@
 use std::fs;
 use std::path::Path;
 
+use reachgraph_core::schema::SCHEMA_VERSION;
 use serde_json::{json, Value};
 
 use crate::support::{doc_of, registry_of, run, TempDir};
@@ -37,9 +38,14 @@ fn operation(operation: &str, direction: &str, key: &str, raw: &str, shard: Valu
 }
 
 fn write_artifact(dir: &Path, operations: Vec<Value>, shards: Vec<(&str, Value)>) {
+    write_artifact_at(dir, SCHEMA_VERSION, operations, shards);
+}
+
+/// An artifact as a run of some schema version wrote it.
+fn write_artifact_at(dir: &Path, version: u32, operations: Vec<Value>, shards: Vec<(&str, Value)>) {
     fs::create_dir_all(dir.join("graph")).expect("graph dir");
     let endpoints = json!({
-        "schema_version": 1,
+        "schema_version": version,
         "generated_by": { "tool": "reachgraph", "version": "0.1.0" },
         "plugins": [],
         "operations": operations,
@@ -57,8 +63,12 @@ fn write_artifact(dir: &Path, operations: Vec<Value>, shards: Vec<(&str, Value)>
 }
 
 fn served_shard(key: &str) -> Value {
+    served_shard_at(key, SCHEMA_VERSION)
+}
+
+fn served_shard_at(key: &str, version: u32) -> Value {
     json!({
-        "schema_version": 1,
+        "schema_version": version,
         "root": {
             "contract": "store.proto", "version": "v1", "service": "Store", "operation": "Get",
             "direction": "served", "join_key": key, "binding": binding("srv:fn/get")
@@ -267,5 +277,96 @@ fn merge_refuses_duplicate_labels() {
     );
     assert_eq!(result.code, reachgraph_cli::EXIT_USAGE, "{}", result.err);
     assert!(result.err.contains("x"), "{}", result.err);
+    assert!(!temp.join("estate").join("estate.json").exists());
+}
+
+/// ADR-1223, behaviour B7. Schema version 1 wrote `"unresolved_edge_count": 0`
+/// for a provider whose count was unknown, and that 0 parses as a real count
+/// under the current schema. So a version 1 artifact is refused by its
+/// version, and the message names both versions, rather than being joined as
+/// if its 0 had been measured.
+#[test]
+fn merge_refuses_an_artifact_of_another_schema_version_and_names_both() {
+    let temp = TempDir::new("merge-version");
+    let (consumer, _) = estate(&temp);
+    let old = temp.join("old");
+    write_artifact_at(
+        &old,
+        1,
+        vec![operation(
+            "Get",
+            "served",
+            GET,
+            "srv:fn/get",
+            json!("graph/get.json"),
+        )],
+        vec![("graph/get.json", served_shard_at(GET, 1))],
+    );
+
+    let result = run(
+        &registry(&temp),
+        &[
+            "merge",
+            consumer.to_str().unwrap(),
+            old.to_str().unwrap(),
+            "-o",
+            temp.join("estate").to_str().unwrap(),
+        ],
+    );
+
+    assert_ne!(result.code, reachgraph_cli::EXIT_OK, "{}", result.err);
+    assert!(result.err.contains("schema_version 1"), "{}", result.err);
+    assert!(
+        result
+            .err
+            .contains(&format!("schema_version {SCHEMA_VERSION}")),
+        "{}",
+        result.err
+    );
+    assert!(!temp.join("estate").join("estate.json").exists());
+}
+
+/// The same rule per shard. An `endpoints.json` at the current version says
+/// nothing about the shards beside it: a directory can hold a shard an older
+/// run left there, and that shard's `"unresolved_edge_count": 0` parses as a
+/// count. So every shard is checked on its own, and the message names it.
+#[test]
+fn merge_refuses_a_shard_of_another_schema_version_beside_current_endpoints() {
+    let temp = TempDir::new("merge-shard-version");
+    let (consumer, _) = estate(&temp);
+    let mixed = temp.join("mixed");
+    write_artifact(
+        &mixed,
+        vec![operation(
+            "Get",
+            "served",
+            GET,
+            "srv:fn/get",
+            json!("graph/get.json"),
+        )],
+        vec![("graph/get.json", served_shard_at(GET, 1))],
+    );
+
+    let result = run(
+        &registry(&temp),
+        &[
+            "merge",
+            consumer.to_str().unwrap(),
+            mixed.to_str().unwrap(),
+            "-o",
+            temp.join("estate").to_str().unwrap(),
+        ],
+    );
+
+    assert_ne!(result.code, reachgraph_cli::EXIT_OK, "{}", result.err);
+    assert!(result.err.contains("get.json"), "{}", result.err);
+    assert!(result.err.contains("schema_version 1"), "{}", result.err);
+    assert!(
+        result
+            .err
+            .contains(&format!("schema_version {SCHEMA_VERSION}")),
+        "{}",
+        result.err
+    );
     assert!(!temp.join("estate").join("estate.json").exists());
 }

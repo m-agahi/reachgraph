@@ -37,11 +37,27 @@ pub fn doc_of(name: &str) -> FixtureDoc {
 /// delegates every other method unaltered.
 pub struct DetectableFixture {
     inner: FixturePlugin,
+    /// What `reports_unresolved` answers. The fixture's own answer unless a
+    /// test asks for a provider that omits calls it cannot resolve, the way
+    /// `reachgraph-lang-rust` does (ADR-1223).
+    reports_unresolved: bool,
 }
 
 impl DetectableFixture {
     pub fn new(inner: FixturePlugin) -> Self {
-        Self { inner }
+        let reports_unresolved = inner.reports_unresolved();
+        Self {
+            inner,
+            reports_unresolved,
+        }
+    }
+
+    /// The same case, declaring that it does not report unresolved calls.
+    pub fn not_reporting_unresolved(inner: FixturePlugin) -> Self {
+        Self {
+            inner,
+            reports_unresolved: false,
+        }
     }
 }
 
@@ -95,6 +111,11 @@ impl EdgeProvider for DetectableFixture {
     fn edges_from(&self, node: &NodeId) -> Result<Vec<Edge>, PluginError> {
         self.inner.edges_from(node)
     }
+
+    /// The second method that is not delegation.
+    fn reports_unresolved(&self) -> bool {
+        self.reports_unresolved
+    }
 }
 
 impl RootProvider for DetectableFixture {
@@ -115,16 +136,21 @@ impl Classifier for DetectableFixture {
 
 /// A registry holding one detectable fixture case, with every view it declares.
 pub fn registry_of(doc: FixtureDoc, case_dir: &Path) -> Registry {
+    registry_holding(DetectableFixture::new(FixturePlugin::from_doc(
+        case_dir, doc,
+    )))
+}
+
+/// A registry holding one double, with every view the fixture declares.
+pub fn registry_holding(plugin: DetectableFixture) -> Registry {
     let mut registry = Registry::new();
     registry
         .register(
-            Registration::of(DetectableFixture::new(FixturePlugin::from_doc(
-                case_dir, doc,
-            )))
-            .symbols()
-            .edges()
-            .roots()
-            .classifier(),
+            Registration::of(plugin)
+                .symbols()
+                .edges()
+                .roots()
+                .classifier(),
         )
         .expect("the case declares every capability it hands over");
     registry

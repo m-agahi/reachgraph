@@ -8,8 +8,7 @@
 use std::io::Write;
 
 use reachgraph_core::{Index, UNREACHABLE_CLAIM};
-use reachgraph_plugin_api::EdgeTarget;
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 
 /// ADR-0006, printed after a successful run and adjacent to the output path —
 /// where the user is deciding what to do with the directory, rather than in a
@@ -61,8 +60,9 @@ pub struct RunReport {
     /// below.
     pub roots_unbound: usize,
     /// Calls the plugin could not resolve. A large number here means the
-    /// unreachability claim is weaker than it looks.
-    pub unresolved_edge_targets: usize,
+    /// unreachability claim is weaker than it looks. Not known — `null` in
+    /// `run.json` — when a plugin omits such calls (ADR-1223).
+    pub unresolved_edge_targets: UnresolvedEdgeTargets,
     /// Indexed symbols no bound root reaches.
     pub unreachable: usize,
     /// ADR-0007's sentence, carried so a consumer of `run.json` uses the same
@@ -105,11 +105,14 @@ impl RunReport {
             roots_total: coverage.roots_total,
             roots_bound: coverage.roots_bound,
             roots_unbound: coverage.unbound_roots.len(),
-            unresolved_edge_targets: view
-                .edges
-                .iter()
-                .filter(|edge| matches!(edge.to, EdgeTarget::Unresolved { .. }))
-                .count(),
+            unresolved_edge_targets: UnresolvedEdgeTargets {
+                count: index.unresolved_edge_count(),
+                not_reported_by: index
+                    .unresolved_not_reported_by()
+                    .iter()
+                    .map(|plugin| plugin.0.to_owned())
+                    .collect(),
+            },
             unreachable: index.unreachable().len(),
             unreachable_claim: UNREACHABLE_CLAIM.to_owned(),
             shards: index.shards().len(),
@@ -138,11 +141,14 @@ impl RunReport {
             "  units {}   symbols {}   edges {}   roots {} ({} unbound)",
             self.units, self.symbols, self.edges, self.roots_total, self.roots_unbound
         )?;
-        writeln!(
-            into,
-            "  unresolved edge targets {}",
-            self.unresolved_edge_targets
-        )?;
+        match self.unresolved_edge_targets.count {
+            Some(count) => writeln!(into, "  unresolved edge targets {count}")?,
+            None => writeln!(
+                into,
+                "  unresolved edge targets: {}",
+                self.unresolved_edge_targets
+            )?,
+        }
         writeln!(
             into,
             "  {}: {} symbols",
@@ -212,6 +218,42 @@ impl RunReport {
         }
 
         Ok(())
+    }
+}
+
+/// The unresolved-edge count, or why it is not known — ADR-1223.
+///
+/// Serialised as the bare count, or `null` when it is not known, so `run.json`
+/// carries the same absence as `unreachable.json`. The plugins that omit
+/// calls they cannot resolve are named from their own declaration
+/// (`EdgeProvider::reports_unresolved`); nothing here matches on a plugin id.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnresolvedEdgeTargets {
+    /// `None` when any edge provider omits calls it cannot resolve.
+    pub count: Option<usize>,
+    /// The plugins that omit them, by id.
+    pub not_reported_by: Vec<String>,
+}
+
+impl Serialize for UnresolvedEdgeTargets {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.count.serialize(serializer)
+    }
+}
+
+/// The count, or a sentence with no digit in it: a reader scanning for a
+/// number must not find one where none was measured.
+impl std::fmt::Display for UnresolvedEdgeTargets {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match (self.count, self.not_reported_by.as_slice()) {
+            (Some(count), _) => write!(f, "{count}"),
+            (None, [one]) => write!(f, "not reported ({one} omits calls it cannot resolve)"),
+            (None, many) => write!(
+                f,
+                "not reported ({} omit calls they cannot resolve)",
+                many.join(", ")
+            ),
+        }
     }
 }
 

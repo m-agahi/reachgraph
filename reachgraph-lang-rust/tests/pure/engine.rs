@@ -87,3 +87,16 @@ fn a_relative_root_is_an_error_rather_than_a_panic() {
         Ok(units) => panic!("a relative root produced {} units", units.len()),
     }
 }
+
+/// ADR-1223. `ra_ap_ide` returns no `CallItem` for a call it cannot resolve,
+/// so the call is omitted rather than emitted as `EdgeTarget::Unresolved`. The
+/// plugin declares that, so every unresolved count over its edges is reported
+/// as unknown, never as 0. Task 2068 phase 2 flips this.
+///
+/// Tier A: the declaration is a constant, and nothing is loaded to read it.
+#[test]
+fn the_plugin_declares_it_does_not_report_unresolved_calls() {
+    use reachgraph_plugin_api::EdgeProvider;
+
+    assert!(!reachgraph_lang_rust::RustPlugin::new().reports_unresolved());
+}

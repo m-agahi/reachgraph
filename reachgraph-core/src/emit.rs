@@ -6,9 +6,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use reachgraph_plugin_api::{
-    Capability, Category, DocFormat, Edge, EdgeTarget, GraphView, IndexCoverage, InferenceMode,
-    Node, NodeId, OutputSink, PluginDescriptor, PositionEncoding, Root, RootBinding, Shard,
-    SourceRange, Symbol, SymbolKind,
+    Capability, Category, DocFormat, Edge, EdgeTarget, IndexCoverage, InferenceMode, Node, NodeId,
+    OutputSink, PluginDescriptor, PositionEncoding, Root, RootBinding, Shard, SourceRange, Symbol,
+    SymbolKind,
 };
 
 use crate::assemble::Index;
@@ -236,13 +236,6 @@ fn coverage_row(coverage: &IndexCoverage) -> CoverageRow {
     }
 }
 
-fn unresolved_count(view: &GraphView) -> usize {
-    view.edges
-        .iter()
-        .filter(|edge| matches!(edge.to, EdgeTarget::Unresolved { .. }))
-        .count()
-}
-
 // ---------------------------------------------------------------------------
 // Documents
 // ---------------------------------------------------------------------------
@@ -255,7 +248,7 @@ fn generated_by() -> GeneratedBy {
 }
 
 /// One shard, as the file holds it.
-pub(crate) fn shard_document(shard: &Shard) -> ShardDocument {
+pub(crate) fn shard_document(index: &Index, shard: &Shard) -> ShardDocument {
     ShardDocument {
         schema_version: SCHEMA_VERSION,
         root: ShardRootRow {
@@ -275,7 +268,7 @@ pub(crate) fn shard_document(shard: &Shard) -> ShardDocument {
         stats: StatsRow {
             node_count: shard.view.nodes.len(),
             edge_count: shard.view.edges.len(),
-            unresolved_edge_count: unresolved_count(&shard.view),
+            unresolved_edge_count: index.unresolved_count_in(&shard.view),
         },
     }
 }
@@ -382,7 +375,7 @@ pub(crate) fn unreachable_document(index: &Index) -> UnreachableDocument {
         coverage: coverage_row(index.coverage()),
         nodes,
         counts_by_category: counts,
-        unresolved_edge_count: unresolved_count(index.view()),
+        unresolved_edge_count: index.unresolved_edge_count(),
     }
 }
 
@@ -511,7 +504,7 @@ impl Index {
 
         for shard in self.shards() {
             let path = shard_path(&RootIdentity::of(&shard.root));
-            write_json(sink, &path, &shard_document(shard))?;
+            write_json(sink, &path, &shard_document(self, shard))?;
         }
 
         write_json(sink, "unreachable.json", &unreachable_document(self))?;

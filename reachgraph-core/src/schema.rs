@@ -38,7 +38,13 @@ use serde::{Deserialize, Serialize};
 pub const UNREACHABLE_CLAIM: &str = "not reachable from any endpoint version in this index";
 
 /// The schema version every artifact file carries.
-pub const SCHEMA_VERSION: u32 = 1;
+///
+/// Version 2 (ADR-1223): every unresolved-edge count is `null` when an edge
+/// provider omits calls it cannot resolve, and `possibly_reachable_via_unresolved`
+/// is `null` when it cannot be known. Version 1 wrote `0` and `false` there,
+/// and a version 1 `0` parses as a count under this schema — so a reader
+/// checks the version, never the shape alone.
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// What produced the artifact.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -476,8 +482,10 @@ pub struct StatsRow {
     pub node_count: usize,
     /// Edges in this shard.
     pub edge_count: usize,
-    /// How many of those edges are unresolved.
-    pub unresolved_edge_count: usize,
+    /// How many of those edges are unresolved. `null` when an edge provider
+    /// omits calls it cannot resolve, so the count is not known (ADR-1223).
+    #[serde(deserialize_with = "Option::deserialize")]
+    pub unresolved_edge_count: Option<usize>,
 }
 
 /// `graph/<slug>.json`.
@@ -518,8 +526,10 @@ pub struct UnreachableRow {
     pub category: Option<CategoryRow>,
     /// Whether the provider marked it test code.
     pub is_test: bool,
-    /// An annotation, never a filter.
-    pub possibly_reachable_via_unresolved: bool,
+    /// An annotation, never a filter. `null` when not flagged and an edge
+    /// provider omits calls it cannot resolve (ADR-1223).
+    #[serde(deserialize_with = "Option::deserialize")]
+    pub possibly_reachable_via_unresolved: Option<bool>,
 }
 
 /// How many unreached nodes fell in each category.
@@ -557,8 +567,11 @@ pub struct UnreachableDocument {
     pub nodes: Vec<UnreachableRow>,
     /// A summary for a consumer that wants one.
     pub counts_by_category: CategoryCountsRow,
-    /// How many unresolved edges the index holds.
-    pub unresolved_edge_count: usize,
+    /// How many unresolved edges the index holds. `null` when an edge
+    /// provider omits calls it cannot resolve, so the count is not known
+    /// (ADR-1223).
+    #[serde(deserialize_with = "Option::deserialize")]
+    pub unresolved_edge_count: Option<usize>,
 }
 
 /// One node's per-version reach.

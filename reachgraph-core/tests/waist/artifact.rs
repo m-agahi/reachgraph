@@ -8,7 +8,8 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use reachgraph_core::schema::{
-    EdgeTargetRow, InferenceModeRow, RangeRow, ShardDocument, SpanRow, UNREACHABLE_CLAIM,
+    EdgeTargetRow, InferenceModeRow, RangeRow, ShardDocument, SpanRow, UnreachableDocument,
+    UNREACHABLE_CLAIM,
 };
 use reachgraph_core::{shard_path, RootIdentity};
 use reachgraph_plugin_api::{ContractId, Direction};
@@ -448,4 +449,51 @@ fn edge_target_is_a_tagged_union_in_the_artifact() {
     // And the same union, through the typed reader.
     let (_, shard) = shards(&sink).remove(0);
     assert!(matches!(shard.edges[0].to, EdgeTargetRow::Resolved { .. }));
+}
+
+/// ADR-1223 with ADR-0726, behaviour B5. `null` is a statement — the count is
+/// not known — and parses. A missing key is not a statement and does not
+/// parse: if serde defaulted it to `None`, an artifact that lost the field
+/// would read as one that declared it unknown.
+#[test]
+fn an_unresolved_count_parses_as_null_and_refuses_to_be_missing() {
+    let sink = emit(&build(&case("versioned_pair")));
+
+    let mut document: Value =
+        serde_json::from_slice(sink.bytes("unreachable.json")).expect("parses");
+    document["unresolved_edge_count"] = Value::Null;
+    document["nodes"][0]["possibly_reachable_via_unresolved"] = Value::Null;
+    let parsed: UnreachableDocument =
+        serde_json::from_value(document.clone()).expect("null is a statement and parses");
+    let back = serde_json::to_value(&parsed).expect("serialises");
+    assert!(back["unresolved_edge_count"].is_null());
+    assert!(back["nodes"][0]["possibly_reachable_via_unresolved"].is_null());
+
+    let mut missing = document.clone();
+    missing
+        .as_object_mut()
+        .expect("an object")
+        .remove("unresolved_edge_count");
+    assert!(serde_json::from_value::<UnreachableDocument>(missing).is_err());
+
+    let mut missing = document;
+    missing["nodes"][0]
+        .as_object_mut()
+        .expect("an object")
+        .remove("possibly_reachable_via_unresolved");
+    assert!(serde_json::from_value::<UnreachableDocument>(missing).is_err());
+
+    let (path, _) = shards(&sink).remove(0);
+    let mut shard: Value = serde_json::from_slice(sink.bytes(&path)).expect("parses");
+    shard["stats"]["unresolved_edge_count"] = Value::Null;
+    let parsed: ShardDocument =
+        serde_json::from_value(shard.clone()).expect("null is a statement and parses");
+    let back = serde_json::to_value(parsed).expect("serialises");
+    assert!(back["stats"]["unresolved_edge_count"].is_null());
+
+    shard["stats"]
+        .as_object_mut()
+        .expect("an object")
+        .remove("unresolved_edge_count");
+    assert!(serde_json::from_value::<ShardDocument>(shard).is_err());
 }

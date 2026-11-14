@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use reachgraph_core::estate::{
     merge, EstateDocument, JoinRow, JoinStatus, NodeCard, RepoArtifact, SideRow, STUB_ONLY_LABEL,
 };
-use reachgraph_core::schema::{EndpointsDocument, ShardDocument};
+use reachgraph_core::schema::{EndpointsDocument, ShardDocument, SCHEMA_VERSION};
 
 use crate::{Streams, EXIT_INTERNAL, EXIT_OK, EXIT_USAGE};
 
@@ -127,11 +127,14 @@ fn read_input(input: &str) -> Result<RepoArtifact, String> {
         .map(Path::to_path_buf)
         .unwrap_or_default();
 
+    check_schema_version(&endpoints_path)?;
     let endpoints: EndpointsDocument = read_json(&endpoints_path)?;
     let mut shards = BTreeMap::new();
     for version in endpoints.operations.iter().flat_map(|op| &op.versions) {
         if let Some(shard) = &version.shard {
-            let document: ShardDocument = read_json(&directory.join(shard))?;
+            let shard_path = directory.join(shard);
+            check_schema_version(&shard_path)?;
+            let document: ShardDocument = read_json(&shard_path)?;
             shards.insert(shard.clone(), document);
         }
     }
@@ -150,6 +153,31 @@ fn read_input(input: &str) -> Result<RepoArtifact, String> {
         endpoints,
         shards,
     })
+}
+
+/// Refuse an artifact another schema version wrote, naming both versions.
+///
+/// Checked before the full parse and read through a struct that ignores every
+/// other key, so the version is what the reader is told about even when the
+/// rest of the shape changed too. The shape alone cannot be trusted: version 1
+/// wrote `"unresolved_edge_count": 0` where the count was not known, and that
+/// `0` parses as a real count under version 2 (ADR-1223).
+fn check_schema_version(path: &Path) -> Result<(), String> {
+    #[derive(serde::Deserialize)]
+    struct Versioned {
+        schema_version: u32,
+    }
+
+    let found: Versioned = read_json(path)?;
+    if found.schema_version == SCHEMA_VERSION {
+        return Ok(());
+    }
+    Err(format!(
+        "{} has schema_version {}, and this reachgraph reads schema_version {SCHEMA_VERSION}; \
+         re-run reachgraph on that repository to write it again",
+        path.display(),
+        found.schema_version
+    ))
 }
 
 fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, String> {

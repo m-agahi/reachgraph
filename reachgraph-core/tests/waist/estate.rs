@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 
 use reachgraph_core::estate::{merge, CallSite, JoinStatus, RepoArtifact};
-use reachgraph_core::schema::{EndpointsDocument, ShardDocument};
+use reachgraph_core::schema::{EndpointsDocument, ShardDocument, SCHEMA_VERSION};
 use serde_json::{json, Value};
 
 fn node(raw: &str) -> Value {
@@ -103,7 +103,7 @@ fn repo(label: &str, roots: Vec<Root<'_>>) -> RepoArtifact {
         }));
     }
     let endpoints: EndpointsDocument = serde_json::from_value(json!({
-        "schema_version": 1,
+        "schema_version": SCHEMA_VERSION,
         "generated_by": { "tool": "reachgraph", "version": "0.1.0" },
         "plugins": [],
         "operations": operations,
@@ -132,7 +132,7 @@ fn repo(label: &str, roots: Vec<Root<'_>>) -> RepoArtifact {
 fn shard(nodes: Vec<Value>, edges: Vec<Value>) -> Value {
     let count = nodes.len();
     json!({
-        "schema_version": 1,
+        "schema_version": SCHEMA_VERSION,
         "root": null,
         "depth_limit": 3,
         "plugins": [],

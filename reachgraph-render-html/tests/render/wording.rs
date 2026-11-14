@@ -161,3 +161,33 @@ fn the_guard_would_fail_on_a_planted_label() {
     assert_ne!(planted, template, "the anchor moved; the mutation is inert");
     assert_eq!(hits(&planted, &word).len(), 1);
 }
+
+/// ADR-1223, behaviour B6, in Max's wording (2026-11-14). A `null`
+/// `possibly_reachable_via_unresolved` means the plugin omits calls it cannot
+/// resolve, so whether one reaches the node is not known. JavaScript reads
+/// `null` as falsy, and a falsy branch here renders the same empty cell as
+/// `false` — a "no" nobody observed. So the null case is tested first and
+/// named.
+///
+/// Nothing in this suite executes `loader.js` (see `main.rs`), so this is
+/// asserted on the template's text.
+#[test]
+fn an_unknown_unresolved_flag_is_labelled_unknown_not_no() {
+    let loader = std::fs::read_to_string(crate_dir().join("assets/loader.js"))
+        .expect("the template is readable");
+
+    let null_check = loader
+        .find("node.possibly_reachable_via_unresolved === null")
+        .expect("the null case is tested explicitly");
+    let label = loader
+        .find("\"unknown — this plugin does not report unresolved calls\"")
+        .expect("the null case carries its label");
+    let truthy = loader
+        .find("an unresolved call may reach this")
+        .expect("the true case keeps its label");
+
+    assert!(
+        null_check < label && label < truthy,
+        "null is tested and labelled before the truthy branch can swallow it"
+    );
+}

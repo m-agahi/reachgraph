@@ -83,6 +83,9 @@ impl EdgeProvider for DetectableFixture {
     fn edges_from(&self, node: &NodeId) -> Result<Vec<Edge>, PluginError> {
         self.0.edges_from(node)
     }
+    fn reports_unresolved(&self) -> bool {
+        self.0.reports_unresolved()
+    }
 }
 impl RootProvider for DetectableFixture {
     fn roots(&self, repo_root: &Path, symbols: &dyn SymbolIndex) -> Result<Vec<Root>, PluginError> {

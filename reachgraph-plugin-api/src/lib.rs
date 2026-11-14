@@ -1076,6 +1076,17 @@ pub trait EdgeProvider: LanguagePlugin {
 
     /// Targeted expansion, for depth-limited traversal from a known node.
     fn edges_from(&self, node: &NodeId) -> Result<Vec<Edge>, PluginError>;
+
+    /// Whether a call this provider cannot resolve reaches the index as an
+    /// [`EdgeTarget::Unresolved`] edge, rather than being omitted.
+    ///
+    /// ADR-1223. A provider that answers `false` omits such calls, so the
+    /// count of unresolved edges is not known for it: the waist reports that
+    /// count as absent, never as 0. A false 0 would strengthen every "not
+    /// reachable" claim with a fact nobody observed (ADR-0003 honest absence).
+    ///
+    /// No default: every provider states which kind it is.
+    fn reports_unresolved(&self) -> bool;
 }
 
 /// The lookup surface the core hands to a [`RootProvider`].

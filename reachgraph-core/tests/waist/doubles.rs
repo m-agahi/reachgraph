@@ -109,6 +109,10 @@ impl EdgeProvider for FailingProvider {
             node: node.clone(),
         })
     }
+
+    fn reports_unresolved(&self) -> bool {
+        true
+    }
 }
 
 /// A classifier that records every path it was asked about.
@@ -258,6 +262,10 @@ impl EdgeProvider for PreflightSpy<'_> {
     fn edges_from(&self, node: &NodeId) -> Result<Vec<Edge>, PluginError> {
         self.inner.edges_from(node)
     }
+
+    fn reports_unresolved(&self) -> bool {
+        self.inner.reports_unresolved()
+    }
 }
 
 /// A root provider that succeeded over part of what it found.
@@ -319,5 +327,74 @@ impl RootProvider for PartialRootProvider {
             versions: Vec::new(),
             unexamined_contracts: self.unexamined.clone(),
         }
+    }
+}
+
+/// A fixture case that declares it does not report unresolved calls.
+///
+/// ADR-1223. `reachgraph-lang-rust` omits a call it cannot resolve, so its
+/// unresolved count is unknown. No corpus case can say that about itself: it
+/// is a declaration of the provider, not content of the document. Everything
+/// else is delegated unaltered.
+pub struct NotReportingUnresolved<'a> {
+    inner: &'a FixturePlugin,
+}
+
+impl<'a> NotReportingUnresolved<'a> {
+    pub fn new(inner: &'a FixturePlugin) -> Self {
+        Self { inner }
+    }
+}
+
+impl Plugin for NotReportingUnresolved<'_> {
+    fn id(&self) -> PluginId {
+        self.inner.id()
+    }
+
+    fn provides(&self) -> &[Capability] {
+        self.inner.provides()
+    }
+
+    fn position_encoding(&self) -> PositionEncoding {
+        self.inner.position_encoding()
+    }
+
+    fn detection(&self) -> Detection {
+        self.inner.detection()
+    }
+
+    fn preflight(&self, root: &Path) -> Preflight {
+        self.inner.preflight(root)
+    }
+
+    fn notes(&self) -> Vec<String> {
+        self.inner.notes()
+    }
+}
+
+impl LanguagePlugin for NotReportingUnresolved<'_> {
+    fn discover_units(&self, root: &Path) -> Result<Vec<Unit>, PluginError> {
+        self.inner.discover_units(root)
+    }
+}
+
+impl SymbolProvider for NotReportingUnresolved<'_> {
+    fn symbols_in(&self, unit: &Unit) -> Result<Vec<Symbol>, PluginError> {
+        self.inner.symbols_in(unit)
+    }
+}
+
+impl EdgeProvider for NotReportingUnresolved<'_> {
+    fn edges_in(&self, unit: &Unit) -> Result<Vec<Edge>, PluginError> {
+        self.inner.edges_in(unit)
+    }
+
+    fn edges_from(&self, node: &NodeId) -> Result<Vec<Edge>, PluginError> {
+        self.inner.edges_from(node)
+    }
+
+    /// The one method that is not delegation.
+    fn reports_unresolved(&self) -> bool {
+        false
     }
 }

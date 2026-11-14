@@ -5,10 +5,10 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use reachgraph_plugin_api::{
-    Capability, Category, Classifier, ContractId, EdgeProvider, GraphView, IndexCoverage, Node,
-    NodeId, Plugin, PluginDescriptor, PluginError, PluginId, Preflight, Root, RootBinding,
-    RootProvider, Shard, Symbol, SymbolIndex, SymbolProvider, UnboundRoot, UnexaminedContract,
-    Unit, UnitId, VersionKey,
+    Capability, Category, Classifier, ContractId, EdgeProvider, EdgeTarget, GraphView,
+    IndexCoverage, Node, NodeId, Plugin, PluginDescriptor, PluginError, PluginId, Preflight, Root,
+    RootBinding, RootProvider, Shard, Symbol, SymbolIndex, SymbolProvider, UnboundRoot,
+    UnexaminedContract, Unit, UnitId, VersionKey,
 };
 
 use crate::classify::{classify_all, Classifiers};
@@ -172,11 +172,16 @@ pub struct UnreachableNode {
     pub category: Option<Category>,
     /// Whether the provider marked it test code.
     pub is_test: bool,
-    /// **An annotation, never a filter.** True when this node is a candidate of
-    /// an unresolved edge whose source is reachable. It never removes the node
-    /// from the list: an implementation that dropped flagged nodes would have
-    /// re-introduced the inference `EdgeTarget` forbids (plan-01 §5.3).
-    pub possibly_reachable_via_unresolved: bool,
+    /// **An annotation, never a filter.** `Some(true)` when this node is a
+    /// candidate of an unresolved edge whose source is reachable. It never
+    /// removes the node from the list: an implementation that dropped flagged
+    /// nodes would have re-introduced the inference `EdgeTarget` forbids
+    /// (plan-01 §5.3).
+    ///
+    /// `None` when the node is not flagged and an edge provider in the index
+    /// omits calls it cannot resolve (ADR-1223): such a call could reach the
+    /// node, so `false` would state a fact nobody observed.
+    pub possibly_reachable_via_unresolved: Option<bool>,
 }
 
 /// One bound root and the walk it produced.
@@ -203,6 +208,7 @@ pub struct Index {
     shard_of_root: Vec<Option<usize>>,
     unreachable: Vec<UnreachableNode>,
     versions: VersionReach,
+    unresolved_not_reported_by: Vec<PluginId>,
 }
 
 impl Index {
@@ -448,6 +454,7 @@ impl Index {
             })
             .collect();
 
+        let unresolved_not_reported_by = unresolved_not_reported_by(inputs);
         let flagged = possibly_reachable(&graph, &reached_anywhere);
         let unreachable = complement(&graph, &reached_anywhere)
             .into_iter()
@@ -460,7 +467,13 @@ impl Index {
                     file: symbol.range.file.clone(),
                     category: record.category,
                     is_test: symbol.is_test,
-                    possibly_reachable_via_unresolved: flagged.contains(&idx),
+                    possibly_reachable_via_unresolved: if flagged.contains(&idx) {
+                        Some(true)
+                    } else if unresolved_not_reported_by.is_empty() {
+                        Some(false)
+                    } else {
+                        None
+                    },
                 })
             })
             .collect();
@@ -478,6 +491,7 @@ impl Index {
             shard_of_root,
             unreachable,
             versions,
+            unresolved_not_reported_by,
         })
     }
 
@@ -514,6 +528,39 @@ impl Index {
     /// What each contributing plugin declared about itself.
     pub fn plugins(&self) -> &[PluginDescriptor] {
         &self.plugins
+    }
+
+    /// The edge providers that omit calls they cannot resolve, by their own
+    /// declaration ([`EdgeProvider::reports_unresolved`]). Empty when every
+    /// provider reports them.
+    pub fn unresolved_not_reported_by(&self) -> &[PluginId] {
+        &self.unresolved_not_reported_by
+    }
+
+    /// How many unresolved edges the index holds — ADR-1223.
+    ///
+    /// `None` when any edge provider omits calls it cannot resolve: a count
+    /// over the edges that were emitted would be a 0 for calls that were never
+    /// emitted, and one unknown part makes the whole sum unknown.
+    pub fn unresolved_edge_count(&self) -> Option<usize> {
+        self.unresolved_count_in(&self.view)
+    }
+
+    /// The same count over one view, under the same rule: a shard inherits the
+    /// index's answer. An omitted call starts at one of the omitting
+    /// provider's own nodes, so a shard holding none of them could report a
+    /// number. For now the answer is null index-wide. Refine it per shard
+    /// when a second real edge provider ships.
+    pub(crate) fn unresolved_count_in(&self, view: &GraphView) -> Option<usize> {
+        if !self.unresolved_not_reported_by.is_empty() {
+            return None;
+        }
+        Some(
+            view.edges
+                .iter()
+                .filter(|edge| matches!(edge.to, EdgeTarget::Unresolved { .. }))
+                .count(),
+        )
     }
 
     /// The shard built for the root at this position, if it bound.
@@ -846,4 +893,17 @@ impl SymbolIndex for GraphSymbolIndex<'_> {
             .lookup(id)
             .and_then(|idx| self.graph.node(idx).symbol.as_ref())
     }
+}
+
+/// Every edge provider that declares it omits calls it cannot resolve, once
+/// each, in registration order — ADR-1223.
+fn unresolved_not_reported_by(inputs: &BuildInputs<'_>) -> Vec<PluginId> {
+    let mut ids: Vec<PluginId> = Vec::new();
+    for provider in &inputs.edges {
+        let id = provider.id();
+        if !provider.reports_unresolved() && !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    ids
 }
