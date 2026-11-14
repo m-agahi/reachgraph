@@ -9,7 +9,7 @@
   the comments; you may not delete the headings.
 
   RULES THE CHECK APPLIES, exactly:
-    1. All five `##` headings must be present: What, Why, Changelog,
+    1. All six `##` headings must be present: What, Why, Changelog, Breaking?,
        Verification, Risk.
     2. Each must contain at least one non-comment, non-blank line.
     3. EVERY line under `## Changelog` must be a Conventional Commits bullet:
@@ -17,6 +17,9 @@
        Types: build, chore, ci, docs, feat, fix, perf, refactor, revert, style,
        test. Nothing else parses. Prose, blank-line-separated paragraphs, or a
        bullet without a type will fail.
+    4. `## Breaking?` must open with `yes` or `no` alone on its first line. It
+       must agree with the Changelog: `yes` needs at least one `!` bullet, `no`
+       forbids one. Put any reason on the lines after the answer.
 
   WHY THE CHANGELOG FORMAT IS STRICT: this repository squash-merges with the
   pull request body as the commit message, so these bullets become the
@@ -59,6 +62,14 @@
   If that major version is 0, the ladder shifts down one step. This shift runs in `ci-pr.yaml`'s `version` job (`yadgarhq/actions`), not in `bump_for`. A major-classified bullet then bumps MINOR. Every other bullet then bumps PATCH.
 
   If that major version is 1 or higher, the classification applies unshifted. A major-classified bullet bumps MAJOR. A minor-classified bullet bumps MINOR. A patch-classified bullet bumps PATCH.
+-->
+
+## Breaking?
+
+<!--
+  First line: `yes` or `no`, alone, nothing else on that line. `yes` needs at
+  least one `!` bullet in the Changelog (e.g. `feat!:`); `no` forbids one. Any
+  reason goes on the lines after the answer: what breaks, and for whom.
 -->
 
 ## Verification
