@@ -546,9 +546,11 @@ impl Index {
         self.unresolved_count_in(&self.view)
     }
 
-    /// The same count over one view, under the same rule. A shard inherits the
-    /// index's answer: the omitted calls are not attributed to any node, so no
-    /// view of the index can say it holds none of them.
+    /// The same count over one view, under the same rule: a shard inherits the
+    /// index's answer. An omitted call starts at one of the omitting
+    /// provider's own nodes, so a shard holding none of them could report a
+    /// number. For now the answer is null index-wide. Refine it per shard
+    /// when a second real edge provider ships.
     pub(crate) fn unresolved_count_in(&self, view: &GraphView) -> Option<usize> {
         if !self.unresolved_not_reported_by.is_empty() {
             return None;

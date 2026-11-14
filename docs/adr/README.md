@@ -56,5 +56,5 @@ them, and a citation is resolvable only when the record is exported here. Export
   not 0, when an edge provider declares it omits calls it cannot resolve. Artifact schema
   version 2.
 
-Cited in this repository and **not yet exported**: ADR-0727, ADR-0729, ADR-0730, ADR-0731,
-ADR-0732, ADR-0738 and ADR-0743. Until each one is exported, read it in the ledger.
+Cited in this repository and **not yet exported**: ADR-0726, ADR-0727, ADR-0729, ADR-0730,
+ADR-0731, ADR-0732, ADR-0738 and ADR-0743. Until each one is exported, read it in the ledger.

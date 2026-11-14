@@ -325,3 +325,48 @@ fn merge_refuses_an_artifact_of_another_schema_version_and_names_both() {
     );
     assert!(!temp.join("estate").join("estate.json").exists());
 }
+
+/// The same rule per shard. An `endpoints.json` at the current version says
+/// nothing about the shards beside it: a directory can hold a shard an older
+/// run left there, and that shard's `"unresolved_edge_count": 0` parses as a
+/// count. So every shard is checked on its own, and the message names it.
+#[test]
+fn merge_refuses_a_shard_of_another_schema_version_beside_current_endpoints() {
+    let temp = TempDir::new("merge-shard-version");
+    let (consumer, _) = estate(&temp);
+    let mixed = temp.join("mixed");
+    write_artifact(
+        &mixed,
+        vec![operation(
+            "Get",
+            "served",
+            GET,
+            "srv:fn/get",
+            json!("graph/get.json"),
+        )],
+        vec![("graph/get.json", served_shard_at(GET, 1))],
+    );
+
+    let result = run(
+        &registry(&temp),
+        &[
+            "merge",
+            consumer.to_str().unwrap(),
+            mixed.to_str().unwrap(),
+            "-o",
+            temp.join("estate").to_str().unwrap(),
+        ],
+    );
+
+    assert_ne!(result.code, reachgraph_cli::EXIT_OK, "{}", result.err);
+    assert!(result.err.contains("get.json"), "{}", result.err);
+    assert!(result.err.contains("schema_version 1"), "{}", result.err);
+    assert!(
+        result
+            .err
+            .contains(&format!("schema_version {SCHEMA_VERSION}")),
+        "{}",
+        result.err
+    );
+    assert!(!temp.join("estate").join("estate.json").exists());
+}
